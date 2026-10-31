@@ -12,7 +12,7 @@ from .html import (
 from .terminal import render_terminal, sparkline
 from .web import Jobs, SyncJob, check_bind, is_loopback, make_app, serve
 
-__all__ = [
+__all__ = (
     'Figure',
     'HtmlReport',
     'Jobs',
@@ -36,4 +36,4 @@ __all__ = [
     'result_to_dict',
     'serve',
     'sparkline',
-]
+)

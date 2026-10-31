@@ -30,7 +30,7 @@ def test_rate_limit_error_names_reset() -> None:
 def test_graphql_error_exposes_pairs() -> None:
     pairs = [('INTERNAL', 'boom'), ('FORBIDDEN', 'no')]
     error = wambatic.fetch.errors.GraphQLError(pairs)
-    assert error.errors == pairs
+    assert error.errors == tuple(pairs)
     assert 'INTERNAL' in str(error)
     assert 'FORBIDDEN' in str(error)
 
@@ -50,3 +50,19 @@ def test_cache_version_error_names_each_key_with_both_values_and_the_remedies() 
     assert 'wambatic cache clear' in message
     assert '--ignore-cache-version' in message
     assert error.differences['schema_version'] == ('1', '2')
+
+
+def test_graphql_error_keeps_its_own_copy_of_the_pairs() -> None:
+    pairs = [('INTERNAL', 'boom')]
+    error = wambatic.fetch.errors.GraphQLError(pairs)
+    pairs.append(('FORBIDDEN', 'no'))
+    assert error.errors == (('INTERNAL', 'boom'),)
+
+
+def test_cache_version_error_differences_cannot_be_changed() -> None:
+    source: dict[str, tuple[str | None, str | None]] = {'schema_version': ('1', '2')}
+    error = wambatic.fetch.errors.CacheVersionError(source)
+    source['other'] = ('a', 'b')
+    assert 'other' not in error.differences
+    with pytest.raises(TypeError):
+        error.differences['other'] = ('a', 'b')  # type: ignore[index]

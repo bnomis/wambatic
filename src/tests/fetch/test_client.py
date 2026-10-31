@@ -309,7 +309,7 @@ def test_graphql_not_found(make_client: tests.conftest.MakeClient) -> None:
 def test_graphql_other_error_discards_data(make_client: tests.conftest.MakeClient) -> None:
     with pytest.raises(wambatic.fetch.errors.GraphQLError) as info:
         run_graphql({GRAPHQL: [Canned(200, responses.GRAPHQL_INTERNAL)]}, make_client)
-    assert info.value.errors == [('INTERNAL', 'Something went wrong')]
+    assert info.value.errors == (('INTERNAL', 'Something went wrong'),)
 
 
 def test_graphql_requires_rate_limit(make_client: tests.conftest.MakeClient) -> None:

@@ -211,13 +211,19 @@ class GitHubClient:
             await self.sleep(wambatic.fetch.ratelimit.backoff_delay(pending, self.rng))
             pending += 1
         if response.status == 304:
-            return RestResponse(304, None, etag, None, header_date(response))
+            return RestResponse(
+                status=304,
+                data=None,
+                etag=etag,
+                next_url=None,
+                date=header_date(response),
+            )
         return RestResponse(
-            response.status,
-            response.data,
-            response.headers.get('ETag'),
-            next_link(response.headers.get('Link')),
-            header_date(response),
+            status=response.status,
+            data=response.data,
+            etag=response.headers.get('ETag'),
+            next_url=next_link(response.headers.get('Link')),
+            date=header_date(response),
         )
 
     async def send(

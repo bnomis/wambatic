@@ -27,7 +27,7 @@ from .errors import (
     StatsPendingError,
 )
 
-__all__ = [
+__all__ = (
     'BUILT_RESOURCES',
     'RESOURCES',
     'AuthError',
@@ -55,4 +55,4 @@ __all__ = [
     'clear_cache',
     'inspect_cache',
     'resolve_token',
-]
+)

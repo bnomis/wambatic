@@ -9,7 +9,7 @@ from .errors import (
     UnknownGroupError,
 )
 
-__all__ = [
+__all__ = (
     'GROUPS',
     'Bucket',
     'CachedRecords',
@@ -30,4 +30,4 @@ __all__ = [
     'partial_buckets',
     'read_records',
     'resources_for',
-]
+)

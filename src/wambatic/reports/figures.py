@@ -4,6 +4,7 @@ and the page script fills in the colours of the active theme, so no figure is ti
 
 import dataclasses
 import datetime
+import types
 import typing
 
 import wambatic.reports.base
@@ -38,26 +39,28 @@ class Theme:
 # The validated reference palette of the dataviz skill available to Claude Code sessions, read
 # 2026-10-30 (reports spec, Palette and themes): its first three categorical slots, which it
 # validates for every pair in both themes, its blue sequential ramp, and its surfaces and inks.
-PALETTE: dict[typing.Literal['dark', 'light'], Theme] = {
-    'light': Theme(
-        categorical=('#2a78d6', '#eb6834', '#1baf7a'),
-        sequential=('#cde2fb', '#86b6ef', '#3987e5', '#256abf', '#0d366b'),
-        surface='#fcfcfb',
-        page='#f9f9f7',
-        ink='#0b0b0b',
-        ink_secondary='#52514e',
-        grid='#e1e0d9',
-    ),
-    'dark': Theme(
-        categorical=('#3987e5', '#d95926', '#199e70'),
-        sequential=('#104281', '#1c5cab', '#3987e5', '#6da7ec', '#b7d3f6'),
-        surface='#1a1a19',
-        page='#0d0d0d',
-        ink='#f0efec',
-        ink_secondary='#c3c2b7',
-        grid='#2c2c2a',
-    ),
-}
+PALETTE: types.MappingProxyType[typing.Literal['dark', 'light'], Theme] = types.MappingProxyType(
+    {
+        'light': Theme(
+            categorical=('#2a78d6', '#eb6834', '#1baf7a'),
+            sequential=('#cde2fb', '#86b6ef', '#3987e5', '#256abf', '#0d366b'),
+            surface='#fcfcfb',
+            page='#f9f9f7',
+            ink='#0b0b0b',
+            ink_secondary='#52514e',
+            grid='#e1e0d9',
+        ),
+        'dark': Theme(
+            categorical=('#3987e5', '#d95926', '#199e70'),
+            sequential=('#104281', '#1c5cab', '#3987e5', '#6da7ec', '#b7d3f6'),
+            surface='#1a1a19',
+            page='#0d0d0d',
+            ink='#f0efec',
+            ink_secondary='#c3c2b7',
+            grid='#2c2c2a',
+        ),
+    }
+)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

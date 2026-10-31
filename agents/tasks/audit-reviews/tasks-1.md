@@ -273,7 +273,7 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 ## Task 7: Freeze shared constants and give each record one field list
 
-**Status:** todo
+**Status:** done
 **Priority:** low
 **Complexity:** medium
 **Source Reference:** F13 (A20), F14 (A15, A13), script rules `mutable-module-level-exported` (in `src/wambatic`) and `mutable-store-without-copy`
@@ -282,23 +282,23 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 **Subtasks:**
 
-- [ ] `stats/delivery.py:36` `UNITS` and `reports/figures.py:40` `PALETTE`: wrap in `types.MappingProxyType`; the four `__all__` lists become tuples
-- [ ] `fetch/errors.py:16` `GraphQLError.errors` stores `tuple(errors)`; `CacheVersionError.differences` stores `types.MappingProxyType(dict(differences))`
-- [ ] `fetch/cache.py`: derive each `*_COLUMNS` tuple, the repos and `sync_state` INSERT and SELECT column lists, and each row writer from `dataclasses.fields(<Record>)`, so the column list exists once per record (the A15 rows `cache.py:173-177`, `:433-461`, `:481-505`, `:598-765`)
-- [ ] `fetch/cache.py` row readers build each record with `Record(**dict(zip(columns, row)))` plus the conversions, so a new field fails a test if a converter is missing
-- [ ] A13: `reports/html.py:438` uses a named `PopularityRow.empty()` factory; `fetch/client.py:189-196` builds `RestResponse` by keyword
-- [ ] A test that adding a field to a record without a cache column fails (schema built from the fields)
+- [x] `stats/delivery.py:36` `UNITS` and `reports/figures.py:40` `PALETTE`: wrap in `types.MappingProxyType`; the four `__all__` lists become tuples
+- [x] `fetch/errors.py:16` `GraphQLError.errors` stores `tuple(errors)`; `CacheVersionError.differences` stores `types.MappingProxyType(dict(differences))`
+- [x] `fetch/cache.py`: derive each `*_COLUMNS` tuple, the repos and `sync_state` INSERT and SELECT column lists, and each row writer from `dataclasses.fields(<Record>)`, so the column list exists once per record (the A15 rows `cache.py:173-177`, `:433-461`, `:481-505`, `:598-765`)
+- [x] `fetch/cache.py` row readers build each record with `Record(**dict(zip(columns, row)))` plus the conversions, so a new field fails a test if a converter is missing
+- [x] A13: `reports/html.py:438` uses a named `PopularityRow.empty()` factory; `fetch/client.py:189-196` builds `RestResponse` by keyword
+- [x] A test that adding a field to a record without a cache column fails (schema built from the fields)
 
 **Acceptance Criteria:**
 
-- [ ] `bin/audit-check.sh --rule mutable-module-level-exported --rule mutable-store-without-copy --path src/wambatic` exits 0
-- [ ] The cache schema version is unchanged (the derived columns equal today's, in order), so no existing cache needs a refresh
+- [x] `bin/audit-check.sh --rule mutable-module-level-exported --rule mutable-store-without-copy --path src/wambatic` exits 0
+- [x] The cache schema version is unchanged (the derived columns equal today's, in order), so no existing cache needs a refresh
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/fetch src/tests/stats/test_delivery.py src/tests/reports src/tests/test_package.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/fetch src/tests/stats/test_delivery.py src/tests/reports src/tests/test_package.py` passes
 
 **Notes:**
 

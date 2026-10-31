@@ -489,9 +489,7 @@ def popularity_tiles(total: wambatic.stats.base.StatsResult) -> list[str]:
     if now is None:
         return []
     format_number = wambatic.reports.terminal.format_number
-    sums = now.total or (
-        now.rows[0] if now.rows else wambatic.reports.rows.PopularityRow('', 0, 0, 0)
-    )
+    sums = now.total or (now.rows[0] if now.rows else wambatic.reports.rows.PopularityRow.empty())
     languages = wambatic.reports.rows.languages_rows(total)
     named = (
         [row.language for row in languages.rows if row.language != OTHER_LANGUAGE]

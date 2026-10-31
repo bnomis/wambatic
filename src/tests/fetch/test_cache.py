@@ -1,3 +1,5 @@
+import collections.abc
+import dataclasses
 import datetime
 import pathlib
 import sqlite3
@@ -1266,3 +1268,67 @@ def test_clear_cache_of_a_file_that_cannot_be_deleted_is_a_cache_error(
     finally:
         cache_path.parent.chmod(0o755)
     assert cache_path.exists()
+
+
+def table_records() -> list[tuple[str, type, tuple[str, ...]]]:
+    tables = wambatic.fetch.cache.tables()
+    return [
+        (table.name, table.record_type, table.columns)  # type: ignore[misc]
+        for table in (
+            tables.commits,
+            tables.forks,
+            tables.issues,
+            tables.pull_requests,
+            tables.releases,
+            tables.star_events,
+            tables.workflow_runs,
+        )
+    ]
+
+
+def stored_columns(cache: wambatic.fetch.cache.Cache, table: str) -> tuple[str, ...]:
+    rows = cache.connection.execute(f'PRAGMA table_info({table})').fetchall()
+    return tuple(row[1] for row in rows)
+
+
+@pytest.mark.parametrize(('name', 'record_type', 'columns'), table_records())
+def test_each_record_field_has_a_cache_column(
+    cache: wambatic.fetch.cache.Cache, name: str, record_type: type, columns: tuple[str, ...]
+) -> None:
+    assert columns == tuple(field.name for field in dataclasses.fields(record_type))
+    assert stored_columns(cache, name) == columns
+
+
+def test_repo_and_sync_state_fields_have_cache_columns(
+    cache: wambatic.fetch.cache.Cache,
+) -> None:
+    tables = wambatic.fetch.cache.tables()
+    repos = stored_columns(cache, 'repos')
+    assert repos == (tables.repo_columns[0], 'owner', *tables.repo_columns[1:])
+    assert stored_columns(cache, 'sync_state') == tables.sync_state_columns
+
+
+def test_every_time_flag_and_json_field_has_a_converter() -> None:
+    tables = wambatic.fetch.cache.tables()
+    pairs: list[tuple[type, collections.abc.Mapping[str, object]]] = [
+        (table.record_type, table.converters)  # type: ignore[misc]
+        for table in (
+            tables.commits,
+            tables.forks,
+            tables.issues,
+            tables.pull_requests,
+            tables.releases,
+            tables.star_events,
+            tables.workflow_runs,
+        )
+    ]
+    pairs.append((wambatic.fetch.base.Repo, wambatic.fetch.cache.REPO_CONVERTERS))
+    pairs.append((wambatic.fetch.base.SyncState, wambatic.fetch.cache.SYNC_STATE_CONVERTERS))
+    for record_type, converters in pairs:
+        hints = typing.get_type_hints(record_type)
+        for field in dataclasses.fields(record_type):
+            needs = {datetime.datetime, bool, tuple} & set(
+                [hints[field.name], *typing.get_args(hints[field.name])]
+                + [typing.get_origin(hints[field.name])]
+            )
+            assert bool(needs) == (field.name in converters), (record_type.__name__, field.name)

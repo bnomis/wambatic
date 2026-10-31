@@ -3,6 +3,7 @@ import collections
 import collections.abc
 import datetime
 import statistics
+import types
 
 import wambatic.fetch.base
 import wambatic.settings
@@ -33,7 +34,7 @@ DORA_METRICS = tuple(
     if name in DEPLOYMENT_METRICS | FAILURE_METRICS | RESTORE_METRICS
 )
 ACTIONS_RELEASE_METRICS = tuple(name for name, _ in DELIVERY_METRICS if name not in DORA_METRICS)
-UNITS = dict(DELIVERY_METRICS)
+UNITS = types.MappingProxyType(dict(DELIVERY_METRICS))
 OUTCOMES = frozenset({'failure', 'startup_failure', 'success', 'timed_out'})
 NO_RELEASES = 'no releases in the cache and stats.deploy_workflow is not set'
 NO_DEPLOY_RUNS = 'no successful run of the workflow named by stats.deploy_workflow'

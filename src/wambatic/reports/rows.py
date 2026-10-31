@@ -105,6 +105,10 @@ class PopularityRow:
     forks: int
     watchers: int
 
+    @classmethod
+    def empty(cls) -> PopularityRow:
+        return cls(repo='', stars=0, forks=0, watchers=0)
+
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class PopularityNow:
@@ -334,15 +338,17 @@ def popularity_now(result: wambatic.stats.base.StatsResult) -> PopularityNow | N
     if not has_popularity(result):
         return None
     rows = tuple(
-        PopularityRow(row['repo'], row['stars'], row['forks'], row['watchers'])
+        PopularityRow(
+            repo=row['repo'], stars=row['stars'], forks=row['forks'], watchers=row['watchers']
+        )
         for row in result.tables.get('popularity', [])
     )
     total = (
         PopularityRow(
-            'Total',
-            sum(row.stars for row in rows),
-            sum(row.forks for row in rows),
-            sum(row.watchers for row in rows),
+            repo='Total',
+            stars=sum(row.stars for row in rows),
+            forks=sum(row.forks for row in rows),
+            watchers=sum(row.watchers for row in rows),
         )
         if len(rows) > 1
         else None

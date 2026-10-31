@@ -2,11 +2,13 @@ import collections.abc
 import contextlib
 import dataclasses
 import datetime
+import functools
 import hashlib
 import json
 import pathlib
 import sqlite3
 import threading
+import types
 import typing
 
 import wambatic.fetch.base
@@ -130,52 +132,6 @@ CREATE TABLE IF NOT EXISTS sync_state (
 );
 """
 OVERRIDE_KEY = 'version_override_at'
-COMMIT_COLUMNS = (
-    'repo',
-    'oid',
-    'authored_at',
-    'author_login',
-    'additions',
-    'deletions',
-    'is_merge',
-)
-PULL_REQUEST_COLUMNS = (
-    'repo',
-    'number',
-    'author_login',
-    'created_at',
-    'updated_at',
-    'merged_at',
-    'closed_at',
-    'first_review_at',
-    'additions',
-    'deletions',
-    'labels',
-    'first_commit_at',
-)
-ISSUE_COLUMNS = ('repo', 'number', 'author_login', 'created_at', 'updated_at', 'closed_at')
-RELEASE_COLUMNS = ('repo', 'tag_name', 'created_at', 'published_at', 'is_prerelease')
-WORKFLOW_RUN_COLUMNS = (
-    'repo',
-    'id',
-    'workflow_path',
-    'name',
-    'event',
-    'head_branch',
-    'status',
-    'conclusion',
-    'created_at',
-    'updated_at',
-    'run_started_at',
-    'run_attempt',
-)
-STAR_EVENT_COLUMNS = ('repo', 'user_id', 'starred_at')
-FORK_COLUMNS = ('repo', 'id', 'created_at')
-REPO_COLUMNS = (
-    'name_with_owner, default_branch, head_oid, is_archived, is_fork, pushed_at, updated_at, '
-    'pull_requests_updated_at, issues_updated_at, releases_count, releases_updated_at, '
-    'stargazer_count, fork_count, watcher_count, languages, languages_size, missing'
-)
 
 
 def expected_identity() -> dict[str, str]:
@@ -229,133 +185,191 @@ class Record(typing.Protocol):
     def repo(self) -> str: ...
 
 
-def repo_from_row(row: tuple[object, ...]) -> wambatic.fetch.base.Repo:
-    (
-        name,
-        branch,
-        head,
-        archived,
-        fork,
-        pushed_at,
-        updated_at,
-        pulls_at,
-        issues_at,
-        releases_count,
-        releases_at,
-        stargazers,
-        forks,
-        watchers,
-        languages,
-        languages_size,
-        missing,
-    ) = row
-    return wambatic.fetch.base.Repo(
-        name_with_owner=str(name),
-        default_branch=None if branch is None else str(branch),
-        head_oid=None if head is None else str(head),
-        is_archived=bool(archived),
-        is_fork=bool(fork),
-        pushed_at=optional_from_text(None if pushed_at is None else str(pushed_at)),
-        updated_at=from_text(str(updated_at)),
-        pull_requests_updated_at=optional_from_text(None if pulls_at is None else str(pulls_at)),
-        issues_updated_at=optional_from_text(None if issues_at is None else str(issues_at)),
-        releases_count=int(str(releases_count)),
-        releases_updated_at=optional_from_text(None if releases_at is None else str(releases_at)),
-        stargazer_count=int(str(stargazers)),
-        fork_count=int(str(forks)),
-        watcher_count=int(str(watchers)),
-        languages=tuple((str(name), int(size)) for name, size in json.loads(str(languages))),
-        languages_size=int(str(languages_size)),
-        missing=bool(missing),
+type Converters = collections.abc.Mapping[str, collections.abc.Callable[[typing.Any], object]]
+
+
+def column_names(record_type: type) -> tuple[str, ...]:
+    """The record's field names, in order: its table's columns."""
+    return tuple(field.name for field in dataclasses.fields(record_type))
+
+
+def to_column(value: object) -> object:
+    if isinstance(value, datetime.datetime):
+        return to_text(value)
+    if isinstance(value, tuple):
+        return json.dumps(value)
+    return value
+
+
+def record_values(record: object) -> tuple[object, ...]:
+    """The record's fields as column values, in `column_names` order."""
+    return tuple(to_column(getattr(record, name)) for name in column_names(type(record)))
+
+
+def as_labels(value: str) -> tuple[str, ...]:
+    return tuple(str(label) for label in json.loads(value))
+
+
+def as_languages(value: str) -> tuple[tuple[str, int], ...]:
+    return tuple((str(name), int(size)) for name, size in json.loads(value))
+
+
+def record_from_row[T](
+    build: collections.abc.Callable[..., T],
+    converters: Converters,
+    columns: tuple[str, ...],
+    row: tuple[typing.Any, ...],
+    **fixed: object,
+) -> T:
+    """Build a record from a row of `columns`: each column named in `converters` is converted,
+    the rest are used as read; `fixed` supplies the fields the row does not hold."""
+    values = dict(zip(columns, row, strict=True))
+    for name, convert in converters.items():
+        values[name] = convert(values[name])
+    return build(**fixed, **values)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Table[T: Record]:
+    """A per-repo table whose columns are the fields of its record type."""
+
+    name: str
+    record_type: collections.abc.Callable[..., T]
+    columns: tuple[str, ...]
+    converters: Converters
+    key: tuple[str, ...]
+
+    @classmethod
+    def of(
+        cls, name: str, record_type: type[T], converters: Converters, key: tuple[str, ...]
+    ) -> Table[T]:
+        return cls(name, record_type, column_names(record_type), converters, key)
+
+    def values(self, record: T) -> tuple[object, ...]:
+        return record_values(record)
+
+    def record(self, repo: str, row: tuple[typing.Any, ...]) -> T:
+        """Build a record from a row of the columns after `repo`."""
+        return record_from_row(self.record_type, self.converters, self.columns[1:], row, repo=repo)
+
+
+REPO_CONVERTERS: Converters = types.MappingProxyType(
+    {
+        'is_archived': bool,
+        'is_fork': bool,
+        'issues_updated_at': optional_from_text,
+        'languages': as_languages,
+        'missing': bool,
+        'pull_requests_updated_at': optional_from_text,
+        'pushed_at': optional_from_text,
+        'releases_updated_at': optional_from_text,
+        'updated_at': from_text,
+    }
+)
+SYNC_STATE_CONVERTERS: Converters = types.MappingProxyType(
+    {
+        'full_synced_at': from_text,
+        'pushed_at': optional_from_text,
+        'synced_at': from_text,
+        'updated_at': from_text,
+        'watermark': optional_from_text,
+    }
+)
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Tables:
+    """The cache's tables and column lists, each derived once from its record's fields."""
+
+    commits: Table[wambatic.fetch.base.Commit]
+    forks: Table[wambatic.fetch.base.Fork]
+    issues: Table[wambatic.fetch.base.Issue]
+    pull_requests: Table[wambatic.fetch.base.PullRequest]
+    releases: Table[wambatic.fetch.base.Release]
+    star_events: Table[wambatic.fetch.base.StarEvent]
+    workflow_runs: Table[wambatic.fetch.base.WorkflowRun]
+    repo_columns: tuple[str, ...]
+    sync_state_columns: tuple[str, ...]
+
+
+@functools.cache
+def tables() -> Tables:
+    """Built on first use: `wambatic.fetch.base` is not yet reachable while this module loads."""
+    COMMITS = Table.of(
+        'commits',
+        wambatic.fetch.base.Commit,
+        {'authored_at': from_text, 'is_merge': bool},
+        ('repo', 'oid'),
+    )
+    PULL_REQUESTS = Table.of(
+        'pull_requests',
+        wambatic.fetch.base.PullRequest,
+        {
+            'closed_at': optional_from_text,
+            'created_at': from_text,
+            'first_commit_at': optional_from_text,
+            'first_review_at': optional_from_text,
+            'labels': as_labels,
+            'merged_at': optional_from_text,
+            'updated_at': from_text,
+        },
+        ('repo', 'number'),
+    )
+    ISSUES = Table.of(
+        'issues',
+        wambatic.fetch.base.Issue,
+        {'closed_at': optional_from_text, 'created_at': from_text, 'updated_at': from_text},
+        ('repo', 'number'),
+    )
+    RELEASES = Table.of(
+        'releases',
+        wambatic.fetch.base.Release,
+        {'created_at': from_text, 'is_prerelease': bool, 'published_at': from_text},
+        ('repo', 'tag_name'),
+    )
+    WORKFLOW_RUNS = Table.of(
+        'workflow_runs',
+        wambatic.fetch.base.WorkflowRun,
+        {
+            'created_at': from_text,
+            'run_started_at': optional_from_text,
+            'updated_at': from_text,
+        },
+        ('repo', 'id'),
+    )
+    STAR_EVENTS = Table.of(
+        'star_events',
+        wambatic.fetch.base.StarEvent,
+        {'starred_at': from_text},
+        ('repo', 'user_id'),
+    )
+    FORKS = Table.of(
+        'forks',
+        wambatic.fetch.base.Fork,
+        {'created_at': from_text},
+        ('repo', 'id'),
+    )
+    return Tables(
+        commits=COMMITS,
+        forks=FORKS,
+        issues=ISSUES,
+        pull_requests=PULL_REQUESTS,
+        releases=RELEASES,
+        star_events=STAR_EVENTS,
+        workflow_runs=WORKFLOW_RUNS,
+        repo_columns=column_names(wambatic.fetch.base.Repo),
+        sync_state_columns=column_names(wambatic.fetch.base.SyncState),
     )
 
 
-def commit_from_row(repo: str, row: tuple[object, ...]) -> wambatic.fetch.base.Commit:
-    oid, authored_at, login, additions, deletions, is_merge = row
-    return wambatic.fetch.base.Commit(
-        repo=repo,
-        oid=str(oid),
-        authored_at=from_text(str(authored_at)),
-        author_login=None if login is None else str(login),
-        additions=int(str(additions)),
-        deletions=int(str(deletions)),
-        is_merge=bool(is_merge),
-    )
+def repo_from_row(row: tuple[typing.Any, ...]) -> wambatic.fetch.base.Repo:
+    return record_from_row(wambatic.fetch.base.Repo, REPO_CONVERTERS, tables().repo_columns, row)
 
 
-def pull_request_from_row(repo: str, row: tuple[object, ...]) -> wambatic.fetch.base.PullRequest:
-    number, login, created, updated, merged, closed, review, additions, deletions, labels, first = (
-        row
-    )
-    return wambatic.fetch.base.PullRequest(
-        repo=repo,
-        number=int(str(number)),
-        author_login=None if login is None else str(login),
-        created_at=from_text(str(created)),
-        updated_at=from_text(str(updated)),
-        merged_at=optional_from_text(None if merged is None else str(merged)),
-        closed_at=optional_from_text(None if closed is None else str(closed)),
-        first_review_at=optional_from_text(None if review is None else str(review)),
-        additions=int(str(additions)),
-        deletions=int(str(deletions)),
-        labels=tuple(str(label) for label in json.loads(str(labels))),
-        first_commit_at=optional_from_text(None if first is None else str(first)),
-    )
-
-
-def issue_from_row(repo: str, row: tuple[object, ...]) -> wambatic.fetch.base.Issue:
-    number, login, created, updated, closed = row
-    return wambatic.fetch.base.Issue(
-        repo=repo,
-        number=int(str(number)),
-        author_login=None if login is None else str(login),
-        created_at=from_text(str(created)),
-        updated_at=from_text(str(updated)),
-        closed_at=optional_from_text(None if closed is None else str(closed)),
-    )
-
-
-def release_from_row(repo: str, row: tuple[object, ...]) -> wambatic.fetch.base.Release:
-    tag_name, created, published, is_prerelease = row
-    return wambatic.fetch.base.Release(
-        repo=repo,
-        tag_name=str(tag_name),
-        created_at=from_text(str(created)),
-        published_at=from_text(str(published)),
-        is_prerelease=bool(is_prerelease),
-    )
-
-
-def workflow_run_from_row(repo: str, row: tuple[object, ...]) -> wambatic.fetch.base.WorkflowRun:
-    run_id, path, name, event, branch, status, conclusion, created, updated, started, attempt = row
-    return wambatic.fetch.base.WorkflowRun(
-        repo=repo,
-        id=int(str(run_id)),
-        workflow_path=str(path),
-        name=str(name),
-        event=str(event),
-        head_branch=None if branch is None else str(branch),
-        status=str(status),
-        conclusion=None if conclusion is None else str(conclusion),
-        created_at=from_text(str(created)),
-        updated_at=from_text(str(updated)),
-        run_started_at=optional_from_text(None if started is None else str(started)),
-        run_attempt=int(str(attempt)),
-    )
-
-
-def star_event_from_row(repo: str, row: tuple[object, ...]) -> wambatic.fetch.base.StarEvent:
-    user_id, starred_at = row
-    return wambatic.fetch.base.StarEvent(
-        repo=repo, user_id=str(user_id), starred_at=from_text(str(starred_at))
-    )
-
-
-def fork_from_row(repo: str, row: tuple[object, ...]) -> wambatic.fetch.base.Fork:
-    fork_id, created_at = row
-    return wambatic.fetch.base.Fork(
-        repo=repo, id=int(str(fork_id)), created_at=from_text(str(created_at))
-    )
+def repo_row(repo: wambatic.fetch.base.Repo) -> tuple[object, ...]:
+    """The `repos` row for `repo`: the owner after the name, and never marked missing."""
+    values = record_values(dataclasses.replace(repo, missing=False))
+    return (repo.name_with_owner, repo.name_with_owner.partition('/')[0], *values[1:])
 
 
 @contextlib.contextmanager
@@ -464,38 +478,15 @@ class Cache:
                 self.connection.execute(
                     'UPDATE repos SET missing = 1 WHERE owner = ? COLLATE NOCASE', (owner,)
                 )
+            names = (tables().repo_columns[0], 'owner', *tables().repo_columns[1:])
             self.connection.executemany(
-                'INSERT OR REPLACE INTO repos (name_with_owner, owner, default_branch, head_oid, '
-                'is_archived, is_fork, pushed_at, updated_at, pull_requests_updated_at, '
-                'issues_updated_at, releases_count, releases_updated_at, stargazer_count, '
-                'fork_count, watcher_count, languages, languages_size, missing) '
-                'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)',
-                [
-                    (
-                        repo.name_with_owner,
-                        repo.name_with_owner.partition('/')[0],
-                        repo.default_branch,
-                        repo.head_oid,
-                        repo.is_archived,
-                        repo.is_fork,
-                        optional_to_text(repo.pushed_at),
-                        to_text(repo.updated_at),
-                        optional_to_text(repo.pull_requests_updated_at),
-                        optional_to_text(repo.issues_updated_at),
-                        repo.releases_count,
-                        optional_to_text(repo.releases_updated_at),
-                        repo.stargazer_count,
-                        repo.fork_count,
-                        repo.watcher_count,
-                        json.dumps([list(language) for language in repo.languages]),
-                        repo.languages_size,
-                    )
-                    for repo in repos
-                ],
+                f'INSERT OR REPLACE INTO repos ({", ".join(names)}) '
+                f'VALUES ({", ".join("?" * len(names))})',
+                [repo_row(repo) for repo in repos],
             )
 
     def read_repos(self, subject: wambatic.fetch.base.Subject) -> list[wambatic.fetch.base.Repo]:
-        columns = REPO_COLUMNS
+        columns = ', '.join(tables().repo_columns)
         with self.locked():
             if subject.kind == 'repo':
                 rows = self.connection.execute(
@@ -513,41 +504,27 @@ class Cache:
     def sync_state(self, repo: str, resource: str) -> wambatic.fetch.base.SyncState | None:
         with self.locked():
             row = self.connection.execute(
-                'SELECT watermark, head_oid, pushed_at, updated_at, synced_at, full_synced_at, '
-                'probe FROM sync_state WHERE repo = ? AND resource = ?',
+                f'SELECT {", ".join(tables().sync_state_columns[2:])} FROM sync_state '
+                'WHERE repo = ? AND resource = ?',
                 (repo, resource),
             ).fetchone()
         if row is None:
             return None
-        watermark, head_oid, pushed_at, updated_at, synced_at, full_synced_at, probe = row
-        return wambatic.fetch.base.SyncState(
+        return record_from_row(
+            wambatic.fetch.base.SyncState,
+            SYNC_STATE_CONVERTERS,
+            tables().sync_state_columns[2:],
+            row,
             repo=repo,
             resource=resource,
-            watermark=optional_from_text(watermark),
-            head_oid=head_oid,
-            pushed_at=optional_from_text(pushed_at),
-            updated_at=from_text(updated_at),
-            synced_at=from_text(synced_at),
-            full_synced_at=from_text(full_synced_at),
-            probe=probe,
         )
 
     def put_state(self, state: wambatic.fetch.base.SyncState) -> None:
         """Write a `sync_state` row inside the caller's transaction."""
         self.connection.execute(
-            'INSERT OR REPLACE INTO sync_state (repo, resource, watermark, head_oid, pushed_at, '
-            'updated_at, synced_at, full_synced_at, probe) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            (
-                state.repo,
-                state.resource,
-                optional_to_text(state.watermark),
-                state.head_oid,
-                optional_to_text(state.pushed_at),
-                to_text(state.updated_at),
-                to_text(state.synced_at),
-                to_text(state.full_synced_at),
-                state.probe,
-            ),
+            f'INSERT OR REPLACE INTO sync_state ({", ".join(tables().sync_state_columns)}) '
+            f'VALUES ({", ".join("?" * len(tables().sync_state_columns))})',
+            record_values(state),
         )
 
     def write_state(self, state: wambatic.fetch.base.SyncState) -> None:
@@ -557,20 +534,17 @@ class Cache:
 
     def write_rows[T: Record](
         self,
-        table: str,
-        columns: tuple[str, ...],
-        key: tuple[str, ...],
+        table: Table[T],
         repo: str,
         records: list[T],
-        values: collections.abc.Callable[[T], tuple[object, ...]],
         state: wambatic.fetch.base.SyncState,
         *,
         replace: bool,
         gone: collections.abc.Collection[int] = (),
     ) -> int:
         """In one transaction: with `replace`, delete the repo's rows from `table` first; upsert
-        each record by `key`; delete the rows whose second key column is in `gone`; write `state`.
-        Returns the number of rows written.
+        each record by its key; delete the rows whose second key column is in `gone`; write
+        `state`. Returns the number of rows written.
 
         Raises:
             InvalidRequestError: a record or the state belongs to another repo.
@@ -579,36 +553,38 @@ class Cache:
             raise wambatic.fetch.errors.InvalidRequestError(
                 f'every record and the state must belong to {repo}'
             )
-        updates = ', '.join(f'{name} = excluded.{name}' for name in columns if name not in key)
+        columns = table.columns
+        updates = ', '.join(
+            f'{name} = excluded.{name}' for name in columns if name not in table.key
+        )
         sql = (
-            f'INSERT INTO {table} ({", ".join(columns)}) '
+            f'INSERT INTO {table.name} ({", ".join(columns)}) '
             f'VALUES ({", ".join("?" * len(columns))}) '
-            f'ON CONFLICT ({", ".join(key)}) DO UPDATE SET {updates}'
+            f'ON CONFLICT ({", ".join(table.key)}) DO UPDATE SET {updates}'
         )
         with self.locked(), self.connection:
             if replace:
-                self.connection.execute(f'DELETE FROM {table} WHERE repo = ?', (repo,))
-            self.connection.executemany(sql, [values(record) for record in records])
+                self.connection.execute(f'DELETE FROM {table.name} WHERE repo = ?', (repo,))
+            self.connection.executemany(sql, [table.values(record) for record in records])
             self.connection.executemany(
-                f'DELETE FROM {table} WHERE repo = ? AND {key[1]} = ?',
+                f'DELETE FROM {table.name} WHERE repo = ? AND {table.key[1]} = ?',
                 [(repo, identifier) for identifier in sorted(gone)],
             )
             self.put_state(state)
         return len(records)
 
-    def read_rows(
+    def read_table[T: Record](
         self,
-        table: str,
-        columns: str,
+        table: Table[T],
         repo: str,
         since: datetime.datetime | None,
         until: datetime.datetime | None = None,
         *,
         time_column: str,
         order: str,
-    ) -> list[tuple[object, ...]]:
-        """The repo's rows with `since <= time_column < until`, each bound optional."""
-        query = f'SELECT {columns} FROM {table} WHERE repo = ?'
+    ) -> list[T]:
+        """The repo's records with `since <= time_column < until`, each bound optional."""
+        query = f'SELECT {", ".join(table.columns[1:])} FROM {table.name} WHERE repo = ?'
         params: list[str] = [repo]
         if since is not None:
             query += f' AND {time_column} >= ?'
@@ -617,7 +593,8 @@ class Cache:
             query += f' AND {time_column} < ?'
             params.append(to_text(until))
         with self.locked():
-            return self.connection.execute(f'{query} ORDER BY {order}', params).fetchall()
+            rows = self.connection.execute(f'{query} ORDER BY {order}', params).fetchall()
+        return [table.record(repo, row) for row in rows]
 
     def write_commits(
         self,
@@ -629,24 +606,7 @@ class Cache:
     ) -> int:
         """In one transaction: with `replace`, delete the repo's commits first; upsert by oid;
         write `state`. Returns the number of rows written."""
-        return self.write_rows(
-            'commits',
-            COMMIT_COLUMNS,
-            ('repo', 'oid'),
-            repo,
-            commits,
-            lambda commit: (
-                commit.repo,
-                commit.oid,
-                to_text(commit.authored_at),
-                commit.author_login,
-                commit.additions,
-                commit.deletions,
-                commit.is_merge,
-            ),
-            state,
-            replace=replace,
-        )
+        return self.write_rows(tables().commits, repo, commits, state, replace=replace)
 
     def write_pull_requests(
         self,
@@ -657,29 +617,7 @@ class Cache:
         replace: bool,
     ) -> int:
         """As `write_commits`, upserting by number."""
-        return self.write_rows(
-            'pull_requests',
-            PULL_REQUEST_COLUMNS,
-            ('repo', 'number'),
-            repo,
-            pulls,
-            lambda pull: (
-                pull.repo,
-                pull.number,
-                pull.author_login,
-                to_text(pull.created_at),
-                to_text(pull.updated_at),
-                optional_to_text(pull.merged_at),
-                optional_to_text(pull.closed_at),
-                optional_to_text(pull.first_review_at),
-                pull.additions,
-                pull.deletions,
-                json.dumps(list(pull.labels)),
-                optional_to_text(pull.first_commit_at),
-            ),
-            state,
-            replace=replace,
-        )
+        return self.write_rows(tables().pull_requests, repo, pulls, state, replace=replace)
 
     def write_issues(
         self,
@@ -690,23 +628,7 @@ class Cache:
         replace: bool,
     ) -> int:
         """As `write_commits`, upserting by number."""
-        return self.write_rows(
-            'issues',
-            ISSUE_COLUMNS,
-            ('repo', 'number'),
-            repo,
-            issues,
-            lambda issue: (
-                issue.repo,
-                issue.number,
-                issue.author_login,
-                to_text(issue.created_at),
-                to_text(issue.updated_at),
-                optional_to_text(issue.closed_at),
-            ),
-            state,
-            replace=replace,
-        )
+        return self.write_rows(tables().issues, repo, issues, state, replace=replace)
 
     def write_releases(
         self,
@@ -715,22 +637,7 @@ class Cache:
         state: wambatic.fetch.base.SyncState,
     ) -> int:
         """As `write_commits` with `replace`: every read of releases is a full read."""
-        return self.write_rows(
-            'releases',
-            RELEASE_COLUMNS,
-            ('repo', 'tag_name'),
-            repo,
-            releases,
-            lambda release: (
-                release.repo,
-                release.tag_name,
-                to_text(release.created_at),
-                to_text(release.published_at),
-                release.is_prerelease,
-            ),
-            state,
-            replace=True,
-        )
+        return self.write_rows(tables().releases, repo, releases, state, replace=True)
 
     def write_workflow_runs(
         self,
@@ -743,28 +650,7 @@ class Cache:
     ) -> int:
         """As `write_commits`, upserting by id; the runs whose ids are in `gone` are deleted."""
         return self.write_rows(
-            'workflow_runs',
-            WORKFLOW_RUN_COLUMNS,
-            ('repo', 'id'),
-            repo,
-            runs,
-            lambda run: (
-                run.repo,
-                run.id,
-                run.workflow_path,
-                run.name,
-                run.event,
-                run.head_branch,
-                run.status,
-                run.conclusion,
-                to_text(run.created_at),
-                to_text(run.updated_at),
-                optional_to_text(run.run_started_at),
-                run.run_attempt,
-            ),
-            state,
-            replace=replace,
-            gone=gone,
+            tables().workflow_runs, repo, runs, state, replace=replace, gone=gone
         )
 
     def write_star_events(
@@ -776,16 +662,7 @@ class Cache:
         replace: bool,
     ) -> int:
         """As `write_commits`, upserting by `user_id`."""
-        return self.write_rows(
-            'star_events',
-            STAR_EVENT_COLUMNS,
-            ('repo', 'user_id'),
-            repo,
-            stars,
-            lambda star: (star.repo, star.user_id, to_text(star.starred_at)),
-            state,
-            replace=replace,
-        )
+        return self.write_rows(tables().star_events, repo, stars, state, replace=replace)
 
     def write_forks(
         self,
@@ -796,108 +673,65 @@ class Cache:
         replace: bool,
     ) -> int:
         """As `write_commits`, upserting by id."""
-        return self.write_rows(
-            'forks',
-            FORK_COLUMNS,
-            ('repo', 'id'),
-            repo,
-            forks,
-            lambda fork: (fork.repo, fork.id, to_text(fork.created_at)),
-            state,
-            replace=replace,
-        )
+        return self.write_rows(tables().forks, repo, forks, state, replace=replace)
 
     def read_commits(
         self, repo: str, since: datetime.datetime | None, until: datetime.datetime | None
     ) -> list[wambatic.fetch.base.Commit]:
-        rows = self.read_rows(
-            'commits',
-            ', '.join(COMMIT_COLUMNS[1:]),
+        return self.read_table(
+            tables().commits,
             repo,
             since,
             until,
             time_column='authored_at',
             order='authored_at, oid',
         )
-        return [commit_from_row(repo, row) for row in rows]
 
     def read_pull_requests(
         self, repo: str, since: datetime.datetime | None
     ) -> list[wambatic.fetch.base.PullRequest]:
         """Rows with `updated_at >= since` (all when None), by number."""
-        rows = self.read_rows(
-            'pull_requests',
-            ', '.join(PULL_REQUEST_COLUMNS[1:]),
-            repo,
-            since,
-            time_column='updated_at',
-            order='number',
+        return self.read_table(
+            tables().pull_requests, repo, since, time_column='updated_at', order='number'
         )
-        return [pull_request_from_row(repo, row) for row in rows]
 
     def read_issues(
         self, repo: str, since: datetime.datetime | None
     ) -> list[wambatic.fetch.base.Issue]:
         """Rows with `updated_at >= since` (all when None), by number."""
-        rows = self.read_rows(
-            'issues',
-            ', '.join(ISSUE_COLUMNS[1:]),
-            repo,
-            since,
-            time_column='updated_at',
-            order='number',
+        return self.read_table(
+            tables().issues, repo, since, time_column='updated_at', order='number'
         )
-        return [issue_from_row(repo, row) for row in rows]
 
     def read_releases(self, repo: str) -> list[wambatic.fetch.base.Release]:
         """All the repo's rows, oldest `published_at` first."""
-        rows = self.read_rows(
-            'releases',
-            ', '.join(RELEASE_COLUMNS[1:]),
+        return self.read_table(
+            tables().releases,
             repo,
             None,
             time_column='published_at',
             order='published_at, tag_name',
         )
-        return [release_from_row(repo, row) for row in rows]
 
     def read_workflow_runs(
         self, repo: str, since: datetime.datetime | None
     ) -> list[wambatic.fetch.base.WorkflowRun]:
         """Rows with `created_at >= since` (all when None), oldest first."""
-        rows = self.read_rows(
-            'workflow_runs',
-            ', '.join(WORKFLOW_RUN_COLUMNS[1:]),
-            repo,
-            since,
-            time_column='created_at',
-            order='created_at, id',
+        return self.read_table(
+            tables().workflow_runs, repo, since, time_column='created_at', order='created_at, id'
         )
-        return [workflow_run_from_row(repo, row) for row in rows]
 
     def read_star_events(self, repo: str) -> list[wambatic.fetch.base.StarEvent]:
         """All the repo's rows, oldest `starred_at` first."""
-        rows = self.read_rows(
-            'star_events',
-            ', '.join(STAR_EVENT_COLUMNS[1:]),
-            repo,
-            None,
-            time_column='starred_at',
-            order='starred_at, user_id',
+        return self.read_table(
+            tables().star_events, repo, None, time_column='starred_at', order='starred_at, user_id'
         )
-        return [star_event_from_row(repo, row) for row in rows]
 
     def read_forks(self, repo: str) -> list[wambatic.fetch.base.Fork]:
         """All the repo's rows, oldest `created_at` first."""
-        rows = self.read_rows(
-            'forks',
-            ', '.join(FORK_COLUMNS[1:]),
-            repo,
-            None,
-            time_column='created_at',
-            order='created_at, id',
+        return self.read_table(
+            tables().forks, repo, None, time_column='created_at', order='created_at, id'
         )
-        return [fork_from_row(repo, row) for row in rows]
 
     def unfinished_runs(self, repo: str) -> list[int]:
         """Ids of the repo's runs whose status is not `completed`, ascending."""

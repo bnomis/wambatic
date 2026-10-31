@@ -233,7 +233,7 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 ## Task 6: Read the cache once and build each figure once
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** large
 **Source Reference:** F8 / Decision 3 (B), A14, P1, P3; F12 (P2); stats spec 1.6 "Reading once for several requests"; reports spec 1.9 "Built once"
@@ -242,27 +242,27 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 **Subtasks:**
 
-- [ ] `stats/compute.py`: implement `CachedRecords`, `read_records`, `aggregate` and `compute_all` as stats spec 1.6 gives them; `compute` becomes `read_records` then `aggregate`; `resources_for(request.groups)` is called once per read; export them as the spec's API says
-- [ ] `reports/service.py` `build_results`: call `wambatic.stats.compute_all`
-- [ ] `reports/html.py`: build each period's figures, the range figures and the calendar once in `html_document` and pass them to `period_figures`, `sections_html` and `page_data`; build each section's table once and reuse it for the presence test
-- [ ] `reports/rows.py`, `figures.py`, `terminal.py`: derive `total_series` and `bucket_list` once per function and pass them on (the P3 rows `rows.py:233-311`, `figures.py:395-404`, `terminal.py:137-138`, `:337`)
-- [ ] `fetch/base.py:652`: pass the `SyncState` `unchanged()` read to the `sync_*` methods instead of re-reading it (`:839`, `:905`, `:977`, `:1035`, `:1098`)
-- [ ] P1: `stats/delivery.py:183` finds the hotfixes in each deployment's window with `bisect` over each repo's sorted `opened` times; `reports/terminal.py:147` finds how many buckets fit in one pass; `stats/activity.py:99-109` keeps per-author and per-repo tallies only for buckets with records
-- [ ] F12: `reports/service.py:183`, `:198` call `resolve_token` through `asyncio.to_thread`; `reports/html.py` `read_template` gets `functools.cache` (templates are package data, fixed for the process)
-- [ ] Tests: `compute_all` returns what five `compute` calls return for the same requests (hypothesis over granularities and ranges against the fixture cache); `compute_all` reads each record once (a counting fake fetcher); `compute_all` raises `InvalidRequestError` for requests that differ in more than granularity, and for an empty list; `html_document` output is unchanged byte for byte against the existing fixtures
+- [x] `stats/compute.py`: implement `CachedRecords`, `read_records`, `aggregate` and `compute_all` as stats spec 1.6 gives them; `compute` becomes `read_records` then `aggregate`; `resources_for(request.groups)` is called once per read; export them as the spec's API says
+- [x] `reports/service.py` `build_results`: call `wambatic.stats.compute_all`
+- [x] `reports/html.py`: build each period's figures, the range figures and the calendar once in `html_document` and pass them to `period_figures`, `sections_html` and `page_data`; build each section's table once and reuse it for the presence test
+- [x] `reports/rows.py`, `figures.py`, `terminal.py`: derive `total_series` and `bucket_list` once per function and pass them on (the P3 rows `rows.py:233-311`, `figures.py:395-404`, `terminal.py:137-138`, `:337`)
+- [x] `fetch/base.py:652`: pass the `SyncState` `unchanged()` read to the `sync_*` methods instead of re-reading it (`:839`, `:905`, `:977`, `:1035`, `:1098`)
+- [x] P1: `stats/delivery.py:183` finds the hotfixes in each deployment's window with `bisect` over each repo's sorted `opened` times; `reports/terminal.py:147` finds how many buckets fit in one pass; `stats/activity.py:99-109` keeps per-author and per-repo tallies only for buckets with records
+- [x] F12: `reports/service.py:183`, `:198` call `resolve_token` through `asyncio.to_thread`; `reports/html.py` `read_template` gets `functools.cache` (templates are package data, fixed for the process)
+- [x] Tests: `compute_all` returns what five `compute` calls return for the same requests (hypothesis over granularities and ranges against the fixture cache); `compute_all` reads each record once (a counting fake fetcher); `compute_all` raises `InvalidRequestError` for requests that differ in more than granularity, and for an empty list; `html_document` output is unchanged byte for byte against the existing fixtures
 
 **Acceptance Criteria:**
 
-- [ ] A five-period HTML report calls each `Fetcher` read method once per repository (counting fake)
-- [ ] Every existing HTML, terminal, JSON and web test passes unchanged
-- [ ] The P1 rewrites give the same results as before on the hypothesis inputs
+- [x] A five-period HTML report calls each `Fetcher` read method once per repository (counting fake)
+- [x] Every existing HTML, terminal, JSON and web test passes unchanged
+- [x] The P1 rewrites give the same results as before on the hypothesis inputs
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/stats src/tests/reports src/tests/fetch/test_fetcher.py src/tests/test_cli.py src/tests/test_package.py` passes
-- [ ] `pytest -m browser src/tests/reports` passes (the page's script reads the same data)
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/stats src/tests/reports src/tests/fetch/test_fetcher.py src/tests/test_cli.py src/tests/test_package.py` passes
+- [x] `pytest -m browser src/tests/reports` passes (the page's script reads the same data)
 
 **Notes:**
 

@@ -175,13 +175,19 @@ def has_dora(result: wambatic.stats.base.StatsResult) -> bool:
     return any(s.metric in DORA_TABLE_METRICS and s.by is None for s in result.series)
 
 
-def bucket_list(result: wambatic.stats.base.StatsResult) -> list[wambatic.stats.base.Bucket]:
-    """The result's buckets, from whichever total series is present."""
-    series = total_series(result)
+def buckets_from(
+    series: dict[str, list[tuple[wambatic.stats.base.Bucket, float]]],
+) -> list[wambatic.stats.base.Bucket]:
+    """The buckets of `total_series` output, from whichever total series is present."""
     for metric in (*TOTAL_METRICS, *FLOW_COUNTS, *DELIVERY_COUNTS, *POPULARITY_TABLE_METRICS):
         if metric in series:
             return [bucket for bucket, _ in series[metric]]
     return []
+
+
+def bucket_list(result: wambatic.stats.base.StatsResult) -> list[wambatic.stats.base.Bucket]:
+    """The result's buckets, from whichever total series is present."""
+    return buckets_from(total_series(result))
 
 
 def partial_labels(result: wambatic.stats.base.StatsResult) -> frozenset[str]:
@@ -234,7 +240,7 @@ def flow_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | None:
     partial = partial_labels(result)
     rows = tuple(
         period_row(bucket.label, partial, (series[metric][index][1] for metric in FLOW_COUNTS))
-        for index, bucket in enumerate(bucket_list(result))
+        for index, bucket in enumerate(buckets_from(series))
     )
     total: tuple[float | None, ...] | None = None
     if len(rows) > 1:
@@ -254,7 +260,7 @@ def flow_times_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | N
         period_row(
             bucket.label, partial, (points[metric].get(bucket) for metric in FLOW_TIMES_METRICS)
         )
-        for bucket in bucket_list(result)
+        for bucket in buckets_from(series)
     )
     return PeriodTable('Flow times by period', FLOW_TIMES_HEADERS, FLOW_TIMES_METRICS, rows, None)
 
@@ -272,7 +278,7 @@ def delivery_period_table(
     points = {metric: dict(series[metric]) for metric in metrics}
     rows = tuple(
         period_row(bucket.label, partial, (points[metric].get(bucket) for metric in metrics))
-        for bucket in bucket_list(result)
+        for bucket in buckets_from(series)
     )
     total: tuple[float | None, ...] | None = None
     if len(rows) > 1:
@@ -308,7 +314,7 @@ def popularity_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | N
         period_row(
             bucket.label, partial, (series[metric][index][1] for metric in POPULARITY_TABLE_METRICS)
         )
-        for index, bucket in enumerate(bucket_list(result))
+        for index, bucket in enumerate(buckets_from(series))
     )
     total: tuple[float | None, ...] | None = None
     if len(rows) > 1:

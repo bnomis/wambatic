@@ -394,7 +394,8 @@ def build_figures(result: wambatic.stats.base.StatsResult) -> list[Figure]:
         'popularity': wambatic.reports.rows.has_popularity(result),
     }
     series = wambatic.reports.rows.total_series(result)
-    labels = [bucket.label for bucket in wambatic.reports.rows.bucket_list(result)]
+    buckets = wambatic.reports.rows.buckets_from(series)
+    labels = [bucket.label for bucket in buckets]
     flags = partial_flags(labels, wambatic.reports.rows.partial_labels(result))
     units = {s.metric: s.unit for s in result.series if s.by is None}
     figures: list[Figure] = []
@@ -402,7 +403,6 @@ def build_figures(result: wambatic.stats.base.StatsResult) -> list[Figure]:
         if not present[chart.group] or any(t.metric not in series for t in chart.traces):
             continue
         points = {t.metric: dict(series[t.metric]) for t in chart.traces}
-        buckets = wambatic.reports.rows.bucket_list(result)
         values = {
             t.metric: [
                 number(points[t.metric].get(bucket), units[t.metric], t.below_zero)

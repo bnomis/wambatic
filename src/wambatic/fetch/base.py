@@ -3,6 +3,7 @@ import collections.abc
 import contextlib
 import dataclasses
 import datetime
+import enum
 import typing
 import urllib.parse
 
@@ -164,6 +165,13 @@ class SyncState:
     synced_at: datetime.datetime
     full_synced_at: datetime.datetime
     probe: str | None = None
+
+
+class Unread(enum.Enum):
+    """The `state` of a sync method that has not been read from the cache yet, as distinct from
+    `None`, which is a resource that was never synced."""
+
+    UNREAD = enum.auto()
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -657,7 +665,17 @@ class Fetcher:
             and (self.settings.include_archived or not repo.is_archived)
         ]
 
-    async def unchanged(self, repo: Repo, resource: str) -> bool:
+    async def stored_state(
+        self, repo: Repo, resource: str, state: SyncState | None | Unread
+    ) -> SyncState | None:
+        """`state` when the caller has read it, else the repo's stored state for `resource`."""
+        if isinstance(state, Unread):
+            return await self.db(self.cache.sync_state, repo.name_with_owner, resource)
+        return state
+
+    async def unchanged(
+        self, repo: Repo, resource: str, state: SyncState | None | Unread = Unread.UNREAD
+    ) -> bool:
         """True when `resource` needs no request for this listed repo.
 
         `commits` were last synced against this `pushedAt` and `updatedAt`. `issues` and
@@ -670,7 +688,7 @@ class Fetcher:
         """
         if resource == 'workflow_runs':
             return False
-        state = await self.db(self.cache.sync_state, repo.name_with_owner, resource)
+        state = await self.stored_state(repo, resource, state)
         if state is None:
             return False
         if resource == 'commits':
@@ -865,9 +883,11 @@ class Fetcher:
             self.cache.write_commits, repo.name_with_owner, commits, new_state, replace=False
         )
 
-    async def sync_commits(self, repo: Repo, full_refresh: bool) -> tuple[int, bool]:
+    async def sync_commits(
+        self, repo: Repo, full_refresh: bool, state: SyncState | None | Unread = Unread.UNREAD
+    ) -> tuple[int, bool]:
         """Rows written and whether the history was read from scratch."""
-        state = await self.db(self.cache.sync_state, repo.name_with_owner, 'commits')
+        state = await self.stored_state(repo, 'commits', state)
         if state is None:
             reason = 'no previous sync'
         elif full_refresh:
@@ -929,11 +949,17 @@ class Fetcher:
             raise malformed('no page was read')
         return found, watermark
 
-    async def sync_updated(self, repo: Repo, resource: str, full_refresh: bool) -> int:
+    async def sync_updated(
+        self,
+        repo: Repo,
+        resource: str,
+        full_refresh: bool,
+        state: SyncState | None | Unread = Unread.UNREAD,
+    ) -> int:
         """Bring the repo's pull requests or issues up to date and return the rows written:
         everything on the first sync, on a full refresh or when a full read is due, else the
         items changed since the watermark. The rows and the new state go in one transaction."""
-        state = await self.db(self.cache.sync_state, repo.name_with_owner, resource)
+        state = await self.stored_state(repo, resource, state)
         full, full_synced_at = self.plan_full_read(repo, resource, state, full_refresh)
         if resource == 'pull_requests':
             pulls, watermark = await self.read_updated(
@@ -1002,10 +1028,12 @@ class Fetcher:
             return None
         return state.watermark - self.settings.overlap
 
-    async def sync_releases(self, repo: Repo, full_refresh: bool) -> int:
+    async def sync_releases(
+        self, repo: Repo, full_refresh: bool, state: SyncState | None | Unread = Unread.UNREAD
+    ) -> int:
         """Read every published release of the repo and replace its cached ones, in one
         transaction with the listing's release probe. Every read is a full read."""
-        state = await self.db(self.cache.sync_state, repo.name_with_owner, 'releases')
+        state = await self.stored_state(repo, 'releases', state)
         self.plan_full_read(repo, 'releases', state, full_refresh)
         owner, name = split_name(repo.name_with_owner)
         releases: list[Release] = []
@@ -1053,7 +1081,9 @@ class Fetcher:
             raise malformed('no page was read')
         return found, watermark
 
-    async def sync_star_events(self, repo: Repo, full_refresh: bool) -> int:
+    async def sync_star_events(
+        self, repo: Repo, full_refresh: bool, state: SyncState | None | Unread = Unread.UNREAD
+    ) -> int:
         """Bring the repo's stars up to date and return the rows written: every star on a full
         read (a first sync, `--full-refresh`, a passed `fetch.full_refresh_after`, or a listed star
         count below the stored one), else the stars given since the watermark less
@@ -1063,7 +1093,7 @@ class Fetcher:
         A read of everything that lists no star for a repo with a listed star count, or that
         GitHub refuses as `FORBIDDEN`, means the token cannot see the stargazers: no rows are
         written, and the state's probe is `STARS_HIDDEN`, so the next sync reads again."""
-        state = await self.db(self.cache.sync_state, repo.name_with_owner, 'star_events')
+        state = await self.stored_state(repo, 'star_events', state)
         full, full_synced_at = self.plan_full_read(
             repo, 'star_events', state, full_refresh, repo.stargazer_count
         )
@@ -1123,10 +1153,12 @@ class Fetcher:
                 return found, watermark
             page += 1
 
-    async def sync_forks(self, repo: Repo, full_refresh: bool) -> int:
+    async def sync_forks(
+        self, repo: Repo, full_refresh: bool, state: SyncState | None | Unread = Unread.UNREAD
+    ) -> int:
         """As `sync_star_events` for the repo's direct forks, from the REST fork list (outside the
         ETag store: the listed fork count has already said they changed)."""
-        state = await self.db(self.cache.sync_state, repo.name_with_owner, 'forks')
+        state = await self.stored_state(repo, 'forks', state)
         full, full_synced_at = self.plan_full_read(
             repo, 'forks', state, full_refresh, repo.fork_count
         )
@@ -1198,11 +1230,13 @@ class Fetcher:
             again.append(parse_workflow_run(repo.name_with_owner, response.data))
         return again, gone
 
-    async def sync_workflow_runs(self, repo: Repo, full_refresh: bool) -> int:
+    async def sync_workflow_runs(
+        self, repo: Repo, full_refresh: bool, state: SyncState | None | Unread = Unread.UNREAD
+    ) -> int:
         """Bring the repo's Actions runs up to date and return the rows written: every run on
         a full read, else the runs created since the watermark less `fetch.overlap`, plus every
         cached unfinished run read again. Rows and state go in one transaction."""
-        state = await self.db(self.cache.sync_state, repo.name_with_owner, 'workflow_runs')
+        state = await self.stored_state(repo, 'workflow_runs', state)
         full, full_synced_at = self.plan_full_read(repo, 'workflow_runs', state, full_refresh)
         runs, watermark = await self.read_workflow_runs(repo, self.read_cutoff(state, full))
         if watermark is None and state is not None:
@@ -1290,12 +1324,14 @@ class Fetcher:
         )
         ordered = [resource for resource in RESOURCE_ORDER if resource in resources]
         pending: list[tuple[Repo, list[Resource]]] = []
+        states: dict[tuple[str, str], SyncState | None] = {}
         for repo in listed:
-            needed = [
-                resource
-                for resource in ordered
-                if full_refresh or not await self.unchanged(repo, resource)
-            ]
+            needed: list[Resource] = []
+            for resource in ordered:
+                state = await self.db(self.cache.sync_state, repo.name_with_owner, resource)
+                states[repo.name_with_owner, resource] = state
+                if full_refresh or not await self.unchanged(repo, resource, state):
+                    needed.append(resource)
             if needed:
                 pending.append((repo, needed))
         rows: dict[str, int] = dict.fromkeys(ordered, 0)
@@ -1307,20 +1343,21 @@ class Fetcher:
         async def sync_one(repo: Repo, needed: list[Resource]) -> None:
             async with self.semaphore:
                 for resource in needed:
+                    state = states[repo.name_with_owner, resource]
                     if resource == 'commits':
-                        written, full = await self.sync_commits(repo, full_refresh)
+                        written, full = await self.sync_commits(repo, full_refresh, state)
                         if full:
                             refetched.append(repo.name_with_owner)
                     elif resource == 'releases':
-                        written = await self.sync_releases(repo, full_refresh)
+                        written = await self.sync_releases(repo, full_refresh, state)
                     elif resource == 'workflow_runs':
-                        written = await self.sync_workflow_runs(repo, full_refresh)
+                        written = await self.sync_workflow_runs(repo, full_refresh, state)
                     elif resource == 'star_events':
-                        written = await self.sync_star_events(repo, full_refresh)
+                        written = await self.sync_star_events(repo, full_refresh, state)
                     elif resource == 'forks':
-                        written = await self.sync_forks(repo, full_refresh)
+                        written = await self.sync_forks(repo, full_refresh, state)
                     elif resource == 'issues' or resource == 'pull_requests':
-                        written = await self.sync_updated(repo, resource, full_refresh)
+                        written = await self.sync_updated(repo, resource, full_refresh, state)
                     else:
                         typing.assert_never(resource)
                     rows[resource] += written

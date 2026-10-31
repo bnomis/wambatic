@@ -2,6 +2,7 @@
 table, built from the results of one request that differ only in granularity."""
 
 import dataclasses
+import functools
 import html
 import importlib.resources
 import json
@@ -129,6 +130,7 @@ def check_report(report: HtmlReport) -> None:
             )
 
 
+@functools.cache
 def read_template(name: str) -> str:
     """The packaged template `name`.
 
@@ -396,12 +398,32 @@ def figure_html(figure: wambatic.reports.figures.Figure, wide: bool = False) -> 
     )
 
 
-def period_figures(report: HtmlReport) -> list[wambatic.reports.figures.Figure]:
+@dataclasses.dataclass(frozen=True, slots=True)
+class PageFigures:
+    """Every figure of one page, each built once by `build_page_figures`."""
+
+    periods: dict[Granularity, list[wambatic.reports.figures.Figure]]
+    range_figures: list[wambatic.reports.figures.Figure]
+    calendar: wambatic.reports.figures.Figure | None
+
+
+def build_page_figures(report: HtmlReport) -> PageFigures:
+    return PageFigures(
+        periods={
+            granularity: wambatic.reports.figures.build_figures(result)
+            for granularity, result in report.periods.items()
+        },
+        range_figures=wambatic.reports.figures.build_range_figures(report.total),
+        calendar=wambatic.reports.figures.build_calendar(report.periods[Granularity.DAY]),
+    )
+
+
+def period_figures(report: HtmlReport, built: PageFigures) -> list[wambatic.reports.figures.Figure]:
     """One figure for each chart any granularity has, in page order, as the elements the page
     script draws into."""
     seen: dict[str, wambatic.reports.figures.Figure] = {}
     for granularity in (report.initial, *PERIODS):
-        for figure in wambatic.reports.figures.build_figures(report.periods[granularity]):
+        for figure in built.periods[granularity]:
             seen.setdefault(figure.key, figure)
     order = {chart.key: index for index, chart in enumerate(wambatic.reports.figures.CHARTS)}
     return sorted(seen.values(), key=lambda figure: order[figure.key])
@@ -518,11 +540,11 @@ def footer_html(total: wambatic.stats.base.StatsResult) -> str:
     )
 
 
-def sections_html(report: HtmlReport) -> str:
+def sections_html(report: HtmlReport, built: PageFigures) -> str:
     total = report.total
-    figures = period_figures(report)
-    range_figures = wambatic.reports.figures.build_range_figures(total)
-    calendar = wambatic.reports.figures.build_calendar(report.periods[Granularity.DAY])
+    figures = period_figures(report, built)
+    range_figures = built.range_figures
+    calendar = built.calendar
     sections = []
     if wambatic.reports.rows.activity_table(total) is not None:
         charts = [f for f in figures if f.group == 'activity']
@@ -590,8 +612,8 @@ def sections_html(report: HtmlReport) -> str:
     return ''.join(sections)
 
 
-def page_data(report: HtmlReport, theme: Theme) -> dict[str, object]:
-    calendar = wambatic.reports.figures.build_calendar(report.periods[Granularity.DAY])
+def page_data(report: HtmlReport, theme: Theme, built: PageFigures) -> dict[str, object]:
+    calendar = built.calendar
     return {
         'initial': str(report.initial),
         'theme': theme,
@@ -600,15 +622,10 @@ def page_data(report: HtmlReport, theme: Theme) -> dict[str, object]:
             for name, colours in wambatic.reports.figures.PALETTE.items()
         },
         'periods': {
-            str(granularity): [
-                dataclasses.asdict(f) for f in wambatic.reports.figures.build_figures(result)
-            ]
-            for granularity, result in report.periods.items()
+            str(granularity): [dataclasses.asdict(f) for f in figures]
+            for granularity, figures in built.periods.items()
         },
-        'range': [
-            dataclasses.asdict(f)
-            for f in wambatic.reports.figures.build_range_figures(report.total)
-        ],
+        'range': [dataclasses.asdict(f) for f in built.range_figures],
         'calendar': None if calendar is None else dataclasses.asdict(calendar),
     }
 
@@ -617,6 +634,7 @@ def html_document(report: HtmlReport, theme: Theme) -> str:
     """The whole self-contained page. Pure: the only reads are of this package's templates.
     Raises UsageError when the five results differ in anything but granularity."""
     check_report(report)
+    built = build_page_figures(report)
     title = f'wambatic: {wambatic.reports.rows.subject_text(report.total)}'
     return string.Template(read_template('report.html')).substitute(
         theme_attribute=theme_attribute(theme),
@@ -624,9 +642,9 @@ def html_document(report: HtmlReport, theme: Theme) -> str:
         style=stylesheet(),
         header=header_html(report),
         tiles=tiles_html(report.total),
-        sections=sections_html(report),
+        sections=sections_html(report, built),
         footer=footer_html(report.total),
-        data=json_for_script(page_data(report, theme)),
+        data=json_for_script(page_data(report, theme, built)),
         plotlyjs=read_plotlyjs(),
         script=read_template('report.js'),
     )

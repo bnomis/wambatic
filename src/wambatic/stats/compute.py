@@ -1,5 +1,7 @@
 import collections.abc
+import dataclasses
 import datetime
+import types
 import typing
 
 import wambatic.fetch.base
@@ -146,23 +148,39 @@ async def read_popularity(
     return stars, forks, hidden
 
 
-async def compute(
+@dataclasses.dataclass(frozen=True, slots=True)
+class CachedRecords:
+    """What `read_records` reads from the cache for one subject and one request, before the range
+    is resolved. Nothing in it depends on the request's granularity."""
+
+    repos: tuple[wambatic.fetch.base.Repo, ...]
+    commits: tuple[wambatic.fetch.base.Commit, ...]
+    pulls: tuple[wambatic.fetch.base.PullRequest, ...]
+    issues: tuple[wambatic.fetch.base.Issue, ...]
+    runs: tuple[wambatic.fetch.base.WorkflowRun, ...]
+    releases: tuple[wambatic.fetch.base.Release, ...]
+    delivery_pulls: tuple[wambatic.fetch.base.PullRequest, ...]
+    stars: tuple[wambatic.fetch.base.StarEvent, ...]
+    forks: tuple[wambatic.fetch.base.Fork, ...]
+    hidden: tuple[wambatic.fetch.base.Repo, ...]
+    provenance: types.MappingProxyType[str, str]
+
+
+async def read_records(
     subject: wambatic.fetch.base.Subject,
     fetcher: wambatic.fetch.base.Fetcher,
     request: wambatic.stats.base.StatsRequest,
-    *,
-    clock: collections.abc.Callable[[], datetime.datetime] | None = None,
-) -> wambatic.stats.base.StatsResult:
-    """All requested metric groups for the subject, from the cache, bucketed by
-    request.granularity. Never syncs: the caller runs Fetcher.sync first, or not at all for
-    --no-fetch. `clock` (default: now in UTC) gives today's date when `until` is None.
+) -> CachedRecords:
+    """Validate the request and read what its groups need from the cache, with the fetch
+    provenance. The only part of `compute` that touches the cache.
 
     Raises:
+        UnknownGroupError: a group is outside `GROUPS`.
         InvalidRequestError: `by_author` is set for a user.
         InvalidRangeError: `since` is after `until`.
-        EmptySubjectError: there is nothing to report.
+        EmptySubjectError: no group is requested, or the cache holds no repositories.
     """
-    resources_for(request.groups)
+    resources = resources_for(request.groups)
     if request.by_author and subject.kind == 'user':
         raise wambatic.stats.errors.InvalidRequestError('by_author is not meaningful for a user')
     if request.since is not None and request.until is not None and request.since > request.until:
@@ -196,13 +214,53 @@ async def compute(
         runs, releases, delivery_pulls = await read_delivery(fetcher, repos, request)
     if 'popularity' in built:
         stars, forks, hidden = await read_popularity(fetcher, repos)
+    provenance = await fetcher.provenance(subject, resources)
+    return CachedRecords(
+        repos=tuple(repos),
+        commits=tuple(commits),
+        pulls=tuple(pulls),
+        issues=tuple(issues),
+        runs=tuple(runs),
+        releases=tuple(releases),
+        delivery_pulls=tuple(delivery_pulls),
+        stars=tuple(stars),
+        forks=tuple(forks),
+        hidden=tuple(hidden),
+        provenance=types.MappingProxyType(dict(provenance)),
+    )
+
+
+def aggregate(
+    subject: wambatic.fetch.base.Subject,
+    records: CachedRecords,
+    request: wambatic.stats.base.StatsRequest,
+    now: datetime.datetime,
+) -> wambatic.stats.base.StatsResult:
+    """Resolve the range against `now` and build every series, table and the stats provenance.
+    Pure: `records` must come from `read_records` of a request that differs from this one in
+    granularity at most.
+
+    Raises:
+        InvalidRangeError: the range resolves backwards.
+        EmptySubjectError: there are no records of any requested group in the range.
+    """
+    built = request.groups
+    commits = list(records.commits)
+    pulls = list(records.pulls)
+    issues = list(records.issues)
+    runs = list(records.runs)
+    releases = list(records.releases)
+    delivery_pulls = list(records.delivery_pulls)
+    stars = list(records.stars)
+    forks = list(records.forks)
+    hidden = list(records.hidden)
+    repos = list(records.repos)
     empty = wambatic.stats.errors.EmptySubjectError(
         f'no {" or ".join(sorted(built))} records in the cache for this range'
     )
     popularity = 'popularity' in built
     if not (commits or pulls or issues or runs or releases or popularity):
         raise empty
-    now = (clock or (lambda: datetime.datetime.now(datetime.UTC)))()
     tz = request.tz
     granularity = request.granularity
     until = request.until if request.until is not None else now.astimezone(tz).date()
@@ -258,7 +316,7 @@ async def compute(
         tables.update(popular_tables)
         gaps.extend(wambatic.stats.popularity.hidden_star_gaps(hidden))
     tables['unavailable'] = gaps
-    provenance = await fetcher.provenance(subject, resources_for(built))
+    provenance = dict(records.provenance)
     provenance['computed_at'] = now.astimezone(datetime.UTC).isoformat()
     provenance['timezone'] = str(tz)
     provenance['partial_buckets'] = ','.join(
@@ -273,3 +331,54 @@ async def compute(
         tables=tables,
         provenance=provenance,
     )
+
+
+async def compute(
+    subject: wambatic.fetch.base.Subject,
+    fetcher: wambatic.fetch.base.Fetcher,
+    request: wambatic.stats.base.StatsRequest,
+    *,
+    clock: collections.abc.Callable[[], datetime.datetime] | None = None,
+) -> wambatic.stats.base.StatsResult:
+    """All requested metric groups for the subject, from the cache, bucketed by
+    request.granularity. Never syncs: the caller runs Fetcher.sync first, or not at all for
+    --no-fetch. `clock` (default: now in UTC) gives today's date when `until` is None.
+
+    Raises:
+        UnknownGroupError: a group is outside `GROUPS`.
+        InvalidRequestError: `by_author` is set for a user.
+        InvalidRangeError: `since` is after `until`.
+        EmptySubjectError: there is nothing to report.
+    """
+    records = await read_records(subject, fetcher, request)
+    now = (clock or (lambda: datetime.datetime.now(datetime.UTC)))()
+    return aggregate(subject, records, request, now)
+
+
+async def compute_all(
+    subject: wambatic.fetch.base.Subject,
+    fetcher: wambatic.fetch.base.Fetcher,
+    requests: list[wambatic.stats.base.StatsRequest],
+    *,
+    clock: collections.abc.Callable[[], datetime.datetime] | None = None,
+) -> list[wambatic.stats.base.StatsResult]:
+    """One result per request, in order, from one `read_records` of the first request and one
+    `now` from `clock`: the cache is read once however many requests there are.
+
+    Raises:
+        InvalidRequestError: `requests` is empty, or two requests differ in more than granularity.
+    """
+    if not requests:
+        raise wambatic.stats.errors.InvalidRequestError('compute_all needs at least one request')
+    first = requests[0]
+    for request in requests[1:]:
+        for field in dataclasses.fields(first):
+            if field.name != 'granularity' and getattr(request, field.name) != getattr(
+                first, field.name
+            ):
+                raise wambatic.stats.errors.InvalidRequestError(
+                    f'requests differ in {field.name}: only granularity may differ'
+                )
+    records = await read_records(subject, fetcher, first)
+    now = (clock or (lambda: datetime.datetime.now(datetime.UTC)))()
+    return [aggregate(subject, records, request, now) for request in requests]

@@ -1316,22 +1316,22 @@ def test_html_syncs_once_and_computes_five_times_and_writes_one_file(
     tmp_path: pathlib.Path,
 ) -> None:
     monkeypatch.setenv('GITHUB_TOKEN', 'test-token')
-    granularities: list[str] = []
-    original = wambatic.stats.compute
+    granularities: list[list[str]] = []
+    original = wambatic.stats.compute_all
 
     async def spy(
-        subject: wambatic.fetch.base.Subject, reader: object, request: object, **kwargs: object
-    ) -> wambatic.stats.base.StatsResult:
-        result: wambatic.stats.base.StatsResult = await original(
+        subject: wambatic.fetch.base.Subject, reader: object, requests: object, **kwargs: object
+    ) -> list[wambatic.stats.base.StatsResult]:
+        results: list[wambatic.stats.base.StatsResult] = await original(
             subject,
             reader,  # type: ignore[arg-type]
-            request,  # type: ignore[arg-type]
+            requests,  # type: ignore[arg-type]
             **kwargs,  # type: ignore[arg-type]
         )
-        granularities.append(str(result.request.granularity))
-        return result
+        granularities.append([str(result.request.granularity) for result in results])
+        return results
 
-    monkeypatch.setattr(wambatic.stats, 'compute', spy)
+    monkeypatch.setattr(wambatic.stats, 'compute_all', spy)
     out = tmp_path / 'one' / 'report.html'
     ran = run_report(
         monkeypatch,
@@ -1340,7 +1340,7 @@ def test_html_syncs_once_and_computes_five_times_and_writes_one_file(
         ['repo:octo-org/alpha', '--format', 'html', '--out', str(out), *ALPHA_FLAGS],
     )
     assert len(ran.syncs) == 1
-    assert granularities == ['total', 'year', 'month', 'week', 'day']
+    assert granularities == [['total', 'year', 'month', 'week', 'day']]
     assert ran.stdout == f'{out}\n'
     assert [path.name for path in out.parent.iterdir()] == ['report.html']
 

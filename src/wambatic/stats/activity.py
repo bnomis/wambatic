@@ -58,11 +58,14 @@ def series_of(
     metric: str,
     unit: str,
     buckets: list[wambatic.stats.base.Bucket],
-    tallies: collections.abc.Sequence[Tally],
+    tallies: collections.abc.Mapping[int, Tally],
     by: str | None = None,
     by_kind: typing.Literal['author', 'repo'] | None = None,
 ) -> wambatic.stats.base.Series:
-    points = {bucket: tally.value(metric) for bucket, tally in zip(buckets, tallies, strict=True)}
+    empty = Tally()
+    points = {
+        bucket: tallies.get(index, empty).value(metric) for index, bucket in enumerate(buckets)
+    }
     return wambatic.stats.base.Series(metric, unit, points, by, by_kind)
 
 
@@ -81,9 +84,9 @@ def aggregate(
     starts = [bucket.start for bucket in buckets]
     end = wambatic.stats.buckets.bucket_end(buckets)
     totals = [Tally() for _ in buckets]
-    authors: dict[str | None, list[Tally]] = {}
+    authors: dict[str | None, dict[int, Tally]] = {}
     spellings: dict[str | None, str] = {}
-    repos: dict[str, list[Tally]] = {}
+    repos: dict[str, dict[int, Tally]] = {}
     overall: dict[str | None, Tally] = {}
     for commit in commits:
         day = commit.authored_at.astimezone(tz).date()
@@ -96,11 +99,13 @@ def aggregate(
             totals[index].logins.add(key)
         overall.setdefault(key, Tally()).add(commit, day, lines)
         if by_author:
-            authors.setdefault(key, [Tally() for _ in buckets])[index].add(commit, day, lines)
+            authors.setdefault(key, {}).setdefault(index, Tally()).add(commit, day, lines)
         if by_repo:
-            repos.setdefault(commit.repo, [Tally() for _ in buckets])[index].add(commit, day, lines)
-    series = [series_of(metric, unit, buckets, totals) for metric, unit in TOTAL_METRICS]
-    breakdowns: list[tuple[str, str, list[Tally]]] = [
+            repos.setdefault(commit.repo, {}).setdefault(index, Tally()).add(commit, day, lines)
+    series = [
+        series_of(metric, unit, buckets, dict(enumerate(totals))) for metric, unit in TOTAL_METRICS
+    ]
+    breakdowns: list[tuple[str, str, dict[int, Tally]]] = [
         ('author', spellings[key], tallies) for key, tallies in authors.items()
     ] + [('repo', name, tallies) for name, tallies in repos.items()]
     for kind, by, tallies in sorted(breakdowns, key=lambda item: (item[0], item[1])):

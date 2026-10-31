@@ -758,3 +758,106 @@ def test_compute_reads_popularity_without_a_request(
     assert stats_fetcher.client.session is None
     compute(stats_fetcher, groups=POPULARITY)
     assert stats_fetcher.client.session is None
+
+
+# compute_all
+
+
+class CountingFetcher:
+    """Wraps a fetcher and counts each call to a method, by name."""
+
+    def __init__(self, inner: wambatic.fetch.base.Fetcher) -> None:
+        self.inner = inner
+        self.calls: dict[str, int] = {}
+
+    def __getattr__(self, name: str) -> object:
+        target = getattr(self.inner, name)
+        if not callable(target):
+            return target
+
+        def counted(*args: object, **kwargs: object) -> object:
+            self.calls[name] = self.calls.get(name, 0) + 1
+            return target(*args, **kwargs)
+
+        return counted
+
+
+ALL_GROUPS = frozenset({'activity', 'delivery', 'flow', 'popularity'})
+
+
+def compute_all_of(
+    fetcher: object, granularities: list[Granularity], **changes: object
+) -> list[wambatic.stats.base.StatsResult]:
+    requests = [request(granularity=granularity, **changes) for granularity in granularities]
+    return asyncio.run(
+        wambatic.stats.compute_all(
+            fixture.ORG, typing.cast(wambatic.fetch.base.Fetcher, fetcher), requests, clock=clock
+        )
+    )
+
+
+@hypothesis.settings(
+    max_examples=20,
+    deadline=10000,
+    suppress_health_check=[hypothesis.HealthCheck.function_scoped_fixture],
+)
+@hypothesis.given(
+    spans(),
+    st.lists(st.sampled_from(list(Granularity)), min_size=1, max_size=5, unique=True),
+)
+def test_compute_all_returns_what_one_compute_per_request_returns(
+    stats_fetcher: wambatic.fetch.base.Fetcher,
+    span: tuple[datetime.date, datetime.date],
+    granularities: list[Granularity],
+) -> None:
+    since, until = span
+    changes = {'since': since, 'until': until, 'groups': ALL_GROUPS}
+    try:
+        expected = [
+            asyncio.run(
+                wambatic.stats.compute(
+                    fixture.ORG, stats_fetcher, request(granularity=g, **changes), clock=clock
+                )
+            )
+            for g in granularities
+        ]
+    except wambatic.stats.errors.EmptySubjectError:
+        with pytest.raises(wambatic.stats.errors.EmptySubjectError):
+            compute_all_of(stats_fetcher, granularities, **changes)
+        return
+    assert compute_all_of(stats_fetcher, granularities, **changes) == expected
+
+
+def test_compute_all_reads_each_resource_once_for_five_requests(
+    stats_fetcher: wambatic.fetch.base.Fetcher,
+) -> None:
+    counting = CountingFetcher(stats_fetcher)
+    results = compute_all_of(counting, list(Granularity), groups=ALL_GROUPS)
+    assert [r.request.granularity for r in results] == list(Granularity)
+    repos = len(asyncio.run(stats_fetcher.repos(fixture.ORG)))
+    assert counting.calls['repos'] == 1
+    assert counting.calls['provenance'] == 1
+    assert counting.calls['commits'] == repos
+    assert counting.calls['releases'] == repos
+    assert counting.calls['workflow_runs'] == repos
+    assert counting.calls['issues'] == repos
+    assert counting.calls['pull_requests'] == 2 * repos
+
+
+def test_compute_all_gives_every_result_the_same_computed_at(
+    stats_fetcher: wambatic.fetch.base.Fetcher,
+) -> None:
+    results = compute_all_of(stats_fetcher, list(Granularity))
+    assert len({r.provenance['computed_at'] for r in results}) == 1
+
+
+def test_compute_all_rejects_an_empty_list_before_reading() -> None:
+    with pytest.raises(wambatic.stats.errors.InvalidRequestError, match='at least one'):
+        compute_all_of(Untouchable(), [])
+
+
+def test_compute_all_rejects_requests_that_differ_in_more_than_granularity() -> None:
+    requests = [request(), request(granularity=Granularity.DAY, by_author=True)]
+    fetcher = typing.cast(wambatic.fetch.base.Fetcher, Untouchable())
+    with pytest.raises(wambatic.stats.errors.InvalidRequestError, match='by_author'):
+        asyncio.run(wambatic.stats.compute_all(fixture.ORG, fetcher, requests, clock=clock))

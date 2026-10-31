@@ -174,14 +174,20 @@ def aggregate(
             values['time_to_restore'][index].append(
                 wambatic.stats.percentile.hours(pull.created_at, pull.merged_at)
             )
+    for opened_times in hotfix_opened.values():
+        opened_times.sort()
     for repo, moments in by_repo.items():
+        opened_times = hotfix_opened.get(repo, [])
         for moment in moments:
             if (index := place(moment)) is None:
                 continue
             counts['deployments'][index] += 1
             window_closed = moment + window <= horizon
-            failures[index] += window_closed and any(
-                moment < opened <= moment + window for opened in hotfix_opened[repo]
+            first = bisect.bisect_right(opened_times, moment)
+            failures[index] += (
+                window_closed
+                and first < len(opened_times)
+                and opened_times[first] <= moment + window
             )
     for pull in pull_requests:
         if pull.merged_at is None:

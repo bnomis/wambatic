@@ -94,9 +94,9 @@ def test_use_outside_context_raises(make_client: tests.conftest.MakeClient) -> N
     async def scenario() -> None:
         async with server_module.ReplayServer({}) as server:
             client = make_client(server)
-            with pytest.raises(RuntimeError):
+            with pytest.raises(wambatic.fetch.errors.FetchError):
                 await client.graphql('query', {})
-            with pytest.raises(RuntimeError):
+            with pytest.raises(wambatic.fetch.errors.FetchError):
                 await client.rest_get('/x')
 
     asyncio.run(scenario())

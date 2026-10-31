@@ -7,6 +7,10 @@ class FetchError(Exception):
     """Base class of every error the fetch layer raises."""
 
 
+class InvalidRequestError(FetchError):
+    """A caller mistake: an unknown resource, a malformed subject, records of another repo."""
+
+
 class AuthError(FetchError):
     pass
 

@@ -7,6 +7,7 @@ import datetime
 import typing
 
 import wambatic.reports.base
+import wambatic.reports.errors
 import wambatic.reports.rows
 import wambatic.stats.base
 
@@ -544,9 +545,9 @@ def build_range_figures(total: wambatic.stats.base.StatsResult) -> list[Figure]:
     """The whole-range charts of a TOTAL result: horizontal bars of commits (the top
     contributors, then each breakdown the result holds, with the tables' rows) when it has
     activity series, then the languages' shares when its languages table is not empty. Raises
-    ValueError for any other granularity."""
+    UsageError for any other granularity."""
     if total.request.granularity is not wambatic.stats.base.Granularity.TOTAL:
-        raise ValueError(
+        raise wambatic.reports.errors.UsageError(
             f'build_range_figures needs a TOTAL result, not {total.request.granularity}'
         )
     figures = activity_range_figures(total) if wambatic.reports.rows.has_activity(total) else []
@@ -558,10 +559,12 @@ def build_range_figures(total: wambatic.stats.base.StatsResult) -> list[Figure]:
 def build_calendar(day: wambatic.stats.base.StatsResult) -> Figure | None:
     """The commits-by-day heat-map of a DAY result: a column for each ISO week in the range
     (x is its Monday) and a row for each weekday, Monday at the top, a day outside the range
-    `None` so it is blank. None without activity series. Raises ValueError for any other
+    `None` so it is blank. None without activity series. Raises UsageError for any other
     granularity."""
     if day.request.granularity is not wambatic.stats.base.Granularity.DAY:
-        raise ValueError(f'build_calendar needs a DAY result, not {day.request.granularity}')
+        raise wambatic.reports.errors.UsageError(
+            f'build_calendar needs a DAY result, not {day.request.granularity}'
+        )
     if not wambatic.reports.rows.has_activity(day):
         return None
     series = wambatic.reports.rows.total_series(day)

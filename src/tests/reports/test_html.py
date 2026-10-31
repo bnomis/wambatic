@@ -279,7 +279,7 @@ def test_report_filename_names_the_kind_and_the_subject(
 
 def test_a_total_that_is_not_total_is_refused(org_report: wambatic.reports.html.HtmlReport) -> None:
     month = org_report.periods[Granularity.MONTH]
-    with pytest.raises(ValueError, match='total must be a TOTAL result'):
+    with pytest.raises(wambatic.reports.errors.UsageError, match='total must be a TOTAL result'):
         wambatic.reports.html.html_document(dataclasses.replace(org_report, total=month), 'auto')
 
 
@@ -287,7 +287,7 @@ def test_a_missing_granularity_is_refused(org_report: wambatic.reports.html.Html
     periods: dict[Granularity, wambatic.stats.base.StatsResult] = {
         g: r for g, r in org_report.periods.items() if g is not Granularity.WEEK
     }
-    with pytest.raises(ValueError, match='periods must be exactly'):
+    with pytest.raises(wambatic.reports.errors.UsageError, match='periods must be exactly'):
         wambatic.reports.html.html_document(
             dataclasses.replace(org_report, periods=periods), 'auto'
         )
@@ -296,7 +296,7 @@ def test_a_missing_granularity_is_refused(org_report: wambatic.reports.html.Html
 def test_an_initial_granularity_outside_the_periods_is_refused(
     org_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    with pytest.raises(ValueError, match='initial'):
+    with pytest.raises(wambatic.reports.errors.UsageError, match='initial'):
         wambatic.reports.html.html_document(
             dataclasses.replace(org_report, initial=Granularity.TOTAL), 'auto'
         )
@@ -324,7 +324,10 @@ def test_a_result_made_for_another_range_is_refused_naming_the_difference(
         month, request=dataclasses.replace(month.request, since=fixture.SINCE.replace(day=2))
     )
     periods = {**org_report.periods, Granularity.MONTH: other}
-    with pytest.raises(ValueError, match='month result differs from the total in request since'):
+    with pytest.raises(
+        wambatic.reports.errors.UsageError,
+        match='month result differs from the total in request since',
+    ):
         wambatic.reports.html.html_document(
             dataclasses.replace(org_report, periods=periods), 'auto'
         )
@@ -335,7 +338,9 @@ def test_a_result_for_another_subject_or_groups_is_refused(
 ) -> None:
     day = org_report.periods[Granularity.DAY]
     user = dataclasses.replace(day, subject=wambatic.fetch.base.Subject('user', 'octocat'))
-    with pytest.raises(ValueError, match='day result differs from the total in subject'):
+    with pytest.raises(
+        wambatic.reports.errors.UsageError, match='day result differs from the total in subject'
+    ):
         wambatic.reports.html.html_document(
             dataclasses.replace(org_report, periods={**org_report.periods, Granularity.DAY: user}),
             'auto',
@@ -343,7 +348,7 @@ def test_a_result_for_another_subject_or_groups_is_refused(
     groups = dataclasses.replace(
         day, request=dataclasses.replace(day.request, groups=frozenset({'activity'}))
     )
-    with pytest.raises(ValueError, match='request groups'):
+    with pytest.raises(wambatic.reports.errors.UsageError, match='request groups'):
         wambatic.reports.html.html_document(
             dataclasses.replace(
                 org_report, periods={**org_report.periods, Granularity.DAY: groups}
@@ -359,7 +364,7 @@ def test_a_result_filed_under_the_wrong_granularity_is_refused(
         **org_report.periods,
         Granularity.WEEK: org_report.periods[Granularity.DAY],
     }
-    with pytest.raises(ValueError, match='week result is by day'):
+    with pytest.raises(wambatic.reports.errors.UsageError, match='week result is by day'):
         wambatic.reports.html.html_document(
             dataclasses.replace(org_report, periods=periods), 'auto'
         )
@@ -513,7 +518,7 @@ def test_a_bad_report_writes_nothing(
 ) -> None:
     bad = dataclasses.replace(org_report, initial=Granularity.TOTAL)
     out = tmp_path / 'sub' / 'report.html'
-    with pytest.raises(ValueError, match='initial'):
+    with pytest.raises(wambatic.reports.errors.UsageError, match='initial'):
         wambatic.reports.html.render_html(bad, out, 'auto')
     assert not out.parent.exists()
 

@@ -398,7 +398,7 @@ def test_complete_listing_leaves_other_owners_alone(cache: wambatic.fetch.cache.
 
 
 def test_naive_times_are_refused(cache: wambatic.fetch.cache.Cache) -> None:
-    with pytest.raises(ValueError, match='timezone-aware'):
+    with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='timezone-aware'):
         cache.upsert_repos(
             'octocat', [repo(updated_at=datetime.datetime(2026, 1, 1))], complete=False
         )
@@ -447,9 +447,9 @@ def test_replace_removes_commits_not_in_the_new_list(cache: wambatic.fetch.cache
 
 
 def test_commits_of_another_repo_are_refused(cache: wambatic.fetch.cache.Cache) -> None:
-    with pytest.raises(ValueError, match='must belong to'):
+    with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
         cache.write_commits(HELLO, [commit('s1', repo_name=SPOON)], state(), replace=False)
-    with pytest.raises(ValueError, match='must belong to'):
+    with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
         cache.write_commits(HELLO, [], state(SPOON), replace=False)
 
 
@@ -643,11 +643,11 @@ def test_a_pull_request_or_state_for_another_repo_raises_and_writes_nothing(
     cache: wambatic.fetch.cache.Cache, cache_path: pathlib.Path
 ) -> None:
     pulls_state = state(resource='pull_requests')
-    with pytest.raises(ValueError, match='must belong to'):
+    with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
         cache.write_pull_requests(
             HELLO, [pull_request(1), pull_request(2, repo_name=SPOON)], pulls_state, replace=False
         )
-    with pytest.raises(ValueError, match='must belong to'):
+    with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
         cache.write_pull_requests(
             HELLO, [pull_request(1)], state(SPOON, resource='pull_requests'), replace=False
         )
@@ -660,11 +660,11 @@ def test_an_issue_or_state_for_another_repo_raises_and_writes_nothing(
     cache: wambatic.fetch.cache.Cache, cache_path: pathlib.Path
 ) -> None:
     issues_state = state(resource='issues')
-    with pytest.raises(ValueError, match='must belong to'):
+    with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
         cache.write_issues(
             HELLO, [issue(1), issue(2, repo_name=SPOON)], issues_state, replace=False
         )
-    with pytest.raises(ValueError, match='must belong to'):
+    with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
         cache.write_issues(HELLO, [issue(1)], state(SPOON, resource='issues'), replace=False)
     assert table_rows(cache_path, 'issues') == []
     assert cache.sync_state(HELLO, 'issues') is None
@@ -853,21 +853,21 @@ def test_the_sync_state_probe_and_the_repo_release_probe_round_trip(
 def test_a_release_or_run_or_state_for_another_repo_raises_and_writes_nothing(
     cache: wambatic.fetch.cache.Cache, cache_path: pathlib.Path
 ) -> None:
-    with pytest.raises(ValueError, match='must belong to'):
+    with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
         cache.write_releases(
             HELLO, [release('v1'), release('v2', repo_name=SPOON)], state(resource='releases')
         )
-    with pytest.raises(ValueError, match='must belong to'):
+    with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
         cache.write_releases(HELLO, [release('v1')], state(SPOON, resource='releases'))
     for replace in (False, True):
-        with pytest.raises(ValueError, match='must belong to'):
+        with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
             cache.write_workflow_runs(
                 HELLO,
                 [workflow_run(1), workflow_run(2, repo_name=SPOON)],
                 state(resource='workflow_runs'),
                 replace=replace,
             )
-        with pytest.raises(ValueError, match='must belong to'):
+        with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
             cache.write_workflow_runs(
                 HELLO, [workflow_run(1)], state(SPOON, resource='workflow_runs'), replace=replace
             )
@@ -983,25 +983,25 @@ def test_a_star_or_fork_or_state_for_another_repo_raises_and_writes_nothing(
     cache: wambatic.fetch.cache.Cache, cache_path: pathlib.Path
 ) -> None:
     for replace in (False, True):
-        with pytest.raises(ValueError, match='must belong to'):
+        with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
             cache.write_star_events(
                 HELLO,
                 [star_event('U_1'), star_event('U_2', repo_name=SPOON)],
                 state(resource='star_events'),
                 replace=replace,
             )
-        with pytest.raises(ValueError, match='must belong to'):
+        with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
             cache.write_star_events(
                 HELLO, [star_event('U_1')], state(SPOON, resource='star_events'), replace=replace
             )
-        with pytest.raises(ValueError, match='must belong to'):
+        with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
             cache.write_forks(
                 HELLO,
                 [fork(1), fork(2, repo_name=SPOON)],
                 state(resource='forks'),
                 replace=replace,
             )
-        with pytest.raises(ValueError, match='must belong to'):
+        with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
             cache.write_forks(HELLO, [fork(1)], state(SPOON, resource='forks'), replace=replace)
     assert table_rows(cache_path, 'star_events') == []
     assert table_rows(cache_path, 'forks') == []

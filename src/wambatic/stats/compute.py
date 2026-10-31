@@ -20,7 +20,11 @@ RESOURCES_BY_GROUP = {
 
 
 def resources_for(groups: frozenset[str]) -> frozenset[str]:
-    """The fetch resources the groups read, for the caller's Fetcher.sync before compute."""
+    """The fetch resources the groups read, for the caller's Fetcher.sync before compute.
+
+    Raises:
+        UnknownGroupError: a group is outside `GROUPS`.
+    """
     unknown = sorted(groups - wambatic.stats.base.GROUPS)
     if unknown:
         raise wambatic.stats.errors.UnknownGroupError(f'unknown groups: {", ".join(unknown)}')
@@ -151,7 +155,13 @@ async def compute(
 ) -> wambatic.stats.base.StatsResult:
     """All requested metric groups for the subject, from the cache, bucketed by
     request.granularity. Never syncs: the caller runs Fetcher.sync first, or not at all for
-    --no-fetch. `clock` (default: now in UTC) gives today's date when `until` is None."""
+    --no-fetch. `clock` (default: now in UTC) gives today's date when `until` is None.
+
+    Raises:
+        InvalidRequestError: `by_author` is set for a user.
+        InvalidRangeError: `since` is after `until`.
+        EmptySubjectError: there is nothing to report.
+    """
     resources_for(request.groups)
     if request.by_author and subject.kind == 'user':
         raise wambatic.stats.errors.InvalidRequestError('by_author is not meaningful for a user')

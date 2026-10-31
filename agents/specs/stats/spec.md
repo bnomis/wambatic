@@ -1,6 +1,6 @@
 # Stats
 
-**Version:** 1.6
+**Version:** 1.7
 **Status:** proposed
 **Date:** 2026-10-31
 
@@ -9,6 +9,8 @@ Turns the raw records from [Fetch and cache](../fetch-and-cache/spec.md) into st
 **Prerequisite:** the `wambatic.fetch` package exists and `Fetcher` reads the records of each group's resources from the cache (check: `python -c 'import wambatic.fetch'`). The `activity` group needs `repos()` and `commits()` (implementation step 3); `flow` needs `pull_requests()` and `issues()` (step 6); `delivery` needs `releases()`, `workflow_runs()` (step 8) and `pull_requests()`; `popularity` needs `star_events()`, `forks()` and the `Repo` popularity fields (step 10).
 
 Version 1.1 settles what step 4 of the [implementation order](../implementation-order.md) needed; the gaps and the choices made are in [review-1.md](review-1.md). Version 1.2 settles what step 6 needed for the `flow` group: what each flow metric counts and its series names, how the range and an empty result are found when several groups are read, and the user-subject rule for pull requests and issues; the choices are in [review-2.md](review-2.md). Version 1.3 settles what step 8 needed for the `delivery` group: what each delivery metric and DORA proxy counts, its series names and units, when a proxy counts as configured, and which resources the group reads; stars, forks, watchers and languages move to step 10. The choices are in [review-3.md](review-3.md). Version 1.4 settles what step 10 needed: stars, forks, watchers and languages leave `activity` for a `popularity` group of their own, asked for with `--groups`, with what each metric and table counts and which resources the group reads; the choices are in [review-4.md](review-4.md). Version 1.5 settles what `popularity` does for a repository whose stargazers the token could not see (fetch spec 1.9): its stars are left out of the star series and the report says so. Version 1.6 splits `compute` into a cache read (`read_records`) and a pure aggregation (`aggregate`), and adds `compute_all`, which reads the cache once for several requests that differ only in granularity, so an HTML report reads each record once rather than five times; the choice is Decision 3 (option B) of the [audit review 1](../../audit-reviews/review-1.md), answered 2026-10-31.
+
+Version 1.7 makes every error `wambatic.stats` raises itself a `StatsError`: `bucket_for` and `bucket_start` raise `InvalidRequestError` for `Granularity.TOTAL` or a naive datetime, and `bucket_range` and `locate` raise `InvalidRangeError`, where they raised `ValueError`; the choice is [audit review 1](../../audit-reviews/review-1.md), Decision 2 (option B), answered 2026-10-31.
 
 ## Module location
 
@@ -62,7 +64,7 @@ class Series:
 
 def bucket_for(when: datetime.datetime, granularity: Granularity, tz: datetime.tzinfo) -> Bucket:
     """Bucket containing `when` (an aware datetime) in `tz`; weeks are ISO 8601 weeks starting
-    Monday. Raises ValueError for Granularity.TOTAL, whose one bucket depends on the range."""
+    Monday. Raises InvalidRequestError for Granularity.TOTAL, whose one bucket depends on the range."""
 
 def bucket_range(since: datetime.date, until: datetime.date, granularity: Granularity) -> list[Bucket]:
     """The buckets covering the local dates `since` to `until`, both inclusive, in order.

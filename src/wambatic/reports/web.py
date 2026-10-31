@@ -240,7 +240,11 @@ def parse_query(
     page: bool,
 ) -> Query:
     """The CLI's parsers applied to the parameters, so a value the CLI rejects is rejected with
-    the same message."""
+    the same message.
+
+    Raises:
+        UsageError: a query parameter is invalid.
+    """
     text = (blank_to_none(raw.target) or '').strip()
     if not text:
         raise wambatic.reports.errors.UsageError(
@@ -376,7 +380,11 @@ def make_app(
         query: Query, requests: list[wambatic.stats.base.StatsRequest]
     ) -> list[wambatic.stats.base.StatsResult] | SyncJob:
         """The results at once when the cache is fresh or the request names its finished job;
-        else the job that brings the cache up to date."""
+        else the job that brings the cache up to date.
+
+        Raises:
+            JobError: the finished job for the request failed.
+        """
         job = jobs.get(query.job) if query.job is not None else None
         if job is not None and job.key == query.key:
             if job.phase == 'failed':
@@ -517,7 +525,11 @@ def is_loopback(host: str) -> bool:
 
 
 def check_bind(host: str, allow_remote: bool) -> None:
-    """Refuse a host that other machines can reach unless remote access was asked for."""
+    """Refuse a host that other machines can reach unless remote access was asked for.
+
+    Raises:
+        UsageError: the host is not a loopback address and no override is given.
+    """
     if is_loopback(host):
         return
     if not allow_remote:
@@ -532,7 +544,11 @@ def check_bind(host: str, allow_remote: bool) -> None:
 
 def listen(host: str, port: int) -> socket.socket:
     """The listening socket, bound here rather than by uvicorn, which logs a bind failure and
-    exits the process itself."""
+    exits the process itself.
+
+    Raises:
+        ServeError: the address cannot be listened on.
+    """
     bare = host.strip('[]')
     family = socket.AF_INET6 if ':' in bare else socket.AF_INET
     try:
@@ -547,7 +563,12 @@ def serve(
     settings: wambatic.settings.Settings, *, default_target: str | None, ignore_cache_version: bool
 ) -> None:
     """Open the cache, bind `report.web_host:report.web_port`, then run the app on uvicorn until
-    Ctrl-C, which ends in the KeyboardInterrupt uvicorn raises again after a graceful stop."""
+    Ctrl-C, which ends in the KeyboardInterrupt uvicorn raises again after a graceful stop.
+
+    Raises:
+        UsageError: the bind address is refused.
+        ServeError: the address cannot be listened on.
+    """
     report = settings.report
     check_bind(report.web_host, report.allow_remote)
     if not 1 <= report.web_port <= 65535:

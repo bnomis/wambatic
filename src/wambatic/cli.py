@@ -179,7 +179,11 @@ def check_verbosity(root: Wambatic) -> None:
 
 
 def check_report(report: Report, settings: wambatic.settings.Settings) -> None:
-    """The flag combinations that can be rejected before the cache or the network is touched."""
+    """The flag combinations that can be rejected before the cache or the network is touched.
+
+    Raises:
+        UsageError: the options conflict.
+    """
     if report.full_refresh and report.no_fetch:
         raise wambatic.reports.errors.UsageError('--full-refresh and --no-fetch cannot be combined')
     if report.out is not None and settings.report.format != 'html':
@@ -380,8 +384,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     except (
         wambatic.fetch.errors.FetchError,
-        wambatic.reports.errors.OutputError,
-        wambatic.reports.errors.ServeError,
+        wambatic.reports.errors.ReportsError,
         wambatic.stats.StatsError,
     ) as e:
         loguru.logger.error(wambatic.reports.service.redact_environment_token(str(e)))

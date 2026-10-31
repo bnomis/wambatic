@@ -106,19 +106,27 @@ def first_difference(
 
 def check_report(report: HtmlReport) -> None:
     if report.total.request.granularity is not Granularity.TOTAL:
-        raise ValueError(f'total must be a TOTAL result, not {report.total.request.granularity}')
+        raise wambatic.reports.errors.UsageError(
+            f'total must be a TOTAL result, not {report.total.request.granularity}'
+        )
     if set(report.periods) != set(PERIODS):
-        raise ValueError(
+        raise wambatic.reports.errors.UsageError(
             f'periods must be exactly {", ".join(PERIODS)}, not '
             f'{", ".join(sorted(report.periods)) or "none"}'
         )
     if report.initial not in report.periods:
-        raise ValueError(f'initial must be one of {", ".join(PERIODS)}, not {report.initial}')
+        raise wambatic.reports.errors.UsageError(
+            f'initial must be one of {", ".join(PERIODS)}, not {report.initial}'
+        )
     for granularity, result in report.periods.items():
         if result.request.granularity is not granularity:
-            raise ValueError(f'the {granularity} result is by {result.request.granularity}')
+            raise wambatic.reports.errors.UsageError(
+                f'the {granularity} result is by {result.request.granularity}'
+            )
         if (difference := first_difference(report.total, result)) is not None:
-            raise ValueError(f'the {granularity} result differs from the total in {difference}')
+            raise wambatic.reports.errors.UsageError(
+                f'the {granularity} result differs from the total in {difference}'
+            )
 
 
 def read_template(name: str) -> str:
@@ -607,7 +615,7 @@ def page_data(report: HtmlReport, theme: Theme) -> dict[str, object]:
 
 def html_document(report: HtmlReport, theme: Theme) -> str:
     """The whole self-contained page. Pure: the only reads are of this package's templates.
-    Raises ValueError when the five results differ in anything but granularity."""
+    Raises UsageError when the five results differ in anything but granularity."""
     check_report(report)
     title = f'wambatic: {wambatic.reports.rows.subject_text(report.total)}'
     return string.Template(read_template('report.html')).substitute(

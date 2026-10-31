@@ -76,7 +76,7 @@ def aggregate(
     by_repo: bool,
 ) -> tuple[list[wambatic.stats.base.Series], Tables]:
     """The activity series and tables for `commits`, which the caller has already restricted to
-    the range `buckets` covers; a commit outside it raises ValueError."""
+    the range `buckets` covers; a commit outside it raises InvalidRangeError."""
     bots = {login.casefold() for login in settings.bot_logins}
     starts = [bucket.start for bucket in buckets]
     end = wambatic.stats.buckets.bucket_end(buckets)

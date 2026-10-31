@@ -67,7 +67,11 @@ SECTIONS: dict[str, type] = {
 
 
 def parse_duration(text: str) -> datetime.timedelta:
-    """Parse a non-negative integer and one unit of `s`, `m`, `h`, `d` or `w`."""
+    """Parse a non-negative integer and one unit of `s`, `m`, `h`, `d` or `w`.
+
+    Raises:
+        SettingsError: `text` is not a duration.
+    """
     digits, unit = text[:-1], text[-1:]
     if not (digits.isascii() and digits.isdigit() and unit in DURATION_UNITS):
         raise SettingsError('a duration is a non-negative integer and one unit of s, m, h, d or w')
@@ -78,7 +82,11 @@ def parse_duration(text: str) -> datetime.timedelta:
 
 
 def convert(key: str, annotation: object, value: object) -> object:
-    """Check `value` against a setting's type and return it in that type."""
+    """Check `value` against a setting's type and return it in that type.
+
+    Raises:
+        SettingsError: `value` cannot be converted to the setting's type.
+    """
     if typing.get_origin(annotation) is typing.Literal:
         allowed = typing.get_args(annotation)
         if value not in allowed:
@@ -110,7 +118,7 @@ def convert(key: str, annotation: object, value: object) -> object:
                 raise SettingsError(f'{key}: {e}') from None
         ok = False
     else:
-        raise TypeError(f'no conversion for {key}: {annotation}')
+        raise SettingsError(f'no conversion for {key}: {annotation}')
     if not ok:
         raise SettingsError(f'{key} has the wrong type')
     return value

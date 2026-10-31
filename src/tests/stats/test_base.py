@@ -5,6 +5,7 @@ import pytest
 
 import wambatic.settings
 import wambatic.stats.base
+import wambatic.stats.errors
 
 Bucket = wambatic.stats.base.Bucket
 Series = wambatic.stats.base.Series
@@ -64,5 +65,5 @@ def test_a_series_with_both_or_neither_key_is_valid() -> None:
 
 @pytest.mark.parametrize('by, by_kind', [('octocat', None), (None, 'author')])
 def test_a_series_with_only_one_key_is_rejected(by: str | None, by_kind: str | None) -> None:
-    with pytest.raises(ValueError, match='by_kind'):
+    with pytest.raises(wambatic.stats.errors.InvalidRequestError, match='by_kind'):
         Series('commits', 'count', {}, by=by, by_kind=by_kind)  # type: ignore[arg-type]

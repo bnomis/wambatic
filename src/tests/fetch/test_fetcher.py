@@ -572,7 +572,7 @@ def test_provenance_rejects_an_unknown_resource(
 ) -> None:
     cache = wambatic.fetch.cache.Cache.open(tmp_path / 'prov.sqlite3')
     try:
-        with pytest.raises(ValueError, match='bogus'):
+        with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='bogus'):
             provenance_of(make_fetcher, cache, frozenset({'bogus'}))
     finally:
         cache.close()
@@ -1100,7 +1100,7 @@ def test_an_unknown_resource_raises_before_any_request(
     async def scenario() -> int:
         async with tests.fixtures.fetch.server.ReplayServer({}) as server:
             async with make_fetcher(server) as fetcher:
-                with pytest.raises(ValueError, match='nonsense'):
+                with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='nonsense'):
                     await fetcher.sync(OWNER, frozenset({'nonsense'}))
             return len(server.received)
 

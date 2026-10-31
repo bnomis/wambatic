@@ -7,6 +7,7 @@ import pytest
 
 import wambatic.stats.base
 import wambatic.stats.buckets
+import wambatic.stats.errors
 
 Granularity = wambatic.stats.base.Granularity
 Bucket = wambatic.stats.base.Bucket
@@ -67,9 +68,9 @@ def test_a_commit_after_the_clocks_go_forward_in_london_is_on_the_next_date() ->
 
 
 def test_bucket_for_rejects_total_and_a_naive_datetime() -> None:
-    with pytest.raises(ValueError, match='total'):
+    with pytest.raises(wambatic.stats.errors.InvalidRequestError, match='total'):
         wambatic.stats.buckets.bucket_for(utc(2026, 10, 1), Granularity.TOTAL, UTC)
-    with pytest.raises(ValueError, match='aware'):
+    with pytest.raises(wambatic.stats.errors.InvalidRequestError, match='aware'):
         wambatic.stats.buckets.bucket_for(datetime.datetime(2026, 10, 1), Granularity.MONTH, UTC)
 
 
@@ -80,7 +81,7 @@ def test_bucket_range_of_total_is_one_bucket() -> None:
 
 
 def test_bucket_range_rejects_since_after_until() -> None:
-    with pytest.raises(ValueError, match='after'):
+    with pytest.raises(wambatic.stats.errors.InvalidRangeError, match='after'):
         wambatic.stats.buckets.bucket_range(date('2026-10-02'), date('2026-10-01'), Granularity.DAY)
 
 

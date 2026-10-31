@@ -8,6 +8,7 @@ import pytest
 
 import tests.fixtures.reports
 import tests.fixtures.stats as fixture
+import wambatic.reports.errors
 import wambatic.reports.figures
 import wambatic.reports.rows
 import wambatic.stats.base
@@ -341,7 +342,7 @@ def test_range_figures_without_activity_series_are_empty(
 
 
 def test_range_figures_need_a_total_result(org_result: wambatic.stats.base.StatsResult) -> None:
-    with pytest.raises(ValueError, match='TOTAL'):
+    with pytest.raises(wambatic.reports.errors.UsageError, match='TOTAL'):
         wambatic.reports.figures.build_range_figures(org_result)
 
 
@@ -420,7 +421,7 @@ def test_the_calendar_needs_a_day_result_and_activity_series(
     org_result: wambatic.stats.base.StatsResult,
     org_day_result: wambatic.stats.base.StatsResult,
 ) -> None:
-    with pytest.raises(ValueError, match='DAY'):
+    with pytest.raises(wambatic.reports.errors.UsageError, match='DAY'):
         wambatic.reports.figures.build_calendar(org_result)
     flow_only = dataclasses.replace(
         org_day_result,

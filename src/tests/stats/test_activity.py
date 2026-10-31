@@ -12,6 +12,7 @@ import wambatic.settings
 import wambatic.stats.activity
 import wambatic.stats.base
 import wambatic.stats.buckets
+import wambatic.stats.errors
 
 Granularity = wambatic.stats.base.Granularity
 Series = wambatic.stats.base.Series
@@ -136,9 +137,9 @@ def test_an_unattributed_commit_is_counted_but_is_no_contributor() -> None:
 def test_a_commit_outside_the_buckets_raises() -> None:
     early = fixture.commit(fixture.ALPHA, 'x', '2026-09-30T12:00', 'octocat', 1, 1)
     late = fixture.commit(fixture.ALPHA, 'y', '2027-02-01T00:00', 'octocat', 1, 1)
-    with pytest.raises(ValueError, match='outside'):
+    with pytest.raises(wambatic.stats.errors.InvalidRangeError, match='outside'):
         run([early])
-    with pytest.raises(ValueError, match='outside'):
+    with pytest.raises(wambatic.stats.errors.InvalidRangeError, match='outside'):
         run([late])
 
 

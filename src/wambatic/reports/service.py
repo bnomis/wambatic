@@ -63,7 +63,11 @@ def parse_target(text: str) -> wambatic.fetch.base.Subject | str:
 
 
 def parse_date(text: str, flag: str = 'a date') -> datetime.date:
-    """Exactly `YYYY-MM-DD`; `date.fromisoformat` alone also takes `20261029` and week dates."""
+    """Exactly `YYYY-MM-DD`; `date.fromisoformat` alone also takes `20261029` and week dates.
+
+    Raises:
+        UsageError: `text` is not a date written YYYY-MM-DD.
+    """
     try:
         if DATE.fullmatch(text):
             return datetime.date.fromisoformat(text)
@@ -97,7 +101,11 @@ def make_request(
     today: datetime.datetime,
 ) -> wambatic.stats.base.StatsRequest:
     """The `StatsRequest` of the computing flags or query parameters. `today` is the caller's
-    clock; `until` may not be after tomorrow in `tz`."""
+    clock; `until` may not be after tomorrow in `tz`.
+
+    Raises:
+        UsageError: an option is invalid or conflicts with another.
+    """
     fields: dict[str, object] = {}
     if groups is not None:
         names = frozenset(name.strip() for name in groups.split(',') if name.strip())
@@ -235,7 +243,11 @@ async def build_results(
     clock: collections.abc.Callable[[], datetime.datetime] = wambatic.fetch.ratelimit.utc_now,
 ) -> tuple[wambatic.fetch.base.Subject, list[wambatic.stats.base.StatsResult]]:
     """Resolve the subject, sync once when needed and compute each of `requests` (which share
-    their groups); the network is used (and a token resolved) only for a bare NAME or a sync."""
+    their groups); the network is used (and a token resolved) only for a bare NAME or a sync.
+
+    Raises:
+        EmptySubjectError: the subject has nothing to report.
+    """
     subject = await sync_target(
         settings,
         cache,

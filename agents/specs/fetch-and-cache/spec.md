@@ -1,6 +1,6 @@
 # Fetch and cache
 
-**Version:** 1.11
+**Version:** 1.12
 **Status:** implemented
 **Date:** 2026-10-31
 
@@ -39,6 +39,8 @@ Version 1.9 settles what a star sync does when the token cannot see the stargaze
 Version 1.10 records a change to the Testing paragraph that was made after 1.8 without a version bump: fixture responses are now recorded from the live API by `bin/record-fixtures.sh` into `src/tests/fixtures/fetch/recorded.py`, which stores the sha256 of each query text so that a test fails when a query changes until the recorder is run again, and the paragraph lists the recorded subjects and what the recording of 2026-10-30 confirmed. Nothing else changes, and the cache schema stays 4.
 
 Version 1.11 stops sending GraphQL global node ids. The REST compare returns each commit's `node_id` in the legacy format for a repository created before late 2021, and `nodes(ids:)` then answers with a `DEPRECATION` warning for every commit. The line counts of compare commits are now read by object id with `commit_counts(n)`, one aliased `object(oid:)` field per commit, and the compare's `node_id` is no longer parsed or kept. `COMMIT_NODES` becomes `COMMIT_COUNTS`, so a cache written before 1.11 is refused once, like any changed query. `SCHEMA_VERSION` does not change.
+
+Version 1.12 adds `InvalidRequestError(FetchError)` for a caller mistake (an unknown resource, a malformed `Subject`, records of another repository, a naive time), which the fetch layer raised as `ValueError`, and raises `FetchError` for a `GitHubClient` used outside `async with`, which it raised as `RuntimeError`; the choice is [audit review 1](../../audit-reviews/review-1.md), Decision 2 (option B), answered 2026-10-31.
 
 ## API
 
@@ -175,7 +177,7 @@ class Fetcher:
                    *, progress: SyncProgress | None = None) -> SyncReport:
         """Bring the cache up to date for the subject: backfill on first use, otherwise only the delta.
 
-        `resources` is a subset of RESOURCES; a name outside it raises ValueError.
+        `resources` is a subset of RESOURCES; a name outside it raises InvalidRequestError.
         `progress`, when given, is updated as the sync runs: `repos_listed` and `repos_pending`
         once the unchanged repos are known, `rows_written` after each resource of a repo, and
         `repos_done` after each pending repo; at the end its counts equal the `SyncReport`'s."""
@@ -393,6 +395,7 @@ class GitHubClient:
 ## Error handling
 
 - `FetchError(Exception)`: base class of every error below, so the edge can catch the fetch layer's errors in one clause.
+- `InvalidRequestError`: a caller mistake, such as an unknown resource name, a `Subject` whose name does not fit its kind, or records that belong to another repository
 - `AuthError`: no token found, or GitHub returns 401. The message says to set `GITHUB_TOKEN` and never echoes a token. A 403 that is not a rate limit (see Requests, retries and rate limits) is also `AuthError`; its message names the scopes from GitHub's `x-accepted-oauth-scopes` header when present.
 - `RateLimitError`: primary limit exhausted (`x-ratelimit-remaining: 0` or a GraphQL `RATE_LIMITED` error) and `fetch.on_rate_limit` is `fail`. Carries the reset time. With `wait` the fetcher sleeps until reset, logging an `ETA:` line.
 - Secondary rate limits (HTTP 403/429, see Requests, retries and rate limits) are always honoured, then retried up to `fetch.max_retries` with exponential backoff and jitter. When the retries run out, `RateLimitError` is raised whatever `fetch.on_rate_limit` says, with `reset_at` set to the time the last wait would have ended.

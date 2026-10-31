@@ -1,6 +1,6 @@
 # Reports
 
-**Version:** 1.9
+**Version:** 1.10
 **Status:** proposed
 **Date:** 2026-10-31
 
@@ -10,13 +10,15 @@ The three ways a user sees a `StatsResult`: a terminal report, a self-contained 
 
 Version 1.2 settles what step 5 of the [implementation order](../implementation-order.md) (terminal report and CLI) needed; the gaps and the choices made are in [review-1.md](review-1.md). Version 1.3 adds the terminal's flow sections for step 6 (flow data and stats); the choices are in the [stats review 2](../stats/review-2.md). Version 1.4 settles what step 7 (static HTML report) needed: the figure type, the results the page is built from, the page layout, themes and palette, the output path and the browser test; the choices are in [review-2.md](review-2.md). Version 1.5 adds the delivery sections of the terminal and the HTML page, and the release and workflow-run counts of `cache info`, for step 8 (delivery data and stats); the choices are in the [stats review 3](../stats/review-3.md). Version 1.6 settles what step 9 (local web app) needed: the server library (FastAPI with uvicorn, chosen 2026-10-30), the sync jobs and progress page that keep a large org from blocking the page, the query parameters and statuses, `serve`'s flags, the loopback and `Host` checks, and the move of the CLI's sync-then-compute code to `service.py` so the web app can share it; the choices are in [review-3.md](review-3.md). Version 1.7 adds the popularity sections of the terminal and the HTML page (the languages chart among them), the star and fork counts of `cache info`, and `popularity` in the `--groups` help, for step 10 (popularity data and stats); the choices are in the [stats review 4](../stats/review-4.md). Version 1.8 states that a repository whose star history is not visible to the token appears in Unavailable in every front end. Version 1.9 builds an HTML report from one read of the cache (`build_results` calls the stats `compute_all`) and builds each figure, table and series list of the page once; the choice is Decision 3 (option B) of the [audit review 1](../../audit-reviews/review-1.md), answered 2026-10-31.
 
+Version 1.10 makes every error `wambatic.reports` raises itself a `ReportsError` (`UsageError`, `OutputError` and `ServeError`): `build_range_figures`, `build_calendar` and `html_document` raise `UsageError` where they raised `ValueError`; the choice is [audit review 1](../../audit-reviews/review-1.md), Decision 2 (option B), answered 2026-10-31.
+
 ## Module location
 
 `src/wambatic/cli.py` (command line), `src/wambatic/__main__.py` (`python -m wambatic`), `src/wambatic/reports/`, with tests in `src/tests/reports/` (the headless-browser test in `src/tests/reports/test_html_browser.py`), `src/tests/test_cli.py` and fixtures in `src/tests/fixtures/reports.py`:
 
 | Module | Holds | Built in implementation step |
 |--------|-------|------------------------------|
-| `errors.py` | `UsageError` | 5 |
+| `errors.py` | `ReportsError`, `UsageError`, `OutputError`, `ServeError` | 5 |
 | `base.py` | `result_to_dict`, `render_json` | 5 |
 | `terminal.py` | `render_terminal`, `sparkline` | 5 |
 | `rows.py` | the table rows both the terminal and the HTML page show (moved out of `terminal.py`) | 7 |
@@ -51,7 +53,7 @@ def build_range_figures(total: StatsResult) -> list[Figure]:
     """The whole-range charts of a TOTAL result: top contributors, by repository, by author, languages."""
 def build_calendar(day: StatsResult) -> Figure | None:
     """The daily-commits heat-map of a DAY result; None without activity series.
-    Raises ValueError for any other granularity."""
+    Raises UsageError for any other granularity."""
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class HtmlReport:
@@ -60,7 +62,7 @@ class HtmlReport:
     initial: Granularity                     # the granularity shown on load; a key of `periods`
 
 def html_document(report: HtmlReport, theme: typing.Literal['auto', 'dark', 'light']) -> str:
-    """The whole self-contained page; pure. Raises ValueError when the five results differ in
+    """The whole self-contained page; pure. Raises UsageError when the five results differ in
     anything but granularity (subject, groups, since, until as requested, by_author, tz, settings)."""
 def report_filename(subject: Subject) -> str:
     """'repo-OWNER-NAME.html', 'user-NAME.html' or 'org-NAME.html'."""
@@ -149,8 +151,17 @@ def main(argv: list[str] | None = None) -> int:
 def run() -> None:
     """The `wambatic` console script and `python -m wambatic`: `sys.exit(main())`."""
 
-class UsageError(Exception):
+class ReportsError(Exception):
+    """Base class of every error `wambatic.reports` raises itself."""
+
+class UsageError(ReportsError):
     """A command line that parses but cannot be run; exit status 2."""
+
+class OutputError(ReportsError):
+    """A report that was built but could not be written; exit status 1."""
+
+class ServeError(ReportsError):
+    """A web app that cannot listen on its address; exit status 1."""
 ```
 
 Command line (`wambatic <command> <target>`):

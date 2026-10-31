@@ -5,6 +5,7 @@ import typing
 
 import wambatic.fetch
 import wambatic.settings
+import wambatic.stats.errors
 
 GROUPS = frozenset({'activity', 'delivery', 'flow', 'popularity'})
 
@@ -33,7 +34,9 @@ class Series:
 
     def __post_init__(self) -> None:
         if (self.by is None) != (self.by_kind is None):
-            raise ValueError('by and by_kind are both set or both None')
+            raise wambatic.stats.errors.InvalidRequestError(
+                'by and by_kind are both set or both None'
+            )
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

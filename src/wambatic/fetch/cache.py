@@ -202,9 +202,13 @@ def identity_differences(
 
 
 def to_text(value: datetime.datetime) -> str:
-    """ISO 8601 UTC at one fixed width, so text order is time order."""
+    """ISO 8601 UTC at one fixed width, so text order is time order.
+
+    Raises:
+        InvalidRequestError: `value` is naive.
+    """
     if value.tzinfo is None:
-        raise ValueError('cache times must be timezone-aware')
+        raise wambatic.fetch.errors.InvalidRequestError('cache times must be timezone-aware')
     return value.astimezone(datetime.UTC).isoformat(timespec='microseconds')
 
 
@@ -566,9 +570,15 @@ class Cache:
     ) -> int:
         """In one transaction: with `replace`, delete the repo's rows from `table` first; upsert
         each record by `key`; delete the rows whose second key column is in `gone`; write `state`.
-        Returns the number of rows written."""
+        Returns the number of rows written.
+
+        Raises:
+            InvalidRequestError: a record or the state belongs to another repo.
+        """
         if any(record.repo != repo for record in records) or state.repo != repo:
-            raise ValueError(f'every record and the state must belong to {repo}')
+            raise wambatic.fetch.errors.InvalidRequestError(
+                f'every record and the state must belong to {repo}'
+            )
         updates = ', '.join(f'{name} = excluded.{name}' for name in columns if name not in key)
         sql = (
             f'INSERT INTO {table} ({", ".join(columns)}) '

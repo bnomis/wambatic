@@ -81,7 +81,11 @@ def describe(error: BaseException) -> str:
 
 
 def require_date(date: datetime.datetime | None) -> datetime.datetime:
-    """`date`, or `GraphQLError` (`MALFORMED`) when the response had no parseable `Date`."""
+    """`date`, or `GraphQLError` (`MALFORMED`) when the response had no parseable `Date`.
+
+    Raises:
+        GraphQLError: the response holds no date.
+    """
     if date is None:
         raise wambatic.fetch.errors.GraphQLError(
             [('MALFORMED', 'response has no parseable Date header')]
@@ -162,7 +166,12 @@ class GitHubClient:
         self, query: str, variables: collections.abc.Mapping[str, object]
     ) -> tuple[dict[str, object], datetime.datetime]:
         """As `graphql`, with the response's `Date` header as an aware UTC datetime: GitHub's
-        clock, for a watermark that does not depend on this machine's."""
+        clock, for a watermark that does not depend on this machine's.
+
+        Raises:
+            GraphQLError: GitHub reports errors.
+            NotFoundError: the queried object does not exist.
+        """
         response = await self.request(
             'graphql', 'POST', '/graphql', json={'query': query, 'variables': dict(variables)}
         )
@@ -184,7 +193,11 @@ class GitHubClient:
         params: collections.abc.Mapping[str, str] | None = None,
         etag: str | None = None,
     ) -> RestResponse:
-        """GET `{api_url}{path}` with `If-None-Match: etag` when given."""
+        """GET `{api_url}{path}` with `If-None-Match: etag` when given.
+
+        Raises:
+            StatsPendingError: GitHub is still computing the statistics.
+        """
         headers = {'If-None-Match': etag} if etag else None
         pending = 0
         while True:
@@ -216,9 +229,13 @@ class GitHubClient:
         params: collections.abc.Mapping[str, str] | None = None,
         headers: collections.abc.Mapping[str, str] | None = None,
     ) -> Response:
-        """One request; no classification."""
+        """One request; no classification.
+
+        Raises:
+            FetchError: the client is used outside `async with`.
+        """
         if self.session is None:
-            raise RuntimeError('GitHubClient must be used inside `async with`')
+            raise wambatic.fetch.errors.FetchError('GitHubClient must be used inside `async with`')
         url = f'{self.api_url}{path}'
         async with self.session.request(
             method, url, json=json, params=params, headers=headers
@@ -262,7 +279,11 @@ class GitHubClient:
         return None
 
     async def wait_for_reset(self, endpoint: str, reset_at: datetime.datetime) -> None:
-        """Fail or wait out an exhausted primary limit, per `on_rate_limit`."""
+        """Fail or wait out an exhausted primary limit, per `on_rate_limit`.
+
+        Raises:
+            RateLimitError: the wait would exceed the configured limit.
+        """
         if self.settings.on_rate_limit == 'fail':
             raise wambatic.fetch.errors.RateLimitError(reset_at)
         wait = (reset_at - self.clock()).total_seconds() + 1
@@ -288,7 +309,14 @@ class GitHubClient:
         params: collections.abc.Mapping[str, str] | None = None,
         headers: collections.abc.Mapping[str, str] | None = None,
     ) -> Response:
-        """`send` with classification, rate-limit accounting and retries."""
+        """`send` with classification, rate-limit accounting and retries.
+
+        Raises:
+            AuthError: GitHub rejects the token.
+            NotFoundError: GitHub answers 404.
+            RateLimitError: the rate limit is exhausted.
+            FetchError: another failure, or retries run out.
+        """
         retries = 0
         max_retries = self.settings.max_retries
         while True:

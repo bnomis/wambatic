@@ -80,7 +80,7 @@ Errors are typed in the layer that detects them and presented only at the edge:
 - `settings` raises `SettingsError`.
 - `fetch` raises `AuthError`, `NotFoundError`, `RateLimitError`, `StatsPendingError`, `GraphQLError`, `CacheVersionError`, all subclasses of `FetchError`.
 - `stats` raises `InvalidRangeError`, `InvalidRequestError`, `UnknownGroupError`, `EmptySubjectError`, all subclasses of `StatsError`.
-- `reports` raises `UsageError` and converts all of the above once, in `cli.main` (exit status 1, or 2 for `UsageError` and `SettingsError`) and in the web app's error middleware (HTTP 400, 404, 502 or 500, as the reports spec lists).
+- `reports` raises `UsageError`, `OutputError` and `ServeError`, all `ReportsError`s, and converts all of the above once, in `cli.main` (exit status 1, or 2 for `UsageError` and `SettingsError`) and in the web app's error middleware (HTTP 400, 404, 502 or 500, as the reports spec lists).
 - Unexpected exceptions propagate and are logged with `loguru.logger.exception`.
 
 ## Implementation

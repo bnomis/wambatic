@@ -160,7 +160,7 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 ## Task 4: Raise domain errors everywhere and make enum chains exhaustive
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** medium
 **Source Reference:** F5 / Decision 2 (B), F7 (A11), script rules `layer-has-domain-error-raises-stdlib`, `mixed-raise-types`, `sibling-errors-no-common-base`, `missing-raises-section`, `assert-never-missing`
@@ -169,24 +169,24 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 **Subtasks:**
 
-- [ ] `reports/errors.py`: add `ReportsError(Exception)` as the base of `OutputError`, `ServeError` and `UsageError`; catch it in `cli.main` where the three are caught today
-- [ ] Convert each of the 23 A3 sites in review-1 (`settings.py:110`; `fetch/client.py:209`, `:222`; `fetch/cache.py:206`, `:541`; `fetch/base.py:36`, `:38`, `:43`, `:689`, `:1248`; `stats/base.py:36`; `stats/buckets.py:23`, `:40`, `:64`, `:75`, `:128`; `reports/html.py:108`, `:110`, `:115`, `:118`, `:120`; `reports/figures.py:549`, `:564`): `SettingsError`; `FetchError` (a new `InvalidRequestError(FetchError)` in `fetch/errors.py` for caller mistakes such as unknown resources and bad subjects); `stats` `InvalidRangeError` for `since` after `until`, `InvalidRequestError` for the others; `UsageError` in `reports`
-- [ ] Update every test that expects `ValueError`, `TypeError` or `RuntimeError` from these sites
-- [ ] Amend the spec passages that name `ValueError`: `stats/spec.md` (`bucket_start`, the `Raises ValueError for Granularity.TOTAL` docstring), `reports/spec.md` (the `build_calendar` and `html_document` docstrings, and the system and reports error lists, which also gain `OutputError`, `ServeError` and `ReportsError`), `fetch-and-cache/spec.md` (the unknown-resources docstring); bump each spec's minor version with a sentence citing review-1 Decision 2
-- [ ] F7: `stats/buckets.py:22`, `:39` handle `Granularity.TOTAL` in its own `case` (raising the domain error) and end in `case _: typing.assert_never(granularity)`; `fetch/base.py:1272`, `:1276`, `:1278` end their chains on `resource` in `else: typing.assert_never(resource)`, with `resource` typed as the resources literal
-- [ ] Add a `Raises:` section to each of the 23 `missing-raises-section` functions, naming the domain errors it raises or lets through from its own package
+- [x] `reports/errors.py`: add `ReportsError(Exception)` as the base of `OutputError`, `ServeError` and `UsageError`; catch it in `cli.main` where the three are caught today
+- [x] Convert each of the 23 A3 sites in review-1 (`settings.py:110`; `fetch/client.py:209`, `:222`; `fetch/cache.py:206`, `:541`; `fetch/base.py:36`, `:38`, `:43`, `:689`, `:1248`; `stats/base.py:36`; `stats/buckets.py:23`, `:40`, `:64`, `:75`, `:128`; `reports/html.py:108`, `:110`, `:115`, `:118`, `:120`; `reports/figures.py:549`, `:564`): `SettingsError`; `FetchError` (a new `InvalidRequestError(FetchError)` in `fetch/errors.py` for caller mistakes such as unknown resources and bad subjects); `stats` `InvalidRangeError` for `since` after `until`, `InvalidRequestError` for the others; `UsageError` in `reports`
+- [x] Update every test that expects `ValueError`, `TypeError` or `RuntimeError` from these sites
+- [x] Amend the spec passages that name `ValueError`: `stats/spec.md` (`bucket_start`, the `Raises ValueError for Granularity.TOTAL` docstring), `reports/spec.md` (the `build_calendar` and `html_document` docstrings, and the system and reports error lists, which also gain `OutputError`, `ServeError` and `ReportsError`), `fetch-and-cache/spec.md` (the unknown-resources docstring); bump each spec's minor version with a sentence citing review-1 Decision 2
+- [x] F7: `stats/buckets.py:22`, `:39` handle `Granularity.TOTAL` in its own `case` (raising the domain error) and end in `case _: typing.assert_never(granularity)`; `fetch/base.py:1272`, `:1276`, `:1278` end their chains on `resource` in `else: typing.assert_never(resource)`, with `resource` typed as the resources literal
+- [x] Add a `Raises:` section to each of the 23 `missing-raises-section` functions, naming the domain errors it raises or lets through from its own package
 
 **Acceptance Criteria:**
 
-- [ ] `grep -rn "raise ValueError\|raise TypeError\|raise RuntimeError" src/wambatic` finds nothing
-- [ ] `bin/audit-check.sh --rule layer-has-domain-error-raises-stdlib --rule mixed-raise-types --rule sibling-errors-no-common-base --rule missing-raises-section --rule assert-never-missing` exits 0
-- [ ] `mypy src` passes, which now proves the chains exhaustive
+- [x] `grep -rn "raise ValueError\|raise TypeError\|raise RuntimeError" src/wambatic` finds nothing
+- [x] `bin/audit-check.sh --rule layer-has-domain-error-raises-stdlib --rule mixed-raise-types --rule sibling-errors-no-common-base --rule missing-raises-section --rule assert-never-missing` exits 0
+- [x] `mypy src` passes, which now proves the chains exhaustive
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/test_settings.py src/tests/fetch src/tests/stats/test_buckets.py src/tests/stats/test_base.py src/tests/reports/test_html.py src/tests/reports/test_figures.py src/tests/test_cli.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/test_settings.py src/tests/fetch src/tests/stats/test_buckets.py src/tests/stats/test_base.py src/tests/reports/test_html.py src/tests/reports/test_figures.py src/tests/test_cli.py` passes
 
 **Notes:**
 

@@ -16,9 +16,11 @@ import wambatic.settings
 if typing.TYPE_CHECKING:
     import wambatic.fetch.cache
 
-RESOURCES = frozenset(
-    {'commits', 'forks', 'issues', 'pull_requests', 'releases', 'star_events', 'workflow_runs'}
-)
+Resource = typing.Literal[
+    'commits', 'forks', 'issues', 'pull_requests', 'releases', 'star_events', 'workflow_runs'
+]
+RESOURCE_ORDER: tuple[Resource, ...] = typing.get_args(Resource)
+RESOURCES: frozenset[str] = frozenset(RESOURCE_ORDER)
 BUILT_RESOURCES = RESOURCES
 PAGE_SIZE = 100
 STARS_HIDDEN = 'hidden'
@@ -33,14 +35,16 @@ class Subject:
 
     def __post_init__(self) -> None:
         if self.kind == 'repo' and self.name is None:
-            raise ValueError('a repo subject needs a name')
+            raise wambatic.fetch.errors.InvalidRequestError('a repo subject needs a name')
         if self.kind != 'repo' and self.name is not None:
-            raise ValueError(f'a {self.kind} subject has no name')
+            raise wambatic.fetch.errors.InvalidRequestError(f'a {self.kind} subject has no name')
 
     @property
     def full_name(self) -> str:
         if self.name is None:
-            raise ValueError(f'a {self.kind} subject has no repo name')
+            raise wambatic.fetch.errors.InvalidRequestError(
+                f'a {self.kind} subject has no repo name'
+            )
         return f'{self.login}/{self.name}'
 
 
@@ -570,7 +574,11 @@ class Fetcher:
 
     async def owner_kind(self, login: str) -> typing.Literal['user', 'org']:
         """Whether `login` is a user or an organisation, from GitHub's own `type` field; one
-        request, nothing cached."""
+        request, nothing cached.
+
+        Raises:
+            NotFoundError: the login is neither a user nor an organisation.
+        """
         response = await self.client.rest_get(f'/users/{login}')
         body = response.data
         kind = body.get('type') if isinstance(body, dict) else None
@@ -603,7 +611,11 @@ class Fetcher:
             cursor = text(page.get('endCursor'), 'endCursor')
 
     async def list_repos(self, subject: Subject) -> list[Repo]:
-        """The subject's repositories from GitHub, after the fork and archived filters."""
+        """The subject's repositories from GitHub, after the fork and archived filters.
+
+        Raises:
+            NotFoundError: the subject does not exist.
+        """
         if subject.kind == 'repo':
             data = await self.client.graphql(
                 wambatic.fetch.queries.REPOSITORY, {'owner': subject.login, 'name': subject.name}
@@ -683,10 +695,16 @@ class Fetcher:
     async def provenance(self, subject: Subject, resources: frozenset[str]) -> dict[str, str]:
         """From the cache: the cache identity, `version_override_at` when recorded, and for each
         resource `fetched_at:<resource>`, the earliest `synced_at` over the subject's repos, or
-        `never` when one of them has no sync state for it."""
+        `never` when one of them has no sync state for it.
+
+        Raises:
+            InvalidRequestError: `resources` names an unknown resource.
+        """
         unknown = sorted(resources - RESOURCES)
         if unknown:
-            raise ValueError(f'unknown resources: {", ".join(unknown)}')
+            raise wambatic.fetch.errors.InvalidRequestError(
+                f'unknown resources: {", ".join(unknown)}'
+            )
         result = await self.db(self.cache.identity)
         override = await self.db(self.cache.version_override_at)
         if override is not None:
@@ -774,6 +792,10 @@ class Fetcher:
         Commits are looked up by object id, not by the compare's `node_id`, which is in the
         deprecated legacy global ID format for repositories created before late 2021 (see
         `wambatic.fetch.queries.commit_counts`).
+
+
+        Raises:
+            GraphQLError: GitHub reports errors for the query.
         """
         counts: dict[str, tuple[int, int]] = {}
         owner, name = split_name(repo.name_with_owner)
@@ -1242,16 +1264,23 @@ class Fetcher:
         progress: SyncProgress | None = None,
     ) -> SyncReport:
         """Bring the cache up to date for the subject: backfill on first use, otherwise only
-        the delta."""
+        the delta.
+
+        Raises:
+            InvalidRequestError: `resources` names an unknown resource.
+            FetchError: a repo fails to sync; the first failure is re-raised.
+        """
         unknown = sorted(resources - RESOURCES)
         if unknown:
-            raise ValueError(f'unknown resources: {", ".join(unknown)}')
+            raise wambatic.fetch.errors.InvalidRequestError(
+                f'unknown resources: {", ".join(unknown)}'
+            )
         listed = await self.list_repos(subject)
         await self.db(
             self.cache.upsert_repos, subject.login, listed, complete=subject.kind != 'repo'
         )
-        ordered = sorted(resources)
-        pending: list[tuple[Repo, list[str]]] = []
+        ordered = [resource for resource in RESOURCE_ORDER if resource in resources]
+        pending: list[tuple[Repo, list[Resource]]] = []
         for repo in listed:
             needed = [
                 resource
@@ -1260,13 +1289,13 @@ class Fetcher:
             ]
             if needed:
                 pending.append((repo, needed))
-        rows = dict.fromkeys(ordered, 0)
+        rows: dict[str, int] = dict.fromkeys(ordered, 0)
         refetched: list[str] = []
         if progress is not None:
             progress.repos_listed = len(listed)
             progress.repos_pending = len(pending)
 
-        async def sync_one(repo: Repo, needed: list[str]) -> None:
+        async def sync_one(repo: Repo, needed: list[Resource]) -> None:
             async with self.semaphore:
                 for resource in needed:
                     if resource == 'commits':
@@ -1281,8 +1310,10 @@ class Fetcher:
                         written = await self.sync_star_events(repo, full_refresh)
                     elif resource == 'forks':
                         written = await self.sync_forks(repo, full_refresh)
-                    else:
+                    elif resource == 'issues' or resource == 'pull_requests':
                         written = await self.sync_updated(repo, resource, full_refresh)
+                    else:
+                        typing.assert_never(resource)
                     rows[resource] += written
                     if progress is not None:
                         progress.rows_written[resource] = (

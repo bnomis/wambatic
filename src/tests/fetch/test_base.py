@@ -27,7 +27,7 @@ def test_valid_subjects_construct(subject: wambatic.fetch.base.Subject) -> None:
     [('repo', None), ('user', 'Hello-World'), ('org', 'Hello-World')],
 )
 def test_invalid_subjects_raise(kind: str, name: str | None) -> None:
-    with pytest.raises(ValueError, match='subject'):
+    with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='subject'):
         wambatic.fetch.base.Subject(kind, 'octocat', name)  # type: ignore[arg-type]
 
 
@@ -39,7 +39,7 @@ def test_full_name_of_a_repo_subject() -> None:
 
 @pytest.mark.parametrize('kind', ['user', 'org'])
 def test_full_name_of_an_owner_subject_raises(kind: str) -> None:
-    with pytest.raises(ValueError, match='no repo name'):
+    with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='no repo name'):
         wambatic.fetch.base.Subject(kind, 'octocat').full_name  # type: ignore[arg-type]  # noqa: B018
 
 

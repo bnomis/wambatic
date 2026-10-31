@@ -13,12 +13,14 @@ import wambatic.stats.errors
 import wambatic.stats.flow
 import wambatic.stats.popularity
 
-RESOURCES_BY_GROUP = {
-    'activity': frozenset({'commits'}),
-    'delivery': frozenset({'pull_requests', 'releases', 'workflow_runs'}),
-    'flow': frozenset({'issues', 'pull_requests'}),
-    'popularity': frozenset({'forks', 'star_events'}),
-}
+RESOURCES_BY_GROUP = types.MappingProxyType(
+    {
+        'activity': frozenset({'commits'}),
+        'delivery': frozenset({'pull_requests', 'releases', 'workflow_runs'}),
+        'flow': frozenset({'issues', 'pull_requests'}),
+        'popularity': frozenset({'forks', 'star_events'}),
+    }
+)
 
 
 def resources_for(groups: frozenset[str]) -> frozenset[str]:

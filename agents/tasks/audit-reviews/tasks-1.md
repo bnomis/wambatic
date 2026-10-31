@@ -492,7 +492,7 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 ## Task 13: Property tests for stats and reports
 
-**Status:** todo
+**Status:** done
 **Priority:** low
 **Complexity:** medium
 **Source Reference:** F17 / Decision 5 (B): T2 (stats and reports rows)
@@ -501,22 +501,22 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 **Subtasks:**
 
-- [ ] `stats/delivery.py` `aggregate` DORA proxies (`deployments_by_repo`, `hotfixes`, `missing_inputs`): deployments and failures never exceed the runs or releases they come from; the failure window counts only events inside the range (the behaviour kept on 2026-10-31)
-- [ ] `stats/compute.py` `resources_for`: union of the groups' resources for every subset of `GROUPS`
-- [ ] `reports/rows.py` table builders: rows sum to the `Total` row where the spec says columns add up; rows are in bucket order
-- [ ] `reports/figures.py` `build_figures`/`build_range_figures`: every figure validates with `plotly.graph_objects.Figure`, has at most three series and no colour
-- [ ] `reports/html.py` `report_filename` (safe over arbitrary logins) and `first_difference`; `reports/web.py` `parse_query` and `reload_path`; `reports/terminal.py` `format_number`
-- [ ] Every hypothesis test uses `@settings(max_examples=20, deadline=10000)`
+- [x] `stats/delivery.py` `aggregate` DORA proxies (`deployments_by_repo`, `hotfixes`, `missing_inputs`): deployments and failures never exceed the runs or releases they come from; the failure window counts only events inside the range (the behaviour kept on 2026-10-31)
+- [x] `stats/compute.py` `resources_for`: union of the groups' resources for every subset of `GROUPS`
+- [x] `reports/rows.py` table builders: rows sum to the `Total` row where the spec says columns add up; rows are in bucket order
+- [x] `reports/figures.py` `build_figures`/`build_range_figures`: every figure validates with `plotly.graph_objects.Figure`, has at most three series and no colour
+- [x] `reports/html.py` `report_filename` (safe over arbitrary logins) and `first_difference`; `reports/web.py` `parse_query` and `reload_path`; `reports/terminal.py` `format_number`
+- [x] Every hypothesis test uses `@settings(max_examples=20, deadline=10000)`
 
 **Acceptance Criteria:**
 
-- [ ] Each function T2 lists for stats and reports is named in at least one hypothesis test
+- [x] Each function T2 lists for stats and reports is named in at least one hypothesis test
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/stats src/tests/reports` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/stats src/tests/reports` passes
 
 **Notes:**
 

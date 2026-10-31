@@ -12,13 +12,16 @@ run with GITHUB_TOKEN unset to use the GitHub CLI's classic token.
 The GraphQL responses are recorded whole: the queries already select only what is read. The
 REST lists are asked for a short page (REST_PAGE), because the tests read a page's shape, not
 its length.
+
+The recording goes to OUT unless `--out FILE` names another file.
 """
 
+import argparse
+import collections.abc
 import datetime
 import hashlib
 import json
 import pathlib
-import pprint
 import subprocess
 import sys
 import urllib.parse
@@ -34,12 +37,16 @@ REST_PAGE = 5
 
 LISTING_OWNER = 'octocat'
 ORGANIZATION = 'github'
+IDENTITY_FIELDS = ('login', 'type')
 # A repository with a short history, for the listing, history, compare and commit-node calls.
+# auditme: accept[non-alphabetical-literal] owner then name, as the pair is read
 HISTORY_OWNER, HISTORY_NAME = 'octocat', 'Hello-World'
 # A small public repository with pull requests (one by a bot), issues, releases (one a
 # prerelease) and Actions runs, so each page is short and every field is present.
+# auditme: accept[non-alphabetical-literal] owner then name, as the pair is read
 FLOW_OWNER, FLOW_NAME = 'miguelangellv', 'ha-gas-station-spain'
 # A repository of the recording account with stars and forks (see the module docstring).
+# auditme: accept[non-alphabetical-literal] owner then name, as the pair is read
 STAR_OWNER, STAR_NAME = 'bnomis', 'ab2cb'
 # A pull request reviewed by GitHub Copilot, for the type and login of an automatic reviewer.
 BOT_REVIEW_OWNER, BOT_REVIEW_NAME, BOT_REVIEW_NUMBER = 'microsoft', 'vscode', 345267
@@ -68,6 +75,7 @@ RECORDED_QUERIES = (
     'REPOSITORY',
     'STARGAZERS',
 )
+# auditme: accept[non-alphabetical-literal] the order the fields are recorded in
 RUN_FIELDS = (
     'id',
     'name',
@@ -187,8 +195,8 @@ def record(recorder: Recorder) -> dict[str, object]:
         'COMMIT_COUNTS_OK': recorder.graphql(queries.commit_counts(len(oids)), **counts_variables),
         'REPO': pick(repo, ('id', 'full_name', 'default_branch')),
         'REPO_ETAG': repo_headers['ETag'],
-        'USER_OK': pick(recorder.rest(f'/users/{LISTING_OWNER}'), ('login', 'type')),
-        'ORGANIZATION_OK': pick(recorder.rest(f'/users/{ORGANIZATION}'), ('login', 'type')),
+        'USER_OK': pick(recorder.rest(f'/users/{LISTING_OWNER}'), IDENTITY_FIELDS),
+        'ORGANIZATION_OK': pick(recorder.rest(f'/users/{ORGANIZATION}'), IDENTITY_FIELDS),
         'PULL_REQUESTS_OK': recorder.graphql(queries.PULL_REQUESTS, cursor=None, **flow),
         'ISSUES_OK': recorder.graphql(queries.ISSUES, cursor=None, **flow),
         'RELEASES_OK': recorder.graphql(queries.RELEASES, cursor=None, **flow),
@@ -210,6 +218,22 @@ def record(recorder: Recorder) -> dict[str, object]:
     }
 
 
+def frozen_text(value: object) -> str:
+    """The source of `value` deeply read-only: dicts become proxies and lists tuples.
+
+    Keys are sorted: the order GitHub sent them in means nothing to the tests. The wrapper at the
+    top is shallow, so each nested container is frozen too (audit rule
+    mutable-members-in-immutable-wrapper).
+    """
+    if isinstance(value, collections.abc.Mapping):
+        items = ', '.join(f'{key!r}: {frozen_text(value[key])}' for key in sorted(value))
+        return f'types.MappingProxyType({{{items}}})'
+    if isinstance(value, (list, tuple)):
+        members = ''.join(f'{frozen_text(member)}, ' for member in value)
+        return f'({members.rstrip()})'
+    return repr(value)
+
+
 def module_text(recorded_at: str, responses: dict[str, object]) -> str:
     hashes = {
         name: query_sha256(getattr(wambatic.fetch.queries, name)) for name in RECORDED_QUERIES
@@ -228,44 +252,60 @@ def module_text(recorded_at: str, responses: dict[str, object]) -> str:
         '',
         '# ruff: noqa: E501',
         '',
+        'import types',
+        '',
         f'RECORDED_AT = {recorded_at!r}',
         f'WAMBATIC_VERSION = {wambatic.version.VERSION!r}',
         '# sha256 of each wambatic.fetch.queries text the recording was made with',
-        f'QUERY_SHA256 = {pprint.pformat(hashes, width=99, sort_dicts=True)}',
+        f'QUERY_SHA256 = {frozen_text(hashes)}',
     ]
     for name, value in responses.items():
-        lines += ['', f'{name} = {pprint.pformat(value, width=99, sort_dicts=False)}']
+        lines += ['', f'{name} = {frozen_text(value)}']
     return '\n'.join(lines) + '\n'
 
 
-def write_fixtures(text: str) -> None:
-    """Write `text` to OUT and format it with ruff.
+def write_fixtures(text: str, out: pathlib.Path) -> None:
+    """Write `text` to `out` and format it with ruff.
 
     Raises:
         RecordingError: when the file cannot be written or ruff cannot format it.
     """
     try:
-        OUT.write_text(text, encoding='utf-8')
+        out.write_text(text, encoding='utf-8')
     except OSError as error:
         # auditme: accept[except-interpolation] the OS reason says what to fix
-        raise RecordingError(f'cannot write {OUT}: {error.strerror or error}') from error
+        raise RecordingError(f'cannot write {out}: {error.strerror or error}') from error
     try:
-        subprocess.run(['ruff', 'format', '--quiet', str(OUT)], check=True)
+        subprocess.run(['ruff', 'format', '--quiet', str(out)], check=True)
     except (OSError, subprocess.CalledProcessError) as error:
         # auditme: accept[except-interpolation] the reason ruff could not run is the payload
-        raise RecordingError(f'cannot format {OUT} with ruff: {error}') from error
+        raise RecordingError(f'cannot format {out} with ruff: {error}') from error
 
 
-def main() -> int:
+def parse_args(argv: list[str] | None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description='Record the successful GitHub responses the fetch tests replay.',
+    )
+    parser.add_argument(
+        '--out',
+        type=pathlib.Path,
+        default=OUT,
+        help='File to write the recording to (default: src/tests/fixtures/fetch/recorded.py)',
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
     recorder = Recorder(wambatic.fetch.auth.resolve_token())
     recorded_at = datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
     try:
-        write_fixtures(module_text(recorded_at, record(recorder)))
+        write_fixtures(module_text(recorded_at, record(recorder)), args.out)
     except RecordingError as error:
         # auditme: accept[except-interpolation] the one line is the failure's own message
         print(f'record-fixtures: {error}', file=sys.stderr)
         return 1
-    print(OUT)
+    print(args.out)
     return 0
 
 

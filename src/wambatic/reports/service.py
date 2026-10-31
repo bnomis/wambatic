@@ -1,11 +1,11 @@
 """The sync-then-compute pipeline the command line and the web app share."""
 
+import asyncio
 import collections.abc
 import contextlib
 import datetime
 import os
 import re
-import typing
 import zoneinfo
 
 import loguru
@@ -16,17 +16,19 @@ import wambatic.fetch.cache
 import wambatic.fetch.ratelimit
 import wambatic.reports.errors
 import wambatic.settings
-import wambatic.stats
 import wambatic.stats.base
+import wambatic.stats.engine
+import wambatic.stats.errors
 
 LOGIN = re.compile(r'[A-Za-z0-9-]{1,39}')
 REPO_NAME = re.compile(r'[A-Za-z0-9._-]{1,100}')
 DATE = re.compile(r'[0-9]{4}-[0-9]{2}-[0-9]{2}')
-PREFIXES: dict[str, typing.Literal['org', 'repo', 'user']] = {
+PREFIXES: dict[str, wambatic.fetch.base.SubjectKind] = {
     'org': 'org',
     'repo': 'repo',
     'user': 'user',
 }
+EARLIEST_DATE = datetime.date(2008, 1, 1)
 TARGET_FORMS = 'user:NAME, org:NAME, repo:OWNER/NAME, OWNER/NAME or NAME'
 
 
@@ -37,7 +39,7 @@ def parse_target(text: str) -> wambatic.fetch.base.Subject | str:
         f'the target must be one of {TARGET_FORMS} (a NAME is 1 to 39 letters, digits and "-"; '
         'a repo NAME is 1 to 100 letters, digits, ".", "_" and "-")'
     )
-    kind: typing.Literal['org', 'repo', 'user'] | None = None
+    kind: wambatic.fetch.base.SubjectKind | None = None
     rest = text
     prefix, colon, after = text.partition(':')
     if colon:
@@ -62,7 +64,11 @@ def parse_target(text: str) -> wambatic.fetch.base.Subject | str:
 
 
 def parse_date(text: str, flag: str = 'a date') -> datetime.date:
-    """Exactly `YYYY-MM-DD`; `date.fromisoformat` alone also takes `20261029` and week dates."""
+    """Exactly `YYYY-MM-DD`; `date.fromisoformat` alone also takes `20261029` and week dates.
+
+    Raises:
+        UsageError: `text` is not a date written YYYY-MM-DD.
+    """
     try:
         if DATE.fullmatch(text):
             return datetime.date.fromisoformat(text)
@@ -91,10 +97,18 @@ def make_request(
     until: str | None,
     groups: str | None,
     by_author: bool,
-    tz: zoneinfo.ZoneInfo,
     settings: wambatic.settings.Settings,
+    today: datetime.datetime,
 ) -> wambatic.stats.base.StatsRequest:
-    """The `StatsRequest` of the computing flags or query parameters."""
+    """The `StatsRequest` of the computing flags or query parameters. The time zone is
+    `settings.stats.timezone`. `today` is the caller's clock; `until` may not be after
+    tomorrow in that zone.
+
+    Raises:
+        UsageError: an option is invalid or conflicts with another.
+        SettingsError: `settings.stats.timezone` is not a known time zone.
+    """
+    tz = resolve_tz(settings)
     fields: dict[str, object] = {}
     if groups is not None:
         names = frozenset(name.strip() for name in groups.split(',') if name.strip())
@@ -106,10 +120,21 @@ def make_request(
     except ValueError:
         choices = ', '.join(sorted(item.value for item in wambatic.stats.base.Granularity))
         raise wambatic.reports.errors.UsageError(f'--by must be one of {choices}') from None
+    since_date = None if since is None else parse_date(since, '--since')
+    until_date = None if until is None else parse_date(until, '--until')
+    if since_date is not None and since_date < EARLIEST_DATE:
+        raise wambatic.reports.errors.UsageError(
+            f'--since may not be before {EARLIEST_DATE.isoformat()}, when GitHub began'
+        )
+    latest = today.astimezone(tz).date() + datetime.timedelta(days=1)
+    if until_date is not None and until_date > latest:
+        raise wambatic.reports.errors.UsageError(
+            f'--until may not be after {latest.isoformat()}, tomorrow in {tz.key}'
+        )
     return wambatic.stats.base.StatsRequest(
         granularity=granularity,
-        since=None if since is None else parse_date(since, '--since'),
-        until=None if until is None else parse_date(until, '--until'),
+        since=since_date,
+        until=until_date,
         by_author=by_author,
         tz=tz,
         settings=settings.stats,
@@ -117,6 +142,7 @@ def make_request(
     )
 
 
+# auditme: accept[passthrough-shim] the one seam tests swap for a fetcher on a replay server
 def make_fetcher(
     token: str, cache: wambatic.fetch.cache.Cache, settings: wambatic.settings.FetchSettings
 ) -> wambatic.fetch.base.Fetcher:
@@ -165,9 +191,8 @@ async def sync_target(
     settings: wambatic.settings.Settings,
     cache: wambatic.fetch.cache.Cache,
     target: wambatic.fetch.base.Subject | str,
-    groups: frozenset[str],
+    request: wambatic.stats.base.StatsRequest,
     *,
-    by_author: bool,
     full_refresh: bool,
     no_fetch: bool,
     sync: bool | None = None,
@@ -180,14 +205,17 @@ async def sync_target(
     async with contextlib.AsyncExitStack() as stack:
         online: wambatic.fetch.base.Fetcher | None = None
         if isinstance(target, str):
-            token = wambatic.fetch.auth.resolve_token()
+            token = await asyncio.to_thread(wambatic.fetch.auth.resolve_token)
             online = await stack.enter_async_context(make_fetcher(token, cache, settings.fetch))
             subject = wambatic.fetch.base.Subject(await online.owner_kind(target), target)
-            if by_author:
+            if request.by_author:
                 check_by_author(subject)
         else:
             subject = target
-        resources = wambatic.stats.resources_for(groups) & wambatic.fetch.base.BUILT_RESOURCES
+        resources = (
+            wambatic.stats.engine.resources_for(request.groups)
+            & wambatic.fetch.base.BUILT_RESOURCES
+        )
         if sync is None:
             provenance = await reader.provenance(subject, resources)
             sync = needs_sync(
@@ -195,7 +223,7 @@ async def sync_target(
             )
         if sync:
             if online is None:
-                token = wambatic.fetch.auth.resolve_token()
+                token = await asyncio.to_thread(wambatic.fetch.auth.resolve_token)
                 online = await stack.enter_async_context(make_fetcher(token, cache, settings.fetch))
             if progress is None:
                 report = await online.sync(subject, resources, full_refresh=full_refresh)
@@ -207,13 +235,12 @@ async def sync_target(
     return subject
 
 
-async def build_results(
+async def sync_and_compute(
     settings: wambatic.settings.Settings,
     cache: wambatic.fetch.cache.Cache,
     target: wambatic.fetch.base.Subject | str,
     requests: list[wambatic.stats.base.StatsRequest],
     *,
-    by_author: bool,
     full_refresh: bool,
     no_fetch: bool,
     sync: bool | None = None,
@@ -221,13 +248,16 @@ async def build_results(
     clock: collections.abc.Callable[[], datetime.datetime] = wambatic.fetch.ratelimit.utc_now,
 ) -> tuple[wambatic.fetch.base.Subject, list[wambatic.stats.base.StatsResult]]:
     """Resolve the subject, sync once when needed and compute each of `requests` (which share
-    their groups); the network is used (and a token resolved) only for a bare NAME or a sync."""
+    their groups); the network is used (and a token resolved) only for a bare NAME or a sync.
+
+    Raises:
+        EmptySubjectError: the subject has nothing to report.
+    """
     subject = await sync_target(
         settings,
         cache,
         target,
-        requests[0].groups,
-        by_author=by_author,
+        requests[0],
         full_refresh=full_refresh,
         no_fetch=no_fetch,
         sync=sync,
@@ -236,13 +266,13 @@ async def build_results(
     )
     reader = make_fetcher('', cache, settings.fetch)
     try:
-        return subject, [
-            await wambatic.stats.compute(subject, reader, request, clock=clock)
-            for request in requests
-        ]
-    except wambatic.stats.EmptySubjectError as e:
+        return subject, await wambatic.stats.engine.compute_all(
+            subject, reader, requests, clock=clock
+        )
+    except wambatic.stats.errors.EmptySubjectError as e:
         if no_fetch:
-            raise wambatic.stats.EmptySubjectError(
+            raise wambatic.stats.errors.EmptySubjectError(
+                # auditme: accept[except-interpolation] the original message is the payload
                 f'{e}; the cache may only need a sync, so try again without --no-fetch'
             ) from None
         raise

@@ -1,12 +1,13 @@
 import asyncio
+import collections.abc
 import dataclasses
 import datetime
 import importlib.util
 import pathlib
 import random
 import types
-import typing
 
+import loguru
 import pytest
 
 import tests.fixtures.audit_check
@@ -19,24 +20,53 @@ import wambatic.fetch.cache
 import wambatic.fetch.client
 import wambatic.reports.html
 import wambatic.settings
-import wambatic.stats
 import wambatic.stats.base
+import wambatic.stats.engine
 
-MakeClient = typing.Callable[..., wambatic.fetch.client.GitHubClient]
-MakeFetcher = typing.Callable[..., wambatic.fetch.base.Fetcher]
+
+@pytest.fixture(autouse=True)
+def restore_logger() -> collections.abc.Iterator[None]:
+    yield
+    loguru.logger.remove()
+
+
+@pytest.fixture
+def cache_path(tmp_path: pathlib.Path) -> pathlib.Path:
+    return tmp_path / 'nested' / 'cache.sqlite3'
+
+
+@pytest.fixture
+def cache(cache_path: pathlib.Path) -> collections.abc.Iterator[wambatic.fetch.cache.Cache]:
+    opened = wambatic.fetch.cache.Cache.open(cache_path)
+    yield opened
+    opened.close()
+
+
+MakeClient = collections.abc.Callable[..., wambatic.fetch.client.GitHubClient]
+MakeFetcher = collections.abc.Callable[..., wambatic.fetch.base.Fetcher]
 
 BIN = pathlib.Path(__file__).resolve().parent.parent.parent / 'bin'
 
 
-@pytest.fixture(scope='session')
-def audit_check() -> types.ModuleType:
-    """bin/audit-check.py, loaded as a module (its name has a dash, so it cannot be imported)."""
-    spec = importlib.util.spec_from_file_location('audit_check', BIN / 'audit-check.py')
+def load_script(name: str) -> types.ModuleType:
+    """bin/`name`.py, loaded as a module (its name has a dash, so it cannot be imported)."""
+    path = BIN / f'{name}.py'
+    spec = importlib.util.spec_from_file_location(name.replace('-', '_'), path)
     if spec is None or spec.loader is None:
-        raise ImportError(f'cannot load {BIN / "audit-check.py"}')
+        raise ImportError(f'cannot load {path}')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+@pytest.fixture(scope='session')
+def audit_check() -> types.ModuleType:
+    return load_script('audit-check')
+
+
+@pytest.fixture(scope='session')
+def record_fixtures() -> types.ModuleType:
+    return load_script('record-fixtures')
 
 
 @pytest.fixture
@@ -98,7 +128,7 @@ def make_fetcher(
     tmp_path: pathlib.Path,
     make_client: MakeClient,
     fetch_settings: wambatic.settings.FetchSettings,
-) -> typing.Iterator[MakeFetcher]:
+) -> collections.abc.Iterator[MakeFetcher]:
     caches: list[wambatic.fetch.cache.Cache] = []
 
     def make(
@@ -214,7 +244,7 @@ def store_popularity(
 
 
 @pytest.fixture
-def stats_cache(tmp_path: pathlib.Path) -> typing.Iterator[wambatic.fetch.cache.Cache]:
+def stats_cache(tmp_path: pathlib.Path) -> collections.abc.Iterator[wambatic.fetch.cache.Cache]:
     """A cache holding the stats fixture's repositories, commits, pull requests, issues, releases,
     workflow runs, stars and forks."""
     fixture = tests.fixtures.stats
@@ -249,13 +279,14 @@ def stats_fetcher(stats_cache: wambatic.fetch.cache.Cache) -> wambatic.fetch.bas
     return wambatic.fetch.base.Fetcher('test-token', stats_cache, wambatic.settings.FetchSettings())
 
 
-def compute_stats(
+def run_stats(
     fetcher: wambatic.fetch.base.Fetcher,
     subject: wambatic.fetch.base.Subject,
     request: wambatic.stats.base.StatsRequest,
+    clock: datetime.datetime = tests.fixtures.stats.NOW,
 ) -> wambatic.stats.base.StatsResult:
     return asyncio.run(
-        wambatic.stats.compute(subject, fetcher, request, clock=lambda: tests.fixtures.stats.NOW)
+        wambatic.stats.engine.compute(subject, fetcher, request, clock=lambda: clock)
     )
 
 
@@ -265,7 +296,7 @@ def org_result(stats_fetcher: wambatic.fetch.base.Fetcher) -> wambatic.stats.bas
     request = wambatic.stats.base.StatsRequest(
         since=tests.fixtures.stats.SINCE, until=tests.fixtures.stats.UNTIL, by_author=True
     )
-    return compute_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
+    return run_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
 
 
 @pytest.fixture
@@ -274,9 +305,9 @@ def delivery_result(stats_fetcher: wambatic.fetch.base.Fetcher) -> wambatic.stat
     request = wambatic.stats.base.StatsRequest(
         since=tests.fixtures.stats.SINCE,
         until=tests.fixtures.stats.UNTIL,
-        groups=frozenset({'delivery'}),
+        groups=tests.fixtures.stats.GROUP_DELIVERY,
     )
-    return compute_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
+    return run_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
 
 
 @pytest.fixture
@@ -287,9 +318,9 @@ def popularity_result(
     request = wambatic.stats.base.StatsRequest(
         since=tests.fixtures.stats.SINCE,
         until=tests.fixtures.stats.UNTIL,
-        groups=frozenset({'popularity'}),
+        groups=tests.fixtures.stats.GROUP_POPULARITY,
     )
-    return compute_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
+    return run_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
 
 
 @pytest.fixture
@@ -303,7 +334,7 @@ def repo_total_result(
         until=tests.fixtures.stats.UNTIL,
     )
     subject = wambatic.fetch.base.Subject('repo', 'octo-org', 'alpha')
-    return compute_stats(stats_fetcher, subject, request)
+    return run_stats(stats_fetcher, subject, request)
 
 
 @pytest.fixture
@@ -317,7 +348,7 @@ def org_total_result(
         until=tests.fixtures.stats.UNTIL,
         by_author=True,
     )
-    return compute_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
+    return run_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
 
 
 @pytest.fixture
@@ -329,9 +360,9 @@ def popularity_total(
         granularity=wambatic.stats.base.Granularity.TOTAL,
         since=tests.fixtures.stats.SINCE,
         until=tests.fixtures.stats.UNTIL,
-        groups=frozenset({'popularity'}),
+        groups=tests.fixtures.stats.GROUP_POPULARITY,
     )
-    return compute_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
+    return run_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
 
 
 @pytest.fixture
@@ -342,7 +373,7 @@ def org_day_result(stats_fetcher: wambatic.fetch.base.Fetcher) -> wambatic.stats
         since=tests.fixtures.stats.SINCE,
         until=tests.fixtures.stats.UNTIL,
     )
-    return compute_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
+    return run_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
 
 
 def make_report(
@@ -350,7 +381,8 @@ def make_report(
     subject: wambatic.fetch.base.Subject,
     initial: wambatic.stats.base.Granularity = wambatic.stats.base.Granularity.MONTH,
     by_author: bool = False,
-    groups: frozenset[str] = frozenset({'activity', 'flow'}),
+    groups: frozenset[str] = tests.fixtures.stats.GROUPS_ACTIVITY_FLOW,
+    clock: datetime.datetime = tests.fixtures.stats.NOW,
 ) -> wambatic.reports.html.HtmlReport:
     """The five results an HTML report is built from, over the stats fixture's range."""
 
@@ -362,7 +394,7 @@ def make_report(
             by_author=by_author,
             groups=groups,
         )
-        return compute_stats(fetcher, subject, request)
+        return run_stats(fetcher, subject, request, clock)
 
     return wambatic.reports.html.HtmlReport(
         total=result(wambatic.stats.base.Granularity.TOTAL),
@@ -386,7 +418,7 @@ def delivery_report(
     return make_report(
         stats_fetcher,
         tests.fixtures.stats.ORG,
-        groups=frozenset({'activity', 'delivery', 'flow'}),
+        groups=tests.fixtures.stats.GROUPS_ACTIVITY_FLOW_DELIVERY,
     )
 
 
@@ -398,7 +430,7 @@ def popularity_report(
     return make_report(
         stats_fetcher,
         tests.fixtures.stats.ORG,
-        groups=frozenset({'activity', 'popularity'}),
+        groups=tests.fixtures.stats.GROUPS_ACTIVITY_POPULARITY,
     )
 
 

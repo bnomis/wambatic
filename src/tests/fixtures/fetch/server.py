@@ -1,6 +1,7 @@
 import asyncio
 import collections.abc
 import dataclasses
+import json
 import types
 
 import aiohttp.test_utils
@@ -12,7 +13,7 @@ import pytest
 class Canned:
     status: int = 200
     body: object | None = None
-    headers: dict[str, str] = dataclasses.field(default_factory=dict)
+    headers: collections.abc.Mapping[str, str] = dataclasses.field(default_factory=dict)
     delay: float = 0.0
 
 
@@ -77,7 +78,12 @@ class ReplayServer:
             self.in_flight -= 1
         if canned.body is None:
             return aiohttp.web.Response(status=canned.status, headers=canned.headers)
-        return aiohttp.web.json_response(canned.body, status=canned.status, headers=canned.headers)
+        return aiohttp.web.json_response(
+            canned.body,
+            status=canned.status,
+            headers=canned.headers,
+            dumps=lambda body: json.dumps(body, default=dict),
+        )
 
     async def __aenter__(self) -> ReplayServer:
         app = aiohttp.web.Application()

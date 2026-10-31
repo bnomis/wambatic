@@ -2,39 +2,55 @@ import asyncio
 import collections.abc
 import dataclasses
 import datetime
+import email.utils
 import random
 
 import aiohttp
+import hypothesis
+import hypothesis.strategies
 import loguru
 import pytest
 
 import tests.conftest
-import tests.fixtures.fetch.responses as responses
-import tests.fixtures.fetch.server as server_module
+import tests.fixtures.fetch.constants
+import tests.fixtures.fetch.recorded
+import tests.fixtures.fetch.responses
+import tests.fixtures.fetch.server
+import tests.fixtures.thaw
 import wambatic.fetch.client
 import wambatic.fetch.errors
 import wambatic.fetch.queries
 import wambatic.fetch.ratelimit
 import wambatic.settings
 
-Canned = server_module.Canned
-GRAPHQL = ('POST', '/graphql')
-REPO = ('GET', '/repos/octocat/Hello-World')
-STATS = ('GET', '/repos/octocat/Hello-World/stats/code_frequency')
-VARIABLES = {'login': 'octocat', 'cursor': None}
+GRAPHQL = tests.fixtures.fetch.constants.GRAPHQL_ROUTE
+REPO = (  # auditme: accept[non-alphabetical-literal] (method, path) pair
+    'GET',
+    '/repos/octocat/Hello-World',
+)
+STATS = (  # auditme: accept[non-alphabetical-literal] (method, path) pair
+    'GET',
+    '/repos/octocat/Hello-World/stats/code_frequency',
+)
+ROUTES = ('graphql', 'rest')
+VARIABLES = {'cursor': None, 'login': 'octocat'}
 
 
-def graphql_ok() -> Canned:
-    return Canned(200, responses.OWNER_REPOSITORIES_OK, responses.RATE_HEADERS)
+def graphql_ok() -> tests.fixtures.fetch.server.Canned:
+    return tests.fixtures.fetch.server.Canned(
+        200,
+        tests.fixtures.fetch.recorded.OWNER_REPOSITORIES_OK,
+        tests.fixtures.fetch.responses.RATE_HEADERS,
+    )
 
 
 def run_graphql(
-    routes: dict[tuple[str, str], list[Canned]],
+    routes: dict[tuple[str, str], list[tests.fixtures.fetch.server.Canned]],
     make_client: tests.conftest.MakeClient,
     settings: wambatic.settings.FetchSettings | None = None,
 ) -> dict[str, object]:
     async def scenario() -> dict[str, object]:
-        async with server_module.ReplayServer(routes) as server:
+        async with tests.fixtures.fetch.server.ReplayServer(routes) as server:
             async with make_client(server, *([settings] if settings else [])) as client:
                 return await client.graphql(wambatic.fetch.queries.OWNER_REPOSITORIES, VARIABLES)
 
@@ -42,14 +58,14 @@ def run_graphql(
 
 
 def run_rest(
-    routes: dict[tuple[str, str], list[Canned]],
+    routes: dict[tuple[str, str], list[tests.fixtures.fetch.server.Canned]],
     make_client: tests.conftest.MakeClient,
     path: str = REPO[1],
     settings: wambatic.settings.FetchSettings | None = None,
     **kwargs: object,
 ) -> wambatic.fetch.client.RestResponse:
     async def scenario() -> wambatic.fetch.client.RestResponse:
-        async with server_module.ReplayServer(routes) as server:
+        async with tests.fixtures.fetch.server.ReplayServer(routes) as server:
             async with make_client(server, *([settings] if settings else [])) as client:
                 return await client.rest_get(path, **kwargs)  # type: ignore[arg-type]
 
@@ -64,8 +80,10 @@ def with_settings(**changes: object) -> wambatic.settings.FetchSettings:
 
 
 def test_requests_carry_required_headers(make_client: tests.conftest.MakeClient) -> None:
-    async def scenario() -> server_module.Received:
-        async with server_module.ReplayServer({REPO: [Canned(200, responses.REPO)]}) as server:
+    async def scenario() -> tests.fixtures.fetch.server.Received:
+        async with tests.fixtures.fetch.server.ReplayServer(
+            {REPO: [tests.fixtures.fetch.server.Canned(200, tests.fixtures.fetch.recorded.REPO)]}
+        ) as server:
             async with make_client(server) as client:
                 await client.rest_get(REPO[1])
             return server.received[0]
@@ -79,7 +97,7 @@ def test_requests_carry_required_headers(make_client: tests.conftest.MakeClient)
 
 def test_session_closes_on_exit(make_client: tests.conftest.MakeClient) -> None:
     async def scenario() -> tuple[bool, bool]:
-        async with server_module.ReplayServer({}) as server:
+        async with tests.fixtures.fetch.server.ReplayServer({}) as server:
             client = make_client(server)
             async with client:
                 assert client.session is not None
@@ -92,11 +110,11 @@ def test_session_closes_on_exit(make_client: tests.conftest.MakeClient) -> None:
 
 def test_use_outside_context_raises(make_client: tests.conftest.MakeClient) -> None:
     async def scenario() -> None:
-        async with server_module.ReplayServer({}) as server:
+        async with tests.fixtures.fetch.server.ReplayServer({}) as server:
             client = make_client(server)
-            with pytest.raises(RuntimeError):
+            with pytest.raises(wambatic.fetch.errors.FetchError):
                 await client.graphql('query', {})
-            with pytest.raises(RuntimeError):
+            with pytest.raises(wambatic.fetch.errors.FetchError):
                 await client.rest_get('/x')
 
     asyncio.run(scenario())
@@ -107,7 +125,9 @@ def test_logs_never_contain_token(make_client: tests.conftest.MakeClient) -> Non
     sink = loguru.logger.add(lambda message: records.append(str(message)), level='DEBUG')
 
     async def scenario() -> None:
-        async with server_module.ReplayServer({REPO: [Canned(200, responses.REPO)]}) as server:
+        async with tests.fixtures.fetch.server.ReplayServer(
+            {REPO: [tests.fixtures.fetch.server.Canned(200, tests.fixtures.fetch.recorded.REPO)]}
+        ) as server:
             async with make_client(server) as client:
                 await client.rest_get(REPO[1])
                 client.logger.info('leaked test-token here')
@@ -127,14 +147,14 @@ def test_logs_never_contain_token(make_client: tests.conftest.MakeClient) -> Non
 @pytest.mark.parametrize(
     ('status', 'body', 'headers', 'error'),
     [
-        (401, responses.BAD_CREDENTIALS, {}, wambatic.fetch.errors.AuthError),
+        (401, tests.fixtures.fetch.responses.BAD_CREDENTIALS, {}, wambatic.fetch.errors.AuthError),
         (
             403,
-            responses.FORBIDDEN,
+            tests.fixtures.fetch.responses.FORBIDDEN,
             {'x-accepted-oauth-scopes': 'repo'},
             wambatic.fetch.errors.AuthError,
         ),
-        (404, responses.NOT_FOUND, {}, wambatic.fetch.errors.NotFoundError),
+        (404, tests.fixtures.fetch.responses.NOT_FOUND, {}, wambatic.fetch.errors.NotFoundError),
     ],
 )
 def test_status_maps_to_error(
@@ -146,7 +166,7 @@ def test_status_maps_to_error(
     error: type[Exception],
 ) -> None:
     with pytest.raises(error) as info:
-        run_rest({REPO: [Canned(status, body, headers)]}, make_client)
+        run_rest({REPO: [tests.fixtures.fetch.server.Canned(status, body, headers)]}, make_client)
     assert 'test-token' not in str(info.value)
     assert 'Bearer' not in str(info.value)
     assert sleeps == []
@@ -158,9 +178,17 @@ def test_transient_status_then_success(
     make_client: tests.conftest.MakeClient, sleeps: tests.conftest.Sleeps
 ) -> None:
     result = run_rest(
-        {REPO: [Canned(502, responses.SERVER_ERROR), Canned(200, responses.REPO)]}, make_client
+        {
+            REPO: [
+                tests.fixtures.fetch.server.Canned(
+                    502, tests.fixtures.fetch.responses.SERVER_ERROR
+                ),
+                tests.fixtures.fetch.server.Canned(200, tests.fixtures.fetch.recorded.REPO),
+            ]
+        },
+        make_client,
     )
-    assert result.data == responses.REPO
+    assert result.data == tests.fixtures.fetch.recorded.REPO
     assert len(sleeps) == 1
     assert 0 <= sleeps[0] <= wambatic.fetch.ratelimit.BACKOFF_BASE
 
@@ -170,7 +198,9 @@ def test_transient_status_exhausts_retries(
     sleeps: tests.conftest.Sleeps,
     fetch_settings: wambatic.settings.FetchSettings,
 ) -> None:
-    canned = [Canned(502, responses.SERVER_ERROR)] * (fetch_settings.max_retries + 1)
+    canned = [
+        tests.fixtures.fetch.server.Canned(502, tests.fixtures.fetch.responses.SERVER_ERROR)
+    ] * (fetch_settings.max_retries + 1)
     with pytest.raises(
         wambatic.fetch.errors.FetchError, match='HTTP 502 to GET /repos/octocat/Hello-World'
     ):
@@ -184,7 +214,9 @@ def test_connection_error_then_success(
     make_client: tests.conftest.MakeClient, sleeps: tests.conftest.Sleeps
 ) -> None:
     async def scenario() -> wambatic.fetch.client.RestResponse:
-        async with server_module.ReplayServer({REPO: [Canned(200, responses.REPO)]}) as server:
+        async with tests.fixtures.fetch.server.ReplayServer(
+            {REPO: [tests.fixtures.fetch.server.Canned(200, tests.fixtures.fetch.recorded.REPO)]}
+        ) as server:
             async with make_client(server) as client:
                 real = client.send
                 calls = 0
@@ -199,7 +231,7 @@ def test_connection_error_then_success(
                 client.send = flaky  # type: ignore[method-assign]
                 return await client.rest_get(REPO[1])
 
-    assert asyncio.run(scenario()).data == responses.REPO
+    assert asyncio.run(scenario()).data == tests.fixtures.fetch.recorded.REPO
     assert len(sleeps) == 1
 
 
@@ -216,7 +248,7 @@ def run_failing(
     make_client: tests.conftest.MakeClient, error: BaseException
 ) -> wambatic.fetch.client.RestResponse:
     async def scenario() -> wambatic.fetch.client.RestResponse:
-        async with server_module.ReplayServer({}) as server:
+        async with tests.fixtures.fetch.server.ReplayServer({}) as server:
             async with make_client(server) as client:
                 client.send = failing_send(error)  # type: ignore[method-assign, assignment]
                 return await client.rest_get(REPO[1])
@@ -254,7 +286,7 @@ def test_another_client_error_is_a_fetch_error_without_retry(
 
 def test_a_failed_close_is_a_fetch_error(make_client: tests.conftest.MakeClient) -> None:
     async def scenario() -> None:
-        async with server_module.ReplayServer({}) as server:
+        async with tests.fixtures.fetch.server.ReplayServer({}) as server:
             client = make_client(server)
             async with client:
                 session = client.session
@@ -275,7 +307,16 @@ def test_other_status_raises_without_retry(
     make_client: tests.conftest.MakeClient, sleeps: tests.conftest.Sleeps
 ) -> None:
     with pytest.raises(wambatic.fetch.errors.FetchError, match='HTTP 422'):
-        run_rest({REPO: [Canned(422, responses.UNPROCESSABLE)]}, make_client)
+        run_rest(
+            {
+                REPO: [
+                    tests.fixtures.fetch.server.Canned(
+                        422, tests.fixtures.fetch.responses.UNPROCESSABLE
+                    )
+                ]
+            },
+            make_client,
+        )
     assert sleeps == []
 
 
@@ -286,14 +327,18 @@ def test_graphql_returns_data_and_tracks_limit(make_client: tests.conftest.MakeC
     async def scenario() -> tuple[
         dict[str, object], wambatic.fetch.ratelimit.RateLimitState, object
     ]:
-        async with server_module.ReplayServer({GRAPHQL: [graphql_ok()]}) as server:
+        async with tests.fixtures.fetch.server.ReplayServer({GRAPHQL: [graphql_ok()]}) as server:
             async with make_client(server) as client:
                 data = await client.graphql(wambatic.fetch.queries.OWNER_REPOSITORIES, VARIABLES)
                 return data, client.graphql_limit, server.received[0].json
 
     data, limit, sent = asyncio.run(scenario())
-    assert data == responses.OWNER_REPOSITORIES_OK['data']
-    recorded = responses.OWNER_REPOSITORIES_OK['data']['rateLimit']
+    assert data == tests.fixtures.thaw.thaw(
+        tests.fixtures.fetch.recorded.OWNER_REPOSITORIES_OK['data']
+    )
+    recorded = tests.fixtures.thaw.thaw(
+        tests.fixtures.fetch.recorded.OWNER_REPOSITORIES_OK['data']['rateLimit']
+    )
     assert isinstance(recorded, dict)
     assert limit == wambatic.fetch.ratelimit.RateLimitState(
         recorded['remaining'], datetime.datetime.fromisoformat(recorded['resetAt'])
@@ -303,28 +348,62 @@ def test_graphql_returns_data_and_tracks_limit(make_client: tests.conftest.MakeC
 
 def test_graphql_not_found(make_client: tests.conftest.MakeClient) -> None:
     with pytest.raises(wambatic.fetch.errors.NotFoundError):
-        run_graphql({GRAPHQL: [Canned(200, responses.GRAPHQL_NOT_FOUND)]}, make_client)
+        run_graphql(
+            {
+                GRAPHQL: [
+                    tests.fixtures.fetch.server.Canned(
+                        200, tests.fixtures.fetch.responses.GRAPHQL_NOT_FOUND
+                    )
+                ]
+            },
+            make_client,
+        )
 
 
 def test_graphql_other_error_discards_data(make_client: tests.conftest.MakeClient) -> None:
     with pytest.raises(wambatic.fetch.errors.GraphQLError) as info:
-        run_graphql({GRAPHQL: [Canned(200, responses.GRAPHQL_INTERNAL)]}, make_client)
-    assert info.value.errors == [('INTERNAL', 'Something went wrong')]
+        run_graphql(
+            {
+                GRAPHQL: [
+                    tests.fixtures.fetch.server.Canned(
+                        200, tests.fixtures.fetch.responses.GRAPHQL_INTERNAL
+                    )
+                ]
+            },
+            make_client,
+        )
+    assert info.value.errors == (('INTERNAL', 'Something went wrong'),)
 
 
 def test_graphql_requires_rate_limit(make_client: tests.conftest.MakeClient) -> None:
     with pytest.raises(wambatic.fetch.errors.GraphQLError):
-        run_graphql({GRAPHQL: [Canned(200, responses.GRAPHQL_NO_RATE_LIMIT)]}, make_client)
+        run_graphql(
+            {
+                GRAPHQL: [
+                    tests.fixtures.fetch.server.Canned(
+                        200, tests.fixtures.fetch.responses.GRAPHQL_NO_RATE_LIMIT
+                    )
+                ]
+            },
+            make_client,
+        )
 
 
 def test_graphql_dated_returns_the_data_and_the_servers_date_in_utc(
     make_client: tests.conftest.MakeClient,
 ) -> None:
-    headers = {**responses.RATE_HEADERS, 'Date': 'Thu, 29 Oct 2026 12:00:00 GMT'}
+    headers = {
+        **tests.fixtures.fetch.responses.RATE_HEADERS,
+        'Date': 'Thu, 29 Oct 2026 12:00:00 GMT',
+    }
 
     async def scenario() -> tuple[dict[str, object], datetime.datetime, dict[str, object]]:
-        canned = [Canned(200, responses.OWNER_REPOSITORIES_OK, headers)] * 2
-        async with server_module.ReplayServer({GRAPHQL: canned}) as server:
+        canned = [
+            tests.fixtures.fetch.server.Canned(
+                200, tests.fixtures.fetch.recorded.OWNER_REPOSITORIES_OK, headers
+            )
+        ] * 2
+        async with tests.fixtures.fetch.server.ReplayServer({GRAPHQL: canned}) as server:
             async with make_client(server) as client:
                 query = wambatic.fetch.queries.OWNER_REPOSITORIES
                 data, date = await client.graphql_dated(query, VARIABLES)
@@ -333,17 +412,27 @@ def test_graphql_dated_returns_the_data_and_the_servers_date_in_utc(
     data, date, plain = asyncio.run(scenario())
     assert date == datetime.datetime(2026, 10, 29, 12, 0, tzinfo=datetime.UTC)
     assert date.utcoffset() == datetime.timedelta(0)
-    assert data == plain == responses.OWNER_REPOSITORIES_OK['data']
+    assert (
+        data
+        == plain
+        == tests.fixtures.thaw.thaw(tests.fixtures.fetch.recorded.OWNER_REPOSITORIES_OK['data'])
+    )
 
 
 def test_graphql_dated_with_an_unparseable_date_is_malformed(
     make_client: tests.conftest.MakeClient,
 ) -> None:
-    headers = {**responses.RATE_HEADERS, 'Date': 'not a date'}
+    headers = {**tests.fixtures.fetch.responses.RATE_HEADERS, 'Date': 'not a date'}
 
     async def scenario() -> None:
-        async with server_module.ReplayServer(
-            {GRAPHQL: [Canned(200, responses.OWNER_REPOSITORIES_OK, headers)]}
+        async with tests.fixtures.fetch.server.ReplayServer(
+            {
+                GRAPHQL: [
+                    tests.fixtures.fetch.server.Canned(
+                        200, tests.fixtures.fetch.recorded.OWNER_REPOSITORIES_OK, headers
+                    )
+                ]
+            }
         ) as server:
             async with make_client(server) as client:
                 await client.graphql_dated(wambatic.fetch.queries.OWNER_REPOSITORIES, VARIABLES)
@@ -386,7 +475,9 @@ HTTP_DATE_PARSED = datetime.datetime(2026, 10, 29, 12, 0, tzinfo=datetime.UTC)
 def test_rest_304_carries_the_date_of_its_own_response(
     make_client: tests.conftest.MakeClient,
 ) -> None:
-    result = run_rest({REPO: [Canned(304, headers={'Date': HTTP_DATE})]}, make_client)
+    result = run_rest(
+        {REPO: [tests.fixtures.fetch.server.Canned(304, headers={'Date': HTTP_DATE})]}, make_client
+    )
     assert result.date == HTTP_DATE_PARSED
 
 
@@ -397,45 +488,89 @@ def test_header_date_is_none_without_a_parseable_date(headers: dict[str, str]) -
 
 
 def test_rest_200_returns_data_and_etag(make_client: tests.conftest.MakeClient) -> None:
-    headers = {**responses.RATE_HEADERS, 'ETag': responses.REPO_ETAG, 'Date': HTTP_DATE}
-    result = run_rest({REPO: [Canned(200, responses.REPO, headers)]}, make_client)
+    headers = {
+        **tests.fixtures.fetch.responses.RATE_HEADERS,
+        'ETag': tests.fixtures.fetch.recorded.REPO_ETAG,
+        'Date': HTTP_DATE,
+    }
+    result = run_rest(
+        {
+            REPO: [
+                tests.fixtures.fetch.server.Canned(200, tests.fixtures.fetch.recorded.REPO, headers)
+            ]
+        },
+        make_client,
+    )
     assert result == wambatic.fetch.client.RestResponse(
-        200, responses.REPO, responses.REPO_ETAG, None, HTTP_DATE_PARSED
+        200,
+        tests.fixtures.fetch.recorded.REPO,
+        tests.fixtures.fetch.recorded.REPO_ETAG,
+        None,
+        HTTP_DATE_PARSED,
     )
 
 
 def test_rest_304_sends_if_none_match(
     make_client: tests.conftest.MakeClient, sleeps: tests.conftest.Sleeps
 ) -> None:
-    async def scenario() -> tuple[wambatic.fetch.client.RestResponse, server_module.Received]:
-        async with server_module.ReplayServer({REPO: [Canned(304)]}) as server:
+    async def scenario() -> tuple[
+        wambatic.fetch.client.RestResponse, tests.fixtures.fetch.server.Received
+    ]:
+        async with tests.fixtures.fetch.server.ReplayServer(
+            {REPO: [tests.fixtures.fetch.server.Canned(304)]}
+        ) as server:
             async with make_client(server) as client:
-                result = await client.rest_get(REPO[1], etag=responses.REPO_ETAG)
+                result = await client.rest_get(
+                    REPO[1], etag=tests.fixtures.fetch.recorded.REPO_ETAG
+                )
                 return result, server.received[0]
 
     result, received = asyncio.run(scenario())
     assert result.status == 304
-    assert (result.data, result.etag, result.next_url) == (None, responses.REPO_ETAG, None)
+    assert (result.data, result.etag, result.next_url) == (
+        None,
+        tests.fixtures.fetch.recorded.REPO_ETAG,
+        None,
+    )
     assert result.date is not None
     assert result.date.tzinfo is not None
-    assert received.headers['If-None-Match'] == responses.REPO_ETAG
+    assert received.headers['If-None-Match'] == tests.fixtures.fetch.recorded.REPO_ETAG
     assert sleeps == []
 
 
 def test_rest_limit_tracks_headers(make_client: tests.conftest.MakeClient) -> None:
     async def scenario() -> wambatic.fetch.ratelimit.RateLimitState:
-        routes = {REPO: [Canned(200, responses.REPO, responses.RATE_HEADERS)]}
-        async with server_module.ReplayServer(routes) as server:
+        routes = {
+            REPO: [
+                tests.fixtures.fetch.server.Canned(
+                    200,
+                    tests.fixtures.fetch.recorded.REPO,
+                    tests.fixtures.fetch.responses.RATE_HEADERS,
+                )
+            ]
+        }
+        async with tests.fixtures.fetch.server.ReplayServer(routes) as server:
             async with make_client(server) as client:
                 await client.rest_get(REPO[1])
                 return client.rest_limit
 
-    assert asyncio.run(scenario()) == wambatic.fetch.ratelimit.RateLimitState(4990, responses.RESET)
+    assert asyncio.run(scenario()) == wambatic.fetch.ratelimit.RateLimitState(
+        4990, tests.fixtures.fetch.responses.RESET
+    )
 
 
 def test_rest_404(make_client: tests.conftest.MakeClient) -> None:
     with pytest.raises(wambatic.fetch.errors.NotFoundError):
-        run_rest({REPO: [Canned(404, responses.NOT_FOUND)]}, make_client)
+        run_rest(
+            {
+                REPO: [
+                    tests.fixtures.fetch.server.Canned(
+                        404, tests.fixtures.fetch.responses.NOT_FOUND
+                    )
+                ]
+            },
+            make_client,
+        )
 
 
 def test_rest_next_url_from_link(make_client: tests.conftest.MakeClient) -> None:
@@ -443,7 +578,9 @@ def test_rest_next_url_from_link(make_client: tests.conftest.MakeClient) -> None
         '<https://api.github.com/x?page=2>; rel="next", '
         '<https://api.github.com/x?page=9>; rel="last"'
     )
-    result = run_rest({REPO: [Canned(200, [], {'Link': link})]}, make_client)
+    result = run_rest(
+        {REPO: [tests.fixtures.fetch.server.Canned(200, [], {'Link': link})]}, make_client
+    )
     assert result.next_url == 'https://api.github.com/x?page=2'
 
 
@@ -460,15 +597,23 @@ def test_next_link() -> None:
 # Primary rate limit
 
 
-def primary_rest() -> Canned:
-    return Canned(403, responses.PRIMARY_LIMIT, responses.PRIMARY_LIMIT_HEADERS)
+def primary_rest() -> tests.fixtures.fetch.server.Canned:
+    return tests.fixtures.fetch.server.Canned(
+        403,
+        tests.fixtures.fetch.responses.PRIMARY_LIMIT,
+        tests.fixtures.fetch.responses.PRIMARY_LIMIT_HEADERS,
+    )
 
 
-def primary_graphql() -> Canned:
-    return Canned(200, responses.GRAPHQL_RATE_LIMITED, responses.PRIMARY_LIMIT_HEADERS)
+def primary_graphql() -> tests.fixtures.fetch.server.Canned:
+    return tests.fixtures.fetch.server.Canned(
+        200,
+        tests.fixtures.fetch.responses.GRAPHQL_RATE_LIMITED,
+        tests.fixtures.fetch.responses.PRIMARY_LIMIT_HEADERS,
+    )
 
 
-@pytest.mark.parametrize('route', ['rest', 'graphql'])
+@pytest.mark.parametrize('route', ROUTES)
 def test_primary_limit_fail(
     make_client: tests.conftest.MakeClient, sleeps: tests.conftest.Sleeps, route: str
 ) -> None:
@@ -478,11 +623,11 @@ def test_primary_limit_fail(
             run_rest({REPO: [primary_rest()]}, make_client, settings=settings)
         else:
             run_graphql({GRAPHQL: [primary_graphql()]}, make_client, settings)
-    assert info.value.reset_at == responses.RESET
+    assert info.value.reset_at == tests.fixtures.fetch.responses.RESET
     assert sleeps == []
 
 
-@pytest.mark.parametrize('route', ['rest', 'graphql'])
+@pytest.mark.parametrize('route', ROUTES)
 def test_primary_limit_wait(
     make_client: tests.conftest.MakeClient, sleeps: tests.conftest.Sleeps, route: str
 ) -> None:
@@ -492,7 +637,12 @@ def test_primary_limit_wait(
     try:
         if route == 'rest':
             run_rest(
-                {REPO: [primary_rest(), Canned(200, responses.REPO)]},
+                {
+                    REPO: [
+                        primary_rest(),
+                        tests.fixtures.fetch.server.Canned(200, tests.fixtures.fetch.recorded.REPO),
+                    ]
+                },
                 make_client,
                 settings=settings,
             )
@@ -506,8 +656,16 @@ def test_primary_limit_wait(
 
 def test_exhausted_state_fails_before_request(make_client: tests.conftest.MakeClient) -> None:
     async def scenario() -> int:
-        routes = {REPO: [Canned(200, responses.REPO, responses.PRIMARY_LIMIT_HEADERS)]}
-        async with server_module.ReplayServer(routes) as server:
+        routes = {
+            REPO: [
+                tests.fixtures.fetch.server.Canned(
+                    200,
+                    tests.fixtures.fetch.recorded.REPO,
+                    tests.fixtures.fetch.responses.PRIMARY_LIMIT_HEADERS,
+                )
+            ]
+        }
+        async with tests.fixtures.fetch.server.ReplayServer(routes) as server:
             client = make_client(server, with_settings(on_rate_limit='fail'))
             async with client:
                 await client.rest_get(REPO[1])
@@ -521,8 +679,18 @@ def test_exhausted_state_fails_before_request(make_client: tests.conftest.MakeCl
 def test_primary_limit_without_reset_is_secondary(
     make_client: tests.conftest.MakeClient, sleeps: tests.conftest.Sleeps
 ) -> None:
-    limited = Canned(403, responses.PRIMARY_LIMIT, {'x-ratelimit-remaining': '0'})
-    run_rest({REPO: [limited, Canned(200, responses.REPO)]}, make_client)
+    limited = tests.fixtures.fetch.server.Canned(
+        403, tests.fixtures.fetch.responses.PRIMARY_LIMIT, {'x-ratelimit-remaining': '0'}
+    )
+    run_rest(
+        {
+            REPO: [
+                limited,
+                tests.fixtures.fetch.server.Canned(200, tests.fixtures.fetch.recorded.REPO),
+            ]
+        },
+        make_client,
+    )
     assert len(sleeps) == 1
     assert sleeps[0] >= wambatic.fetch.ratelimit.SECONDARY_WAIT
 
@@ -533,8 +701,18 @@ def test_primary_limit_without_reset_is_secondary(
 def test_retry_after_is_honoured(
     make_client: tests.conftest.MakeClient, sleeps: tests.conftest.Sleeps
 ) -> None:
-    limited = Canned(429, responses.PRIMARY_LIMIT, {'retry-after': '3'})
-    run_rest({REPO: [limited, Canned(200, responses.REPO)]}, make_client)
+    limited = tests.fixtures.fetch.server.Canned(
+        429, tests.fixtures.fetch.responses.PRIMARY_LIMIT, {'retry-after': '3'}
+    )
+    run_rest(
+        {
+            REPO: [
+                limited,
+                tests.fixtures.fetch.server.Canned(200, tests.fixtures.fetch.recorded.REPO),
+            ]
+        },
+        make_client,
+    )
     assert len(sleeps) == 1
     assert sleeps[0] >= 3
 
@@ -542,8 +720,18 @@ def test_retry_after_is_honoured(
 def test_secondary_message_waits_a_minute(
     make_client: tests.conftest.MakeClient, sleeps: tests.conftest.Sleeps
 ) -> None:
-    limited = Canned(403, responses.SECONDARY_LIMIT)
-    run_rest({REPO: [limited, Canned(200, responses.REPO)]}, make_client)
+    limited = tests.fixtures.fetch.server.Canned(
+        403, tests.fixtures.fetch.responses.SECONDARY_LIMIT
+    )
+    run_rest(
+        {
+            REPO: [
+                limited,
+                tests.fixtures.fetch.server.Canned(200, tests.fixtures.fetch.recorded.REPO),
+            ]
+        },
+        make_client,
+    )
     assert len(sleeps) == 1
     assert sleeps[0] >= 60
 
@@ -553,19 +741,30 @@ def test_secondary_limit_runs_out_of_retries(
     sleeps: tests.conftest.Sleeps,
     fetch_settings: wambatic.settings.FetchSettings,
 ) -> None:
-    limited = Canned(429, responses.PRIMARY_LIMIT, {'retry-after': '3'})
+    limited = tests.fixtures.fetch.server.Canned(
+        429, tests.fixtures.fetch.responses.PRIMARY_LIMIT, {'retry-after': '3'}
+    )
     settings = dataclasses.replace(fetch_settings, on_rate_limit='wait')
     with pytest.raises(wambatic.fetch.errors.RateLimitError) as info:
         run_rest({REPO: [limited] * (settings.max_retries + 1)}, make_client, settings=settings)
     assert len(sleeps) == settings.max_retries
-    assert info.value.reset_at >= responses.NOW + datetime.timedelta(seconds=3)
+    assert info.value.reset_at >= tests.fixtures.fetch.responses.NOW + datetime.timedelta(seconds=3)
 
 
 def test_forbidden_without_limit_signal_is_auth_error(
     make_client: tests.conftest.MakeClient, sleeps: tests.conftest.Sleeps
 ) -> None:
     with pytest.raises(wambatic.fetch.errors.AuthError):
-        run_rest({REPO: [Canned(403, responses.FORBIDDEN)]}, make_client)
+        run_rest(
+            {
+                REPO: [
+                    tests.fixtures.fetch.server.Canned(
+                        403, tests.fixtures.fetch.responses.FORBIDDEN
+                    )
+                ]
+            },
+            make_client,
+        )
     assert sleeps == []
 
 
@@ -575,8 +774,10 @@ def test_forbidden_without_limit_signal_is_auth_error(
 def test_202_then_200(
     make_client: tests.conftest.MakeClient, sleeps: tests.conftest.Sleeps
 ) -> None:
-    done = Canned(200, [[1, 2, 3, 4]])
-    result = run_rest({STATS: [responses.STATS_PENDING] * 2 + [done]}, make_client, STATS[1])
+    done = tests.fixtures.fetch.server.Canned(200, [[1, 2, 3, 4]])
+    result = run_rest(
+        {STATS: [tests.fixtures.fetch.responses.STATS_PENDING] * 2 + [done]}, make_client, STATS[1]
+    )
     assert result.data == [[1, 2, 3, 4]]
     assert len(sleeps) == 2
 
@@ -586,7 +787,7 @@ def test_202_exhausts_stats_retries(
     sleeps: tests.conftest.Sleeps,
     fetch_settings: wambatic.settings.FetchSettings,
 ) -> None:
-    pending = [responses.STATS_PENDING] * (fetch_settings.stats_retries + 1)
+    pending = [tests.fixtures.fetch.responses.STATS_PENDING] * (fetch_settings.stats_retries + 1)
     with pytest.raises(wambatic.fetch.errors.StatsPendingError) as info:
         run_rest({STATS: pending}, make_client, STATS[1])
     assert STATS[1] in str(info.value)
@@ -596,3 +797,84 @@ def test_202_exhausts_stats_retries(
 def test_default_rng_is_independent() -> None:
     client = wambatic.fetch.client.GitHubClient('t', wambatic.settings.FetchSettings())
     assert isinstance(client.rng, random.Random)
+
+
+URL_TEXT = hypothesis.strategies.text(
+    alphabet=hypothesis.strategies.characters(blacklist_characters='<>,;"', codec='ascii'),
+    min_size=1,
+    max_size=40,
+)
+JSON_VALUES = hypothesis.strategies.recursive(
+    hypothesis.strategies.none()
+    | hypothesis.strategies.booleans()
+    | hypothesis.strategies.integers()
+    | hypothesis.strategies.text(max_size=10),
+    lambda inner: (
+        hypothesis.strategies.lists(inner, max_size=3)
+        | hypothesis.strategies.dictionaries(
+            hypothesis.strategies.text(max_size=6), inner, max_size=3
+        )
+    ),
+    max_leaves=8,
+)
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(
+    first=URL_TEXT,
+    following=URL_TEXT,
+)
+def test_next_link_picks_the_next_relation(first: str, following: str) -> None:
+    header = f'<{first}>; rel="prev", <{following}>; rel="next", <{first}>; rel="last"'
+    assert wambatic.fetch.client.next_link(header) == following
+    assert wambatic.fetch.client.next_link(f'<{first}>; rel="last"') is None
+    assert wambatic.fetch.client.next_link(None) is None
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(header=hypothesis.strategies.text(max_size=80))
+def test_next_link_never_fails(header: str) -> None:
+    result = wambatic.fetch.client.next_link(header)
+    assert result is None or result in header
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(data=JSON_VALUES)
+def test_error_types_gives_string_pairs(data: object) -> None:
+    pairs = wambatic.fetch.client.error_types(data)
+    assert all(isinstance(kind, str) and isinstance(message, str) for kind, message in pairs)
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(
+    kind=hypothesis.strategies.text(max_size=10), message=hypothesis.strategies.text(max_size=10)
+)
+def test_error_types_reads_the_errors_list(kind: str, message: str) -> None:
+    data = {'errors': [{'type': kind, 'message': message}, 'junk', {}]}
+    assert wambatic.fetch.client.error_types(data) == [(kind, message), ('UNKNOWN', '')]
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(
+    moment=hypothesis.strategies.datetimes(
+        min_value=datetime.datetime(2000, 1, 1),
+        max_value=datetime.datetime(2100, 1, 1),
+        timezones=hypothesis.strategies.just(datetime.UTC),
+    ).map(lambda value: value.replace(microsecond=0))
+)
+def test_header_date_reads_an_http_date(moment: datetime.datetime) -> None:
+    response = wambatic.fetch.client.Response(
+        200,
+        {'Date': email.utils.format_datetime(moment, usegmt=True)},
+        None,
+        None,  # type: ignore[arg-type]
+    )
+    assert wambatic.fetch.client.header_date(response) == moment
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(value=hypothesis.strategies.text(max_size=40))
+def test_header_date_is_utc_or_none(value: str) -> None:
+    response = wambatic.fetch.client.Response(200, {'Date': value}, None, None)  # type: ignore[arg-type]
+    result = wambatic.fetch.client.header_date(response)
+    assert result is None or result.utcoffset() == datetime.timedelta(0)

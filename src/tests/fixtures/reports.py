@@ -5,12 +5,13 @@ an author breakdown, regenerated when the flow tables were added, then checked b
 2026-10-30: every number against the hand-worked totals in `tests.fixtures.stats` (periods,
 breakdowns by repository and by author, top contributors, and the flow counts and times by period,
 whose arithmetic is in `ORG_FLOW_BY_MONTH_UTC`) and the layout against the reports spec's Terminal
-section. The versions in the provenance footer are `{wambatic_version}` and
-`{schema_version}`, filled in by the test; trailing spaces are not kept, so the test compares
+section. The versions in the provenance footer are `$wambatic_version` and
+`$schema_version`, filled in by the test; trailing spaces are not kept, so the test compares
 lines without them.
 """
 
 import datetime
+import types
 
 import pytest
 
@@ -23,8 +24,6 @@ import wambatic.fetch.cache
 import wambatic.reports.service
 import wambatic.settings
 
-UTC = datetime.UTC
-
 
 def alpha_upstream() -> tests.fixtures.fetch.upstream.Upstream:
     """A fake GitHub whose repositories match the stats fixture's, so a sync finds them
@@ -35,7 +34,7 @@ def alpha_upstream() -> tests.fixtures.fetch.upstream.Upstream:
             repo.name_with_owner,
             [
                 tests.fixtures.fetch.upstream.FakeCommit(
-                    str(repo.head_oid), datetime.datetime(2026, 10, 5, 10, 0, tzinfo=UTC)
+                    str(repo.head_oid), datetime.datetime(2026, 10, 5, 10, 0, tzinfo=datetime.UTC)
                 )
             ],
             pushed_at=repo.pushed_at or tests.fixtures.stats.NOW,
@@ -158,10 +157,25 @@ computed_at: 2027-01-20T12:00:00+00:00
 fetched_at:commits: 2027-02-01T10:00:00+00:00
 fetched_at:issues: 2027-02-01T10:00:00+00:00
 fetched_at:pull_requests: 2027-02-01T10:00:00+00:00
-wambatic_version: {wambatic_version}
-schema_version: {schema_version}
+wambatic_version: $wambatic_version
+schema_version: $schema_version
 """
 
+
+# The names of the files a report writes, and the one period its page shows at first
+REPORT_FILES = ('report.html',)
+MONTH_ONLY = frozenset({'month'})
+
+# The keys of the figures built for the range as a whole, in order
+RANGE_FIGURE_KEYS = (  # auditme: accept[non-alphabetical-literal] the order the figures come in
+    'activity-top-contributors',
+    'activity-by-repository',
+    'activity-by-author',
+)
+
+# One entry per month label: the bar pattern shapes and the line marker symbols of those figures
+BLANK_SHAPES = ('',) * len(tests.fixtures.stats.LABELS)
+CIRCLE_SYMBOLS = ('circle',) * len(tests.fixtures.stats.LABELS)
 
 # The `activity-commits` and `flow-merge-time` figures of the org by month, as `Figure` fields
 # (`dataclasses.asdict`). Generated from `build_figures` once, then checked by hand on 2026-10-30:
@@ -169,95 +183,133 @@ schema_version: {schema_version}
 # months of `ORG_BY_MONTH_UTC` and `ORG_FLOW_BY_MONTH_UTC` (November has no merge, so a gap), no
 # month is partial so no mark, the first slot is the p50 and the second the p90, and the last
 # point of each line is labelled.
-ORG_MONTH_FIGURES = {
-    'activity-commits': {
-        'key': 'activity-commits',
-        'group': 'activity',
-        'title': 'Commits per period',
-        'description': 'Bars of the commits in each period.',
-        'data': [
+ORG_MONTH_FIGURES = types.MappingProxyType(
+    {
+        'activity-commits': types.MappingProxyType(
             {
-                'type': 'bar',
-                'name': 'Commits',
-                'x': ['2026-10', '2026-11', '2026-12', '2027-01'],
-                'y': [7, 0, 1, 2],
-                'marker': {'pattern': {'shape': ['', '', '', '']}},
-                'meta': {'slot': 1},
+                'key': 'activity-commits',
+                'group': 'activity',
+                'title': 'Commits per period',
+                'description': 'Bars of the commits in each period.',
+                'data': (
+                    types.MappingProxyType(
+                        {
+                            'type': 'bar',
+                            'name': 'Commits',
+                            'x': tests.fixtures.stats.LABELS,
+                            'y': (7, 0, 1, 2),
+                            'marker': types.MappingProxyType(
+                                {'pattern': types.MappingProxyType({'shape': BLANK_SHAPES})}
+                            ),
+                            'meta': types.MappingProxyType({'slot': 1}),
+                        }
+                    ),
+                ),
+                'layout': types.MappingProxyType(
+                    {
+                        'height': 320,
+                        'margin': types.MappingProxyType({'l': 64, 'r': 24, 't': 16, 'b': 72}),
+                        'font': types.MappingProxyType(
+                            {'family': 'system-ui, -apple-system, "Segoe UI", sans-serif'}
+                        ),
+                        'xaxis': types.MappingProxyType({'type': 'category', 'automargin': True}),
+                        'yaxis': types.MappingProxyType(
+                            {
+                                'title': types.MappingProxyType({'text': 'commits'}),
+                                'automargin': True,
+                                'zeroline': True,
+                            }
+                        ),
+                        'barmode': 'group',
+                        'hovermode': 'x unified',
+                        'showlegend': False,
+                        'legend': types.MappingProxyType({'orientation': 'h', 'x': 0, 'y': 1.15}),
+                        'annotations': (),
+                    }
+                ),
             }
-        ],
-        'layout': {
-            'height': 320,
-            'margin': {'l': 64, 'r': 24, 't': 16, 'b': 72},
-            'font': {'family': 'system-ui, -apple-system, "Segoe UI", sans-serif'},
-            'xaxis': {'type': 'category', 'automargin': True},
-            'yaxis': {'title': {'text': 'commits'}, 'automargin': True, 'zeroline': True},
-            'barmode': 'group',
-            'hovermode': 'x unified',
-            'showlegend': False,
-            'legend': {'orientation': 'h', 'x': 0, 'y': 1.15},
-            'annotations': [],
-        },
-    },
-    'flow-merge-time': {
-        'key': 'flow-merge-time',
-        'group': 'flow',
-        'title': 'Time to merge per period',
-        'description': 'Lines of the median and 90th percentile hours to merge '
-        'for each period, with a gap where no merge has a value.',
-        'data': [
+        ),
+        'flow-merge-time': types.MappingProxyType(
             {
-                'type': 'scatter',
-                'mode': 'lines+markers',
-                'name': 'p50',
-                'x': ['2026-10', '2026-11', '2026-12', '2027-01'],
-                'y': [48.0, None, 37.5, 24.0],
-                'marker': {'symbol': ['circle', 'circle', 'circle', 'circle']},
-                'connectgaps': False,
-                'meta': {'slot': 1},
-            },
-            {
-                'type': 'scatter',
-                'mode': 'lines+markers',
-                'name': 'p90',
-                'x': ['2026-10', '2026-11', '2026-12', '2027-01'],
-                'y': [86.4, None, 37.5, 24.0],
-                'marker': {'symbol': ['circle', 'circle', 'circle', 'circle']},
-                'connectgaps': False,
-                'meta': {'slot': 2},
-            },
-        ],
-        'layout': {
-            'height': 320,
-            'margin': {'l': 64, 'r': 56, 't': 48, 'b': 72},
-            'font': {'family': 'system-ui, -apple-system, "Segoe UI", sans-serif'},
-            'xaxis': {'type': 'category', 'automargin': True},
-            'yaxis': {'title': {'text': 'hours'}, 'automargin': True, 'zeroline': True},
-            'barmode': 'group',
-            'hovermode': 'x unified',
-            'showlegend': True,
-            'legend': {'orientation': 'h', 'x': 0, 'y': 1.15},
-            'annotations': [
-                {
-                    'x': '2027-01',
-                    'y': 24.0,
-                    'xref': 'x',
-                    'yref': 'y',
-                    'text': 'p50',
-                    'showarrow': False,
-                    'xanchor': 'left',
-                    'xshift': 6,
-                },
-                {
-                    'x': '2027-01',
-                    'y': 24.0,
-                    'xref': 'x',
-                    'yref': 'y',
-                    'text': 'p90',
-                    'showarrow': False,
-                    'xanchor': 'left',
-                    'xshift': 6,
-                },
-            ],
-        },
-    },
-}
+                'key': 'flow-merge-time',
+                'group': 'flow',
+                'title': 'Time to merge per period',
+                'description': 'Lines of the median and 90th percentile hours to merge '
+                'for each period, with a gap where no merge has a value.',
+                'data': (
+                    types.MappingProxyType(
+                        {
+                            'type': 'scatter',
+                            'mode': 'lines+markers',
+                            'name': 'p50',
+                            'x': tests.fixtures.stats.LABELS,
+                            'y': (48.0, None, 37.5, 24.0),
+                            'marker': types.MappingProxyType({'symbol': CIRCLE_SYMBOLS}),
+                            'connectgaps': False,
+                            'meta': types.MappingProxyType({'slot': 1}),
+                        }
+                    ),
+                    types.MappingProxyType(
+                        {
+                            'type': 'scatter',
+                            'mode': 'lines+markers',
+                            'name': 'p90',
+                            'x': tests.fixtures.stats.LABELS,
+                            'y': (86.4, None, 37.5, 24.0),
+                            'marker': types.MappingProxyType({'symbol': CIRCLE_SYMBOLS}),
+                            'connectgaps': False,
+                            'meta': types.MappingProxyType({'slot': 2}),
+                        }
+                    ),
+                ),
+                'layout': types.MappingProxyType(
+                    {
+                        'height': 320,
+                        'margin': types.MappingProxyType({'l': 64, 'r': 56, 't': 48, 'b': 72}),
+                        'font': types.MappingProxyType(
+                            {'family': 'system-ui, -apple-system, "Segoe UI", sans-serif'}
+                        ),
+                        'xaxis': types.MappingProxyType({'type': 'category', 'automargin': True}),
+                        'yaxis': types.MappingProxyType(
+                            {
+                                'title': types.MappingProxyType({'text': 'hours'}),
+                                'automargin': True,
+                                'zeroline': True,
+                            }
+                        ),
+                        'barmode': 'group',
+                        'hovermode': 'x unified',
+                        'showlegend': True,
+                        'legend': types.MappingProxyType({'orientation': 'h', 'x': 0, 'y': 1.15}),
+                        'annotations': (
+                            types.MappingProxyType(
+                                {
+                                    'x': '2027-01',
+                                    'y': 24.0,
+                                    'xref': 'x',
+                                    'yref': 'y',
+                                    'text': 'p50',
+                                    'showarrow': False,
+                                    'xanchor': 'left',
+                                    'xshift': 6,
+                                }
+                            ),
+                            types.MappingProxyType(
+                                {
+                                    'x': '2027-01',
+                                    'y': 24.0,
+                                    'xref': 'x',
+                                    'yref': 'y',
+                                    'text': 'p90',
+                                    'showarrow': False,
+                                    'xanchor': 'left',
+                                    'xshift': 6,
+                                }
+                            ),
+                        ),
+                    }
+                ),
+            }
+        ),
+    }
+)

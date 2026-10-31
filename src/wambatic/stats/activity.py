@@ -23,7 +23,10 @@ Tables = dict[str, list[dict[str, typing.Any]]]
 
 @dataclasses.dataclass(slots=True)
 class Tally:
-    """What the commits of one group add up to, in one bucket or over the whole range."""
+    """What the commits of one group add up to, in one bucket or over the whole range.
+
+    A mutable accumulator by design: the stats code adds each commit to it while it reads them.
+    """
 
     commits: int = 0
     lines_added: int = 0
@@ -58,11 +61,14 @@ def series_of(
     metric: str,
     unit: str,
     buckets: list[wambatic.stats.base.Bucket],
-    tallies: collections.abc.Sequence[Tally],
+    tallies: collections.abc.Mapping[int, Tally],
     by: str | None = None,
-    by_kind: typing.Literal['author', 'repo'] | None = None,
+    by_kind: wambatic.stats.base.ByKind | None = None,
 ) -> wambatic.stats.base.Series:
-    points = {bucket: tally.value(metric) for bucket, tally in zip(buckets, tallies, strict=True)}
+    empty = Tally()
+    points = {
+        bucket: tallies.get(index, empty).value(metric) for index, bucket in enumerate(buckets)
+    }
     return wambatic.stats.base.Series(metric, unit, points, by, by_kind)
 
 
@@ -76,14 +82,14 @@ def aggregate(
     by_repo: bool,
 ) -> tuple[list[wambatic.stats.base.Series], Tables]:
     """The activity series and tables for `commits`, which the caller has already restricted to
-    the range `buckets` covers; a commit outside it raises ValueError."""
+    the range `buckets` covers; a commit outside it raises InvalidRangeError."""
     bots = {login.casefold() for login in settings.bot_logins}
     starts = [bucket.start for bucket in buckets]
     end = wambatic.stats.buckets.bucket_end(buckets)
     totals = [Tally() for _ in buckets]
-    authors: dict[str | None, list[Tally]] = {}
+    authors: dict[str | None, dict[int, Tally]] = {}
     spellings: dict[str | None, str] = {}
-    repos: dict[str, list[Tally]] = {}
+    repos: dict[str, dict[int, Tally]] = {}
     overall: dict[str | None, Tally] = {}
     for commit in commits:
         day = commit.authored_at.astimezone(tz).date()
@@ -96,11 +102,13 @@ def aggregate(
             totals[index].logins.add(key)
         overall.setdefault(key, Tally()).add(commit, day, lines)
         if by_author:
-            authors.setdefault(key, [Tally() for _ in buckets])[index].add(commit, day, lines)
+            authors.setdefault(key, {}).setdefault(index, Tally()).add(commit, day, lines)
         if by_repo:
-            repos.setdefault(commit.repo, [Tally() for _ in buckets])[index].add(commit, day, lines)
-    series = [series_of(metric, unit, buckets, totals) for metric, unit in TOTAL_METRICS]
-    breakdowns: list[tuple[str, str, list[Tally]]] = [
+            repos.setdefault(commit.repo, {}).setdefault(index, Tally()).add(commit, day, lines)
+    series = [
+        series_of(metric, unit, buckets, dict(enumerate(totals))) for metric, unit in TOTAL_METRICS
+    ]
+    breakdowns: list[tuple[str, str, dict[int, Tally]]] = [
         ('author', spellings[key], tallies) for key, tallies in authors.items()
     ] + [('repo', name, tallies) for name, tallies in repos.items()]
     for kind, by, tallies in sorted(breakdowns, key=lambda item: (item[0], item[1])):

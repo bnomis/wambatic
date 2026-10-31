@@ -2,40 +2,40 @@ import asyncio
 import collections.abc
 import datetime
 
-import tests.fixtures.stats as fixture
+import tests.fixtures.stats
 import wambatic.fetch.base
 import wambatic.fetch.cache
 
 
 def test_every_net_is_added_minus_deleted() -> None:
-    for months in (fixture.ORG_BY_MONTH_UTC, fixture.ORG_BY_MONTH_BERLIN):
+    for months in (tests.fixtures.stats.ORG_BY_MONTH_UTC, tests.fixtures.stats.ORG_BY_MONTH_BERLIN):
         for values in months.values():
             assert values['lines_net'] == values['lines_added'] - values['lines_deleted']
-    for totals in (fixture.ORG_TOTAL_UTC, fixture.ORG_TOTAL_BERLIN):
+    for totals in (tests.fixtures.stats.ORG_TOTAL_UTC, tests.fixtures.stats.ORG_TOTAL_BERLIN):
         assert totals['lines_net'] == totals['lines_added'] - totals['lines_deleted']
-    for breakdown in (fixture.ORG_BY_REPO_UTC, fixture.ORG_BY_AUTHOR_UTC):
+    for breakdown in (tests.fixtures.stats.ORG_BY_REPO_UTC, tests.fixtures.stats.ORG_BY_AUTHOR_UTC):
         for rows in breakdown.values():
             for _, added, deleted, net in rows.values():
                 assert net == added - deleted
-    for top in fixture.ORG_TOP_CONTRIBUTORS:
+    for top in tests.fixtures.stats.ORG_TOP_CONTRIBUTORS:
         assert top['lines_net'] == top['lines_added'] - top['lines_deleted']
 
 
 def test_the_months_sum_to_the_totals() -> None:
     for months, total in (
-        (fixture.ORG_BY_MONTH_UTC, fixture.ORG_TOTAL_UTC),
-        (fixture.ORG_BY_MONTH_BERLIN, fixture.ORG_TOTAL_BERLIN),
+        (tests.fixtures.stats.ORG_BY_MONTH_UTC, tests.fixtures.stats.ORG_TOTAL_UTC),
+        (tests.fixtures.stats.ORG_BY_MONTH_BERLIN, tests.fixtures.stats.ORG_TOTAL_BERLIN),
     ):
-        assert tuple(months) == fixture.LABELS
+        assert tuple(months) == tests.fixtures.stats.LABELS
         for metric in ('commits', 'active_days', 'lines_added', 'lines_deleted', 'lines_net'):
             assert sum(values[metric] for values in months.values()) == total[metric]
 
 
 def test_the_breakdowns_sum_to_the_months() -> None:
-    for breakdown in (fixture.ORG_BY_REPO_UTC, fixture.ORG_BY_AUTHOR_UTC):
-        for label in fixture.LABELS:
+    for breakdown in (tests.fixtures.stats.ORG_BY_REPO_UTC, tests.fixtures.stats.ORG_BY_AUTHOR_UTC):
+        for label in tests.fixtures.stats.LABELS:
             summed = [sum(months[label][i] for months in breakdown.values()) for i in range(4)]
-            month = fixture.ORG_BY_MONTH_UTC[label]
+            month = tests.fixtures.stats.ORG_BY_MONTH_UTC[label]
             assert summed == [
                 month['commits'],
                 month['lines_added'],
@@ -45,10 +45,16 @@ def test_the_breakdowns_sum_to_the_months() -> None:
 
 
 def test_the_top_contributors_sum_to_the_totals_less_the_bot() -> None:
-    rows = fixture.ORG_TOP_CONTRIBUTORS
-    assert sum(row['commits'] for row in rows) == fixture.ORG_TOTAL_UTC['commits'] - 1
-    assert sum(row['lines_added'] for row in rows) == fixture.ORG_TOTAL_UTC['lines_added'] - 30
-    assert sum(row['lines_deleted'] for row in rows) == fixture.ORG_TOTAL_UTC['lines_deleted'] - 30
+    rows = tests.fixtures.stats.ORG_TOP_CONTRIBUTORS
+    assert sum(row['commits'] for row in rows) == tests.fixtures.stats.ORG_TOTAL_UTC['commits'] - 1
+    assert (
+        sum(row['lines_added'] for row in rows)
+        == tests.fixtures.stats.ORG_TOTAL_UTC['lines_added'] - 30
+    )
+    assert (
+        sum(row['lines_deleted'] for row in rows)
+        == tests.fixtures.stats.ORG_TOTAL_UTC['lines_deleted'] - 30
+    )
 
 
 def test_the_fetcher_returns_every_fixture_commit(
@@ -56,14 +62,14 @@ def test_the_fetcher_returns_every_fixture_commit(
 ) -> None:
     async def read() -> list[wambatic.fetch.base.Commit]:
         found: list[wambatic.fetch.base.Commit] = []
-        for subject in (fixture.ORG, fixture.USER):
+        for subject in (tests.fixtures.stats.ORG, tests.fixtures.stats.USER):
             for repo in await stats_fetcher.repos(subject):
                 found.extend([c async for c in stats_fetcher.commits(repo, None, None)])
         return found
 
     found = asyncio.run(read())
     assert sorted(found, key=lambda c: (c.repo, c.oid)) == sorted(
-        fixture.COMMITS, key=lambda c: (c.repo, c.oid)
+        tests.fixtures.stats.COMMITS, key=lambda c: (c.repo, c.oid)
     )
 
 
@@ -81,7 +87,7 @@ def in_range(moment: datetime.datetime | None) -> bool:
 
 
 def test_every_flow_record_is_inside_the_range_or_deliberately_outside_it() -> None:
-    for pull in fixture.PULL_REQUESTS:
+    for pull in tests.fixtures.stats.PULL_REQUESTS:
         key = (pull.repo, pull.number)
         events = [pull.created_at, pull.first_review_at, pull.merged_at, pull.closed_at]
         inside = [in_range(moment) for moment in events if moment is not None]
@@ -95,7 +101,7 @@ def test_every_flow_record_is_inside_the_range_or_deliberately_outside_it() -> N
             assert not in_range(pull.merged_at)
         else:
             assert all(inside), key
-    for item in fixture.ISSUES:
+    for item in tests.fixtures.stats.ISSUES:
         key = (item.repo, item.number)
         if key in ISSUES_BEFORE_RANGE:
             assert not in_range(item.created_at)
@@ -106,10 +112,10 @@ def test_every_flow_record_is_inside_the_range_or_deliberately_outside_it() -> N
 
 
 def test_every_record_was_updated_at_or_after_each_of_its_events() -> None:
-    for pull in fixture.PULL_REQUESTS:
+    for pull in tests.fixtures.stats.PULL_REQUESTS:
         events = [pull.created_at, pull.first_review_at, pull.merged_at, pull.closed_at]
         assert all(moment <= pull.updated_at for moment in events if moment is not None)
-    for item in fixture.ISSUES:
+    for item in tests.fixtures.stats.ISSUES:
         assert max(item.created_at, item.closed_at or item.created_at) <= item.updated_at
 
 
@@ -118,10 +124,10 @@ def count_in_month(moments: collections.abc.Sequence[datetime.datetime | None], 
 
 
 def test_the_expected_counts_equal_a_direct_count_over_the_org_records() -> None:
-    pulls = [p for p in fixture.PULL_REQUESTS if p.repo != fixture.GAMMA]
-    issues = [i for i in fixture.ISSUES if i.repo != fixture.GAMMA]
-    expected = fixture.ORG_FLOW_BY_MONTH_UTC
-    for label in fixture.LABELS:
+    pulls = [p for p in tests.fixtures.stats.PULL_REQUESTS if p.repo != tests.fixtures.stats.GAMMA]
+    issues = [i for i in tests.fixtures.stats.ISSUES if i.repo != tests.fixtures.stats.GAMMA]
+    expected = tests.fixtures.stats.ORG_FLOW_BY_MONTH_UTC
+    for label in tests.fixtures.stats.LABELS:
         assert count_in_month([p.created_at for p in pulls], label) == expected['prs_opened'][label]
         assert count_in_month([p.merged_at for p in pulls], label) == expected['prs_merged'][label]
         assert (
@@ -134,10 +140,10 @@ def test_the_expected_counts_equal_a_direct_count_over_the_org_records() -> None
 
 
 def test_the_duration_expectations_are_absent_exactly_where_there_is_no_event() -> None:
-    pulls = [p for p in fixture.PULL_REQUESTS if p.repo != fixture.GAMMA]
-    issues = [i for i in fixture.ISSUES if i.repo != fixture.GAMMA]
-    expected = fixture.ORG_FLOW_BY_MONTH_UTC
-    for label in fixture.LABELS:
+    pulls = [p for p in tests.fixtures.stats.PULL_REQUESTS if p.repo != tests.fixtures.stats.GAMMA]
+    issues = [i for i in tests.fixtures.stats.ISSUES if i.repo != tests.fixtures.stats.GAMMA]
+    expected = tests.fixtures.stats.ORG_FLOW_BY_MONTH_UTC
+    for label in tests.fixtures.stats.LABELS:
         reviewed = count_in_month([p.first_review_at for p in pulls], label) > 0
         merged = count_in_month([p.merged_at for p in pulls], label) > 0
         closed = count_in_month([i.closed_at for i in issues], label) > 0
@@ -149,24 +155,26 @@ def test_the_duration_expectations_are_absent_exactly_where_there_is_no_event() 
 
 
 def test_the_p90_is_never_below_the_p50_and_the_berlin_moves_follow_the_merge() -> None:
-    utc = fixture.ORG_FLOW_BY_MONTH_UTC
+    utc = tests.fixtures.stats.ORG_FLOW_BY_MONTH_UTC
     for name in ('time_to_first_review', 'time_to_merge', 'time_to_close'):
         for label, p50 in utc[f'{name}_p50'].items():
             assert utc[f'{name}_p90'][label] >= p50
-    assert sum(fixture.ORG_FLOW_BY_MONTH_BERLIN['prs_merged'].values()) == sum(
+    assert sum(tests.fixtures.stats.ORG_FLOW_BY_MONTH_BERLIN['prs_merged'].values()) == sum(
         utc['prs_merged'].values()
     )
-    assert set(fixture.ORG_FLOW_BY_MONTH_BERLIN) <= set(utc)
+    assert set(tests.fixtures.stats.ORG_FLOW_BY_MONTH_BERLIN) <= set(utc)
 
 
 def test_the_user_expectations_count_only_the_users_own_items_in_the_users_repos() -> None:
-    mine = [p for p in fixture.PULL_REQUESTS if p.repo == fixture.GAMMA]
-    own = [p for p in mine if (p.author_login or '').casefold() == fixture.USER.login]
-    assert len(own) == fixture.USER_FLOW_TOTAL_UTC['prs_opened']
+    mine = [p for p in tests.fixtures.stats.PULL_REQUESTS if p.repo == tests.fixtures.stats.GAMMA]
+    own = [p for p in mine if (p.author_login or '').casefold() == tests.fixtures.stats.USER.login]
+    assert len(own) == tests.fixtures.stats.USER_FLOW_TOTAL_UTC['prs_opened']
     assert len(own) < len(mine)
-    items = [i for i in fixture.ISSUES if i.repo == fixture.GAMMA]
-    own_issues = [i for i in items if (i.author_login or '').casefold() == fixture.USER.login]
-    assert len(own_issues) == fixture.USER_FLOW_TOTAL_UTC['issues_opened']
+    items = [i for i in tests.fixtures.stats.ISSUES if i.repo == tests.fixtures.stats.GAMMA]
+    own_issues = [
+        i for i in items if (i.author_login or '').casefold() == tests.fixtures.stats.USER.login
+    ]
+    assert len(own_issues) == tests.fixtures.stats.USER_FLOW_TOTAL_UTC['issues_opened']
     assert len(own_issues) < len(items)
 
 
@@ -176,7 +184,7 @@ def test_the_fetcher_returns_every_fixture_pull_request_and_issue(
     async def read() -> tuple[list[object], list[object]]:
         pulls: list[object] = []
         issues: list[object] = []
-        for subject in (fixture.ORG, fixture.USER):
+        for subject in (tests.fixtures.stats.ORG, tests.fixtures.stats.USER):
             for repo in await stats_fetcher.repos(subject):
                 pulls.extend([p async for p in stats_fetcher.pull_requests(repo, None)])
                 issues.extend([i async for i in stats_fetcher.issues(repo, None)])
@@ -187,20 +195,20 @@ def test_the_fetcher_returns_every_fixture_pull_request_and_issue(
     def key(record: object) -> tuple[str, int]:
         return (record.repo, record.number)  # type: ignore[attr-defined]
 
-    assert sorted(pulls, key=key) == sorted(fixture.PULL_REQUESTS, key=key)
-    assert sorted(issues, key=key) == sorted(fixture.ISSUES, key=key)
+    assert sorted(pulls, key=key) == sorted(tests.fixtures.stats.PULL_REQUESTS, key=key)
+    assert sorted(issues, key=key) == sorted(tests.fixtures.stats.ISSUES, key=key)
 
 
 def test_each_repo_has_a_sync_state_for_every_flow_resource_at_its_sync_time(
     stats_cache: wambatic.fetch.cache.Cache,
 ) -> None:
     times = {
-        fixture.ALPHA: fixture.ALPHA_SYNCED_AT,
-        fixture.BETA: fixture.BETA_SYNCED_AT,
-        fixture.GAMMA: fixture.GAMMA_SYNCED_AT,
+        tests.fixtures.stats.ALPHA: tests.fixtures.stats.ALPHA_SYNCED_AT,
+        tests.fixtures.stats.BETA: tests.fixtures.stats.BETA_SYNCED_AT,
+        tests.fixtures.stats.GAMMA: tests.fixtures.stats.GAMMA_SYNCED_AT,
     }
     for name, synced_at in times.items():
-        for resource in ('commits', 'issues', 'pull_requests'):
+        for resource in tests.fixtures.stats.RESOURCES_ACTIVITY_FLOW:
             state = stats_cache.sync_state(name, resource)
             assert state is not None
             assert state.synced_at == synced_at
@@ -210,62 +218,71 @@ def test_each_repo_has_a_sync_state_for_every_flow_resource_at_its_sync_time(
 
 
 def test_every_delivery_record_belongs_to_a_fixture_repo() -> None:
-    names = {repo.name_with_owner for repo in fixture.REPOS}
-    assert {release.repo for release in fixture.RELEASES} <= names
-    assert {run.repo for run in fixture.WORKFLOW_RUNS} <= names
+    names = {repo.name_with_owner for repo in tests.fixtures.stats.REPOS}
+    assert {release.repo for release in tests.fixtures.stats.RELEASES} <= names
+    assert {run.repo for run in tests.fixtures.stats.WORKFLOW_RUNS} <= names
 
 
 def test_a_release_is_published_at_or_after_it_was_created() -> None:
-    for release in fixture.RELEASES:
+    for release in tests.fixtures.stats.RELEASES:
         assert release.published_at >= release.created_at
 
 
 def test_every_completed_run_has_a_conclusion_and_no_other_run_has() -> None:
-    for run in fixture.WORKFLOW_RUNS:
+    for run in tests.fixtures.stats.WORKFLOW_RUNS:
         assert (run.status == 'completed') == (run.conclusion is not None), run.id
         assert run.updated_at >= run.created_at
         assert run.run_started_at is None or run.run_started_at >= run.created_at
 
 
 def test_run_ids_and_release_tags_are_unique_within_a_repo() -> None:
-    assert len({(run.repo, run.id) for run in fixture.WORKFLOW_RUNS}) == len(fixture.WORKFLOW_RUNS)
-    assert len({(r.repo, r.tag_name) for r in fixture.RELEASES}) == len(fixture.RELEASES)
+    assert len({(run.repo, run.id) for run in tests.fixtures.stats.WORKFLOW_RUNS}) == len(
+        tests.fixtures.stats.WORKFLOW_RUNS
+    )
+    assert len({(r.repo, r.tag_name) for r in tests.fixtures.stats.RELEASES}) == len(
+        tests.fixtures.stats.RELEASES
+    )
 
 
 def test_the_fixtures_cover_what_each_delivery_rule_tells_apart() -> None:
-    conclusions = {run.conclusion for run in fixture.WORKFLOW_RUNS}
+    conclusions = {run.conclusion for run in tests.fixtures.stats.WORKFLOW_RUNS}
     assert {'success', 'failure', 'timed_out', 'startup_failure', 'cancelled', 'skipped'} <= (
         conclusions
     )
-    assert {'in_progress', 'queued'} <= {run.status for run in fixture.WORKFLOW_RUNS}
-    assert any(run.run_started_at is None for run in fixture.WORKFLOW_RUNS)
-    assert any(release.is_prerelease for release in fixture.RELEASES)
+    assert {'in_progress', 'queued'} <= {run.status for run in tests.fixtures.stats.WORKFLOW_RUNS}
+    assert any(run.run_started_at is None for run in tests.fixtures.stats.WORKFLOW_RUNS)
+    assert any(release.is_prerelease for release in tests.fixtures.stats.RELEASES)
     assert any(
-        release.published_at < fixture.moment('2026-10-01T00:00') for release in fixture.RELEASES
+        release.published_at < tests.fixtures.stats.moment('2026-10-01T00:00')
+        for release in tests.fixtures.stats.RELEASES
     )
     assert any(
         run.workflow_path.endswith('/deploy.yml') and run.name == 'Deploy'
-        for run in fixture.WORKFLOW_RUNS
+        for run in tests.fixtures.stats.WORKFLOW_RUNS
     )
     hotfix = [
-        p for p in fixture.PULL_REQUESTS if 'hotfix' in {name.casefold() for name in p.labels}
+        p
+        for p in tests.fixtures.stats.PULL_REQUESTS
+        if 'hotfix' in {name.casefold() for name in p.labels}
     ]
     assert {'Hotfix', 'hotfix'} <= {name for p in hotfix for name in p.labels}
 
 
 def test_the_utc_and_berlin_months_differ_only_where_a_record_crosses_midnight() -> None:
     assert (
-        fixture.ORG_DELIVERY_BY_MONTH_UTC['workflow_runs']
-        != (fixture.ORG_DELIVERY_BY_MONTH_BERLIN['workflow_runs'])
+        tests.fixtures.stats.ORG_DELIVERY_BY_MONTH_UTC['workflow_runs']
+        != (tests.fixtures.stats.ORG_DELIVERY_BY_MONTH_BERLIN['workflow_runs'])
     )
-    for name, by_label in fixture.ORG_DELIVERY_BY_MONTH_BERLIN.items():
-        assert by_label['2026-10'] == fixture.ORG_DELIVERY_BY_MONTH_UTC[name]['2026-10']
+    for name, by_label in tests.fixtures.stats.ORG_DELIVERY_BY_MONTH_BERLIN.items():
+        assert (
+            by_label['2026-10'] == tests.fixtures.stats.ORG_DELIVERY_BY_MONTH_UTC[name]['2026-10']
+        )
 
 
 def test_every_delivery_series_has_a_value_somewhere_and_a_percentile_or_ratio_has_a_gap() -> None:
     expected = {
-        **fixture.ORG_DELIVERY_BY_MONTH_UTC,
-        **fixture.ORG_DORA_RELEASES_BY_MONTH_UTC,
+        **tests.fixtures.stats.ORG_DELIVERY_BY_MONTH_UTC,
+        **tests.fixtures.stats.ORG_DORA_RELEASES_BY_MONTH_UTC,
     }
     assert set(expected) == {
         'workflow_runs',
@@ -283,48 +300,63 @@ def test_every_delivery_series_has_a_value_somewhere_and_a_percentile_or_ratio_h
     }
     for name, by_label in expected.items():
         assert by_label, name
-        if name not in ('workflow_runs', 'release_count', 'deployments'):
-            assert len(by_label) < len(fixture.LABELS), name
+        if name not in tests.fixtures.stats.DELIVERY_COUNTS:
+            assert len(by_label) < len(tests.fixtures.stats.LABELS), name
 
 
 def test_the_month_counts_equal_a_direct_count_over_the_org_records() -> None:
-    org = {fixture.ALPHA, fixture.BETA}
-    runs = [run.created_at for run in fixture.WORKFLOW_RUNS if run.repo in org]
-    published = [release.published_at for release in fixture.RELEASES if release.repo in org]
-    deployed = [r.published_at for r in fixture.RELEASES if r.repo in org and not r.is_prerelease]
-    for label in fixture.LABELS:
-        expected = fixture.ORG_DELIVERY_BY_MONTH_UTC
+    org = {tests.fixtures.stats.ALPHA, tests.fixtures.stats.BETA}
+    runs = [run.created_at for run in tests.fixtures.stats.WORKFLOW_RUNS if run.repo in org]
+    published = [
+        release.published_at for release in tests.fixtures.stats.RELEASES if release.repo in org
+    ]
+    deployed = [
+        r.published_at
+        for r in tests.fixtures.stats.RELEASES
+        if r.repo in org and not r.is_prerelease
+    ]
+    for label in tests.fixtures.stats.LABELS:
+        expected = tests.fixtures.stats.ORG_DELIVERY_BY_MONTH_UTC
         assert count_in_month(runs, label) == expected['workflow_runs'][label]
         assert count_in_month(published, label) == expected['release_count'][label]
-        dora = fixture.ORG_DORA_RELEASES_BY_MONTH_UTC
+        dora = tests.fixtures.stats.ORG_DORA_RELEASES_BY_MONTH_UTC
         assert count_in_month(deployed, label) == dora['deployments'][label]
 
 
 def test_a_gamma_release_and_runs_are_the_users_whole_delivery() -> None:
-    assert [r.tag_name for r in fixture.RELEASES if r.repo == fixture.GAMMA] == ['g1.0']
-    assert [run.id for run in fixture.WORKFLOW_RUNS if run.repo == fixture.GAMMA] == [301, 302]
-    assert not any(p.labels for p in fixture.PULL_REQUESTS if p.repo == fixture.GAMMA)
+    assert [
+        r.tag_name for r in tests.fixtures.stats.RELEASES if r.repo == tests.fixtures.stats.GAMMA
+    ] == ['g1.0']
+    assert [
+        run.id
+        for run in tests.fixtures.stats.WORKFLOW_RUNS
+        if run.repo == tests.fixtures.stats.GAMMA
+    ] == [301, 302]
+    assert not any(
+        p.labels for p in tests.fixtures.stats.PULL_REQUESTS if p.repo == tests.fixtures.stats.GAMMA
+    )
 
 
 def test_every_star_and_fork_belongs_to_a_fixture_repo_and_no_user_starred_twice() -> None:
-    names = {repo.name_with_owner for repo in fixture.REPOS}
-    assert {star.repo for star in fixture.STAR_EVENTS} <= names
-    assert {fork.repo for fork in fixture.FORKS} <= names
-    pairs = [(star.repo, star.user_id) for star in fixture.STAR_EVENTS]
+    names = {repo.name_with_owner for repo in tests.fixtures.stats.REPOS}
+    assert {star.repo for star in tests.fixtures.stats.STAR_EVENTS} <= names
+    assert {fork.repo for fork in tests.fixtures.stats.FORKS} <= names
+    pairs = [(star.repo, star.user_id) for star in tests.fixtures.stats.STAR_EVENTS]
     assert len(pairs) == len(set(pairs))
-    ids = [(fork.repo, fork.id) for fork in fixture.FORKS]
+    ids = [(fork.repo, fork.id) for fork in tests.fixtures.stats.FORKS]
     assert len(ids) == len(set(ids))
 
 
 def test_each_repos_listed_languages_sum_to_no_more_than_its_size() -> None:
-    for repo in fixture.REPOS:
+    for repo in tests.fixtures.stats.REPOS:
         assert sum(size for _, size in repo.languages) <= repo.languages_size
 
 
 def test_the_popularity_fixture_covers_the_cases_it_is_for() -> None:
-    by_name = {repo.name_with_owner: repo for repo in fixture.REPOS}
+    by_name = {repo.name_with_owner: repo for repo in tests.fixtures.stats.REPOS}
     cached_stars = {
-        name: sum(star.repo == name for star in fixture.STAR_EVENTS) for name in by_name
+        name: sum(star.repo == name for star in tests.fixtures.stats.STAR_EVENTS)
+        for name in by_name
     }
     assert any(cached_stars[name] != by_name[name].stargazer_count for name in by_name)
     assert any(
@@ -335,35 +367,39 @@ def test_the_popularity_fixture_covers_the_cases_it_is_for() -> None:
     assert any(len(a & b) for i, a in enumerate(language_repos) for b in language_repos[:i])
     assert any(
         star.starred_at < datetime.datetime(2026, 10, 1, tzinfo=datetime.UTC)
-        for star in fixture.STAR_EVENTS
+        for star in tests.fixtures.stats.STAR_EVENTS
     )
     assert any(
         fork.created_at < datetime.datetime(2026, 10, 1, tzinfo=datetime.UTC)
-        for fork in fixture.FORKS
+        for fork in tests.fixtures.stats.FORKS
     )
 
 
 def test_the_popularity_months_have_the_expected_runs_of_totals() -> None:
     for months in (
-        fixture.ORG_POPULARITY_BY_MONTH_UTC,
-        fixture.ORG_POPULARITY_BY_MONTH_BERLIN,
-        fixture.USER_POPULARITY_BY_MONTH_UTC,
+        tests.fixtures.stats.ORG_POPULARITY_BY_MONTH_UTC,
+        tests.fixtures.stats.ORG_POPULARITY_BY_MONTH_BERLIN,
+        tests.fixtures.stats.USER_POPULARITY_BY_MONTH_UTC,
     ):
-        assert tuple(months) == fixture.LABELS
-        for kind in ('stars', 'forks'):
+        assert tuple(months) == tests.fixtures.stats.LABELS
+        for kind in tests.fixtures.stats.POPULARITY_PREFIXES:
             totals = [values[f'{kind}_total'] for values in months.values()]
             added = [values[f'{kind}_added'] for values in months.values()]
             assert totals == sorted(totals)
             assert [b - a for a, b in zip(totals, totals[1:], strict=False)] == added[1:]
-    assert any(v['stars_added'] == 0 for v in fixture.ORG_POPULARITY_BY_MONTH_UTC.values())
-    assert any(v['forks_added'] == 0 for v in fixture.ORG_POPULARITY_BY_MONTH_UTC.values())
-    total = fixture.ORG_POPULARITY_TOTAL
-    last = fixture.ORG_POPULARITY_BY_MONTH_UTC['2027-01']
+    assert any(
+        v['stars_added'] == 0 for v in tests.fixtures.stats.ORG_POPULARITY_BY_MONTH_UTC.values()
+    )
+    assert any(
+        v['forks_added'] == 0 for v in tests.fixtures.stats.ORG_POPULARITY_BY_MONTH_UTC.values()
+    )
+    total = tests.fixtures.stats.ORG_POPULARITY_TOTAL
+    last = tests.fixtures.stats.ORG_POPULARITY_BY_MONTH_UTC['2027-01']
     assert total['stars_total'] == last['stars_total']
     assert total['forks_total'] == last['forks_total']
 
 
 def test_the_languages_shares_sum_to_one_with_other_last() -> None:
-    rows = fixture.ORG_LANGUAGES_TABLE
+    rows = tests.fixtures.stats.ORG_LANGUAGES_TABLE
     assert abs(sum(row['share'] for row in rows) - 1) < 1e-12
     assert rows[-1]['language'] == 'Other'

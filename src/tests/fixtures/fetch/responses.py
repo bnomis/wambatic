@@ -8,7 +8,9 @@ came from beside it, and so do the error responses.
 """
 
 import datetime
+import types
 
+import tests.fixtures.constants
 import tests.fixtures.fetch.recorded
 import tests.fixtures.fetch.server
 
@@ -17,9 +19,9 @@ RESET = NOW + datetime.timedelta(hours=1)
 RESET_EPOCH = str(int(RESET.timestamp()))
 RESET_ISO = RESET.strftime('%Y-%m-%dT%H:%M:%SZ')
 
-Canned = tests.fixtures.fetch.server.Canned
-
-RATE_HEADERS = {'x-ratelimit-remaining': '4990', 'x-ratelimit-reset': RESET_EPOCH}
+RATE_HEADERS = types.MappingProxyType(
+    {'x-ratelimit-remaining': '4990', 'x-ratelimit-reset': RESET_EPOCH}
+)
 
 
 def iso(moment: datetime.datetime) -> str:
@@ -379,83 +381,103 @@ def compare_response(
 HELLO_PUSHED_AT = datetime.datetime(2026, 10, 20, 9, 0, tzinfo=datetime.UTC)
 HELLO_UPDATED_AT = datetime.datetime(2026, 10, 21, 9, 0, tzinfo=datetime.UTC)
 
-Recorded = tests.fixtures.fetch.recorded
-OWNER_REPOSITORIES_OK = Recorded.OWNER_REPOSITORIES_OK
-REPOSITORY_OK = Recorded.REPOSITORY_OK
-COMMIT_HISTORY_OK = Recorded.COMMIT_HISTORY_OK
-COMPARE_AHEAD = Recorded.COMPARE_AHEAD
-COMMIT_COUNTS_OK = Recorded.COMMIT_COUNTS_OK
-PULL_REQUESTS_OK = Recorded.PULL_REQUESTS_OK
-ISSUES_OK = Recorded.ISSUES_OK
-RELEASES_OK = Recorded.RELEASES_OK
-WORKFLOW_RUNS_OK = Recorded.WORKFLOW_RUNS_OK
-WORKFLOW_RUN_OK = Recorded.WORKFLOW_RUN_OK
-STARGAZERS_OK = Recorded.STARGAZERS_OK
-FORKS_OK = Recorded.FORKS_OK
-BOT_REVIEWS_OK = Recorded.BOT_REVIEWS_OK
-GRAPHQL_NOT_FOUND = {
-    'data': {
-        'repositoryOwner': None,
-        'rateLimit': {'cost': 1, 'remaining': 4998, 'resetAt': RESET_ISO},
-    },
-    'errors': [
-        {
-            'type': 'NOT_FOUND',
-            'path': ['repositoryOwner'],
-            'message': "Could not resolve to a RepositoryOwner with the login of 'nobody'.",
-        }
-    ],
-}
-GRAPHQL_REPOSITORY_NOT_FOUND = {
-    'data': {'repository': None, 'rateLimit': RATE_LIMIT},
-    'errors': [
-        {
-            'type': 'NOT_FOUND',
-            'path': ['repository'],
-            'message': "Could not resolve to a Repository with the name 'octocat/nope'.",
-        }
-    ],
-}
-GRAPHQL_FORBIDDEN = {
-    'data': {'repository': None, 'rateLimit': RATE_LIMIT},
-    'errors': [
-        {
-            'type': 'FORBIDDEN',
-            'path': ['repository', 'stargazers'],
-            'message': 'Resource not accessible by personal access token',
-        }
-    ],
-}
-GRAPHQL_INTERNAL = {'errors': [{'type': 'INTERNAL', 'message': 'Something went wrong'}]}
-GRAPHQL_NO_RATE_LIMIT = {'data': {'repositoryOwner': {'login': 'octocat'}}}
-GRAPHQL_RATE_LIMITED = {
-    'errors': [{'type': 'RATE_LIMITED', 'message': 'API rate limit exceeded for user ID 1.'}]
-}
+GRAPHQL_NOT_FOUND = types.MappingProxyType(
+    {
+        'data': types.MappingProxyType(
+            {
+                'repositoryOwner': None,
+                'rateLimit': types.MappingProxyType(
+                    {'cost': 1, 'remaining': 4998, 'resetAt': RESET_ISO}
+                ),
+            }
+        ),
+        'errors': (
+            types.MappingProxyType(
+                {
+                    'type': 'NOT_FOUND',
+                    'path': ('repositoryOwner',),
+                    'message': "Could not resolve to a RepositoryOwner with the login of 'nobody'.",
+                }
+            ),
+        ),
+    }
+)
+GRAPHQL_REPOSITORY_NOT_FOUND = types.MappingProxyType(
+    {
+        'data': types.MappingProxyType({'repository': None, 'rateLimit': RATE_LIMIT}),
+        'errors': (
+            types.MappingProxyType(
+                {
+                    'type': 'NOT_FOUND',
+                    'path': tests.fixtures.constants.REPOSITORY_QUERIES,
+                    'message': "Could not resolve to a Repository with the name 'octocat/nope'.",
+                }
+            ),
+        ),
+    }
+)
+GRAPHQL_FORBIDDEN = types.MappingProxyType(
+    {
+        'data': types.MappingProxyType({'repository': None, 'rateLimit': RATE_LIMIT}),
+        'errors': (
+            types.MappingProxyType(
+                {
+                    'type': 'FORBIDDEN',
+                    'path': tests.fixtures.constants.REPOSITORY_STARGAZER_QUERIES,
+                    'message': 'Resource not accessible by personal access token',
+                }
+            ),
+        ),
+    }
+)
+GRAPHQL_INTERNAL = types.MappingProxyType(
+    {'errors': (types.MappingProxyType({'type': 'INTERNAL', 'message': 'Something went wrong'}),)}
+)
+GRAPHQL_NO_RATE_LIMIT = types.MappingProxyType(
+    {
+        'data': types.MappingProxyType(
+            {'repositoryOwner': types.MappingProxyType({'login': 'octocat'})}
+        )
+    }
+)
+GRAPHQL_RATE_LIMITED = types.MappingProxyType(
+    {
+        'errors': (
+            types.MappingProxyType(
+                {'type': 'RATE_LIMITED', 'message': 'API rate limit exceeded for user ID 1.'}
+            ),
+        )
+    }
+)
 
 # https://docs.github.com/en/rest/using-the-rest-api/troubleshooting-the-rest-api
-BAD_CREDENTIALS = {
-    'message': 'Bad credentials',
-    'documentation_url': 'https://docs.github.com/rest',
-}
-FORBIDDEN = {'message': 'Resource not accessible by personal access token'}
-NOT_FOUND = {'message': 'Not Found', 'documentation_url': 'https://docs.github.com/rest'}
-SERVER_ERROR = {'message': 'Server Error'}
-UNPROCESSABLE = {'message': 'Validation Failed'}
+BAD_CREDENTIALS = types.MappingProxyType(
+    {
+        'message': 'Bad credentials',
+        'documentation_url': 'https://docs.github.com/rest',
+    }
+)
+FORBIDDEN = types.MappingProxyType({'message': 'Resource not accessible by personal access token'})
+NOT_FOUND = types.MappingProxyType(
+    {'message': 'Not Found', 'documentation_url': 'https://docs.github.com/rest'}
+)
+SERVER_ERROR = types.MappingProxyType({'message': 'Server Error'})
+UNPROCESSABLE = types.MappingProxyType({'message': 'Validation Failed'})
 
 # https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api#exceeding-the-rate-limit
-PRIMARY_LIMIT = {'message': 'API rate limit exceeded for user ID 1.'}
-PRIMARY_LIMIT_HEADERS = {'x-ratelimit-remaining': '0', 'x-ratelimit-reset': RESET_EPOCH}
-SECONDARY_LIMIT = {
-    'message': (
-        'You have exceeded a secondary rate limit. Please wait a few minutes before you try again.'
-    )
-}
+PRIMARY_LIMIT = types.MappingProxyType({'message': 'API rate limit exceeded for user ID 1.'})
+PRIMARY_LIMIT_HEADERS = types.MappingProxyType(
+    {'x-ratelimit-remaining': '0', 'x-ratelimit-reset': RESET_EPOCH}
+)
+SECONDARY_LIMIT = types.MappingProxyType(
+    {
+        'message': (
+            'You have exceeded a secondary rate limit. '
+            'Please wait a few minutes before you try again.'
+        )
+    }
+)
 
-REPO = Recorded.REPO
-REPO_ETAG = Recorded.REPO_ETAG
 
 # https://docs.github.com/en/rest/metrics/statistics#a-word-about-caching
-STATS_PENDING = Canned(202)
-
-USER_OK = Recorded.USER_OK
-ORGANIZATION_OK = Recorded.ORGANIZATION_OK
+STATS_PENDING = tests.fixtures.fetch.server.Canned(202)

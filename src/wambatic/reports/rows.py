@@ -1,8 +1,8 @@
 """The table rows the terminal and the HTML page both show, as plain data: labels and numbers,
 with no Rich objects and no formatting, so the two renderers cannot disagree."""
 
+import collections.abc
 import dataclasses
-import typing
 
 import wambatic.stats.activity
 import wambatic.stats.base
@@ -11,28 +11,29 @@ import wambatic.stats.flow
 import wambatic.stats.popularity
 
 TOTAL_METRICS = tuple(metric for metric, _ in wambatic.stats.activity.TOTAL_METRICS)
-UNATTRIBUTED = wambatic.stats.activity.UNATTRIBUTED
 PARTIAL_MARK = ' *'
 TOP_CONTRIBUTORS_SHOWN = 20
 BREAKDOWN_TITLES = (('repo', 'By repository'), ('author', 'By author'))
 SIGNED_METRICS = frozenset({'lines_net'})
 FLOW_COUNTS = wambatic.stats.flow.COUNT_METRICS
 FLOW_TIMES = wambatic.stats.flow.TIME_METRICS
-SIZE_METRIC = wambatic.stats.flow.SIZE_METRIC
-DELIVERY_COUNTS = ('workflow_runs', 'release_count', 'deployments')
+DELIVERY_COUNTS = wambatic.stats.delivery.COUNT_METRICS
 DELIVERY_TABLE_METRICS = wambatic.stats.delivery.ACTIONS_RELEASE_METRICS
 DORA_TABLE_METRICS = wambatic.stats.delivery.DORA_METRICS
 DELIVERY_UNITS = wambatic.stats.delivery.UNITS
 POPULARITY_TABLE_METRICS = tuple(
     metric for metric, _ in wambatic.stats.popularity.POPULARITY_METRICS
 )
-POPULARITY_ADDED = frozenset({'stars_added', 'forks_added'})
+POPULARITY_ADDED = frozenset({'forks_added', 'stars_added'})
 TOP_LANGUAGES_SHOWN = 10
 TREND_METRICS = (*TOTAL_METRICS, *FLOW_COUNTS, *DELIVERY_COUNTS, *POPULARITY_TABLE_METRICS)
 NO_DATA = '-'
+# auditme: accept[non-alphabetical-literal] column order of the table
 ACTIVITY_HEADERS = ('Commits', 'Contributors', 'Active days', 'Added', 'Deleted', 'Net')
+# auditme: accept[non-alphabetical-literal] column order of the table
 FLOW_HEADERS = ('PRs opened', 'PRs merged', 'Issues opened', 'Issues closed')
-FLOW_TIMES_METRICS = (*FLOW_TIMES, SIZE_METRIC)
+FLOW_TIMES_METRICS = (*FLOW_TIMES, wambatic.stats.flow.SIZE_METRIC)
+# auditme: accept[non-alphabetical-literal] column order of the table
 FLOW_TIMES_HEADERS = (
     'Review p50',
     'Review p90',
@@ -42,8 +43,11 @@ FLOW_TIMES_HEADERS = (
     'Close p90',
     'PR size p50',
 )
+# auditme: accept[non-alphabetical-literal] column order of the table
 BREAKDOWN_HEADERS = ('Name', 'Commits', 'Added', 'Deleted', 'Net')
+# auditme: accept[non-alphabetical-literal] column order of the table
 CONTRIBUTOR_HEADERS = ('Login', 'Commits', 'Added', 'Deleted', 'Net', 'Active days')
+# auditme: accept[non-alphabetical-dict-keys] the order of the table columns
 DELIVERY_HEADERS = {
     'workflow_runs': 'Runs',
     'workflow_success_rate': 'Success',
@@ -58,9 +62,12 @@ DELIVERY_HEADERS = {
     'time_to_restore_p50': 'Restore p50',
     'time_to_restore_p90': 'Restore p90',
 }
-DELIVERY_TOTALS = frozenset({'workflow_runs', 'release_count', 'deployments'})
+DELIVERY_TOTALS = frozenset(DELIVERY_COUNTS)
+# auditme: accept[non-alphabetical-literal] column order of the table
 POPULARITY_HEADERS = ('Stars added', 'Stars total', 'Forks added', 'Forks total')
+# auditme: accept[non-alphabetical-literal] column order of the table
 POPULARITY_NOW_HEADERS = ('Repository', 'Stars', 'Forks', 'Watchers')
+# auditme: accept[non-alphabetical-literal] column order of the table
 LANGUAGE_HEADERS = ('Language', 'Bytes', 'Share')
 UNAVAILABLE_HEADERS = ('Metric', 'Reason')
 
@@ -105,6 +112,10 @@ class PopularityRow:
     forks: int
     watchers: int
 
+    @classmethod
+    def empty(cls) -> PopularityRow:
+        return cls(repo='', stars=0, forks=0, watchers=0)
+
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class PopularityNow:
@@ -123,10 +134,9 @@ class Language:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class Languages:
-    """The first `limit` rows of the languages table and how many were left out."""
+    """The rows of the languages table, ending in one `Other` row when it was cut at a limit."""
 
     rows: tuple[Language, ...]
-    more: int
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -175,13 +185,19 @@ def has_dora(result: wambatic.stats.base.StatsResult) -> bool:
     return any(s.metric in DORA_TABLE_METRICS and s.by is None for s in result.series)
 
 
-def bucket_list(result: wambatic.stats.base.StatsResult) -> list[wambatic.stats.base.Bucket]:
-    """The result's buckets, from whichever total series is present."""
-    series = total_series(result)
+def buckets_from(
+    series: dict[str, list[tuple[wambatic.stats.base.Bucket, float]]],
+) -> list[wambatic.stats.base.Bucket]:
+    """The buckets of `total_series` output, from whichever total series is present."""
     for metric in (*TOTAL_METRICS, *FLOW_COUNTS, *DELIVERY_COUNTS, *POPULARITY_TABLE_METRICS):
         if metric in series:
             return [bucket for bucket, _ in series[metric]]
     return []
+
+
+def bucket_list(result: wambatic.stats.base.StatsResult) -> list[wambatic.stats.base.Bucket]:
+    """The result's buckets, from whichever total series is present."""
+    return buckets_from(total_series(result))
 
 
 def partial_labels(result: wambatic.stats.base.StatsResult) -> frozenset[str]:
@@ -192,7 +208,9 @@ def partial_labels(result: wambatic.stats.base.StatsResult) -> frozenset[str]:
 
 def contributor_count(result: wambatic.stats.base.StatsResult) -> int:
     return sum(
-        1 for row in result.tables.get('top_contributors', []) if row['login'] != UNATTRIBUTED
+        1
+        for row in result.tables.get('top_contributors', [])
+        if row['login'] != wambatic.stats.activity.UNATTRIBUTED
     )
 
 
@@ -203,7 +221,7 @@ def subject_text(result: wambatic.stats.base.StatsResult) -> str:
 
 
 def period_row(
-    label: str, partial: frozenset[str], values: typing.Iterable[float | None]
+    label: str, partial: frozenset[str], values: collections.abc.Iterable[float | None]
 ) -> PeriodRow:
     return PeriodRow(label, label in partial, tuple(values))
 
@@ -234,7 +252,7 @@ def flow_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | None:
     partial = partial_labels(result)
     rows = tuple(
         period_row(bucket.label, partial, (series[metric][index][1] for metric in FLOW_COUNTS))
-        for index, bucket in enumerate(bucket_list(result))
+        for index, bucket in enumerate(buckets_from(series))
     )
     total: tuple[float | None, ...] | None = None
     if len(rows) > 1:
@@ -254,7 +272,7 @@ def flow_times_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | N
         period_row(
             bucket.label, partial, (points[metric].get(bucket) for metric in FLOW_TIMES_METRICS)
         )
-        for bucket in bucket_list(result)
+        for bucket in buckets_from(series)
     )
     return PeriodTable('Flow times by period', FLOW_TIMES_HEADERS, FLOW_TIMES_METRICS, rows, None)
 
@@ -272,7 +290,7 @@ def delivery_period_table(
     points = {metric: dict(series[metric]) for metric in metrics}
     rows = tuple(
         period_row(bucket.label, partial, (points[metric].get(bucket) for metric in metrics))
-        for bucket in bucket_list(result)
+        for bucket in buckets_from(series)
     )
     total: tuple[float | None, ...] | None = None
     if len(rows) > 1:
@@ -308,7 +326,7 @@ def popularity_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | N
         period_row(
             bucket.label, partial, (series[metric][index][1] for metric in POPULARITY_TABLE_METRICS)
         )
-        for index, bucket in enumerate(bucket_list(result))
+        for index, bucket in enumerate(buckets_from(series))
     )
     total: tuple[float | None, ...] | None = None
     if len(rows) > 1:
@@ -328,15 +346,17 @@ def popularity_now(result: wambatic.stats.base.StatsResult) -> PopularityNow | N
     if not has_popularity(result):
         return None
     rows = tuple(
-        PopularityRow(row['repo'], row['stars'], row['forks'], row['watchers'])
+        PopularityRow(
+            repo=row['repo'], stars=row['stars'], forks=row['forks'], watchers=row['watchers']
+        )
         for row in result.tables.get('popularity', [])
     )
     total = (
         PopularityRow(
-            'Total',
-            sum(row.stars for row in rows),
-            sum(row.forks for row in rows),
-            sum(row.watchers for row in rows),
+            repo='Total',
+            stars=sum(row.stars for row in rows),
+            forks=sum(row.forks for row in rows),
+            watchers=sum(row.watchers for row in rows),
         )
         if len(rows) > 1
         else None
@@ -347,13 +367,21 @@ def popularity_now(result: wambatic.stats.base.StatsResult) -> PopularityNow | N
 def languages_rows(
     result: wambatic.stats.base.StatsResult, limit: int | None = None
 ) -> Languages | None:
-    """The languages table in its own order, the first `limit` rows when given; None when it is
-    empty or absent."""
+    """The languages table in its own order; None when it is empty or absent. When there are
+    more than `limit` rows, the first `limit - 1` and one `Other` row summing the rest."""
     rows = result.tables.get('languages', [])
     if not rows:
         return None
-    shown = tuple(Language(row['language'], row['bytes'], row['share']) for row in rows[:limit])
-    return Languages(shown, len(rows) - len(shown))
+    languages = [Language(row['language'], row['bytes'], row['share']) for row in rows]
+    if limit is None or len(languages) <= limit:
+        return Languages(tuple(languages))
+    rest = languages[limit - 1 :]
+    other = Language(
+        wambatic.stats.popularity.OTHER,
+        sum(language.bytes for language in rest),
+        sum(language.share for language in rest),
+    )
+    return Languages((*languages[: limit - 1], other))
 
 
 def breakdown_rows(result: wambatic.stats.base.StatsResult, kind: str) -> list[BreakdownRow] | None:

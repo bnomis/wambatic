@@ -1,14 +1,16 @@
 # Reports
 
-**Version:** 1.9
-**Status:** proposed
+**Version:** 1.11
+**Status:** implemented
 **Date:** 2026-10-31
 
 The three ways a user sees a `StatsResult`: a terminal report, a self-contained static HTML report, and a local web app. All three render the same result object, so they never disagree. It also defines the `wambatic` command line.
 
 **Prerequisites:** [Fetch and cache](../fetch-and-cache/spec.md) and [Stats](../stats/spec.md) are implemented (check: `python -c 'import wambatic.stats'`).
 
-Version 1.2 settles what step 5 of the [implementation order](../implementation-order.md) (terminal report and CLI) needed; the gaps and the choices made are in [review-1.md](review-1.md). Version 1.3 adds the terminal's flow sections for step 6 (flow data and stats); the choices are in the [stats review 2](../stats/review-2.md). Version 1.4 settles what step 7 (static HTML report) needed: the figure type, the results the page is built from, the page layout, themes and palette, the output path and the browser test; the choices are in [review-2.md](review-2.md). Version 1.5 adds the delivery sections of the terminal and the HTML page, and the release and workflow-run counts of `cache info`, for step 8 (delivery data and stats); the choices are in the [stats review 3](../stats/review-3.md). Version 1.6 settles what step 9 (local web app) needed: the server library (FastAPI with uvicorn, chosen 2026-10-30), the sync jobs and progress page that keep a large org from blocking the page, the query parameters and statuses, `serve`'s flags, the loopback and `Host` checks, and the move of the CLI's sync-then-compute code to `service.py` so the web app can share it; the choices are in [review-3.md](review-3.md). Version 1.7 adds the popularity sections of the terminal and the HTML page (the languages chart among them), the star and fork counts of `cache info`, and `popularity` in the `--groups` help, for step 10 (popularity data and stats); the choices are in the [stats review 4](../stats/review-4.md). Version 1.8 states that a repository whose star history is not visible to the token appears in Unavailable in every front end. Version 1.9 builds an HTML report from one read of the cache (`build_results` calls the stats `compute_all`) and builds each figure, table and series list of the page once; the choice is Decision 3 (option B) of the [audit review 1](../../audit-reviews/review-1.md), answered 2026-10-31.
+Version 1.2 settles what step 5 of the [implementation order](../implementation-order.md) (terminal report and CLI) needed; the gaps and the choices made are in [review-1.md](review-1.md). Version 1.3 adds the terminal's flow sections for step 6 (flow data and stats); the choices are in the [stats review 2](../stats/review-2.md). Version 1.4 settles what step 7 (static HTML report) needed: the figure type, the results the page is built from, the page layout, themes and palette, the output path and the browser test; the choices are in [review-2.md](review-2.md). Version 1.5 adds the delivery sections of the terminal and the HTML page, and the release and workflow-run counts of `cache info`, for step 8 (delivery data and stats); the choices are in the [stats review 3](../stats/review-3.md). Version 1.6 settles what step 9 (local web app) needed: the server library (FastAPI with uvicorn, chosen 2026-10-30), the sync jobs and progress page that keep a large org from blocking the page, the query parameters and statuses, `serve`'s flags, the loopback and `Host` checks, and the move of the CLI's sync-then-compute code to `service.py` so the web app can share it; the choices are in [review-3.md](review-3.md). Version 1.7 adds the popularity sections of the terminal and the HTML page (the languages chart among them), the star and fork counts of `cache info`, and `popularity` in the `--groups` help, for step 10 (popularity data and stats); the choices are in the [stats review 4](../stats/review-4.md). Version 1.8 states that a repository whose star history is not visible to the token appears in Unavailable in every front end. Version 1.9 builds an HTML report from one read of the cache (`sync_and_compute` calls the stats `compute_all`) and builds each figure, table and series list of the page once; the choice is Decision 3 (option B) of the [audit review 1](../../audit-reviews/review-1.md), answered 2026-10-31.
+
+Version 1.11 brings the spec in line with the code after [audit review 1](../../audit-reviews/review-1.md) (F9, F10): the Languages table and chart end in one `Other` row, `SyncJob` stores `phase`, and `redact_error` is listed. Version 1.10 makes every error `wambatic.reports` raises itself a `ReportsError` (`UsageError`, `OutputError` and `ServeError`): `build_range_figures`, `build_calendar` and `html_document` raise `UsageError` where they raised `ValueError`; the choice is [audit review 1](../../audit-reviews/review-1.md), Decision 2 (option B), answered 2026-10-31.
 
 ## Module location
 
@@ -16,14 +18,14 @@ Version 1.2 settles what step 5 of the [implementation order](../implementation-
 
 | Module | Holds | Built in implementation step |
 |--------|-------|------------------------------|
-| `errors.py` | `UsageError` | 5 |
+| `errors.py` | `ReportsError`, `UsageError`, `OutputError`, `ServeError` | 5 |
 | `base.py` | `result_to_dict`, `render_json` | 5 |
 | `terminal.py` | `render_terminal`, `sparkline` | 5 |
 | `rows.py` | the table rows both the terminal and the HTML page show (moved out of `terminal.py`) | 7 |
 | `figures.py` | `Figure`, `build_figures`, `build_range_figures`, `build_calendar`, `PALETTE` | 7 |
 | `html.py`, `templates/` (`report.html`, `report.css`, `report.js`) | `HtmlReport`, `html_document`, `render_html`, `report_filename` | 7 |
-| `service.py` | `parse_target`, `parse_date`, `make_request`, `resolve_tz`, `check_by_author`, `make_fetcher`, `needs_sync`, `log_sync`, `build_results`, `redact_environment_token` (moved out of `cli.py`) | 9 |
-| `web.py`, `templates/` (`form.html`, `progress.html`, `progress.js`, `message.html`) | `SyncJob`, `Jobs`, `make_app`, `is_loopback`, `check_bind`, `serve` | 9 |
+| `service.py` | `parse_target`, `parse_date`, `make_request`, `resolve_tz`, `check_by_author`, `make_fetcher`, `needs_sync`, `log_sync`, `sync_and_compute`, `redact_environment_token` (moved out of `cli.py`) | 9 |
+| `web.py`, `templates/` (`form.html`, `progress.html`, `progress.js`, `message.html`) | `SyncJob`, `Jobs`, `make_app`, `is_loopback`, `warn_on_bind`, `serve` | 9 |
 
 `wambatic.cli` is the composition root: it is the one module that imports every layer (settings, logs, fetch, stats, reports). `wambatic.reports` imports `wambatic.stats`, `wambatic.settings` and `wambatic.version`; only `wambatic.reports.service` and `wambatic.reports.web`, which sync on the CLI's and the web app's behalf, also import `wambatic.fetch` (review-3.md choice 2), and no reports module imports `wambatic.cli`; renderers read `result.subject` through `StatsResult` without importing it. Of the third-party libraries, only `html.py` imports `plotly`, and only for the plotly.js it bundles (`plotly.offline.get_plotlyjs()`); figures are plain Plotly JSON built by wambatic's own typed code (review-2.md decision 1).
 
@@ -51,7 +53,7 @@ def build_range_figures(total: StatsResult) -> list[Figure]:
     """The whole-range charts of a TOTAL result: top contributors, by repository, by author, languages."""
 def build_calendar(day: StatsResult) -> Figure | None:
     """The daily-commits heat-map of a DAY result; None without activity series.
-    Raises ValueError for any other granularity."""
+    Raises UsageError for any other granularity."""
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class HtmlReport:
@@ -60,7 +62,7 @@ class HtmlReport:
     initial: Granularity                     # the granularity shown on load; a key of `periods`
 
 def html_document(report: HtmlReport, theme: typing.Literal['auto', 'dark', 'light']) -> str:
-    """The whole self-contained page; pure. Raises ValueError when the five results differ in
+    """The whole self-contained page; pure. Raises UsageError when the five results differ in
     anything but granularity (subject, groups, since, until as requested, by_author, tz, settings)."""
 def report_filename(subject: Subject) -> str:
     """'repo-OWNER-NAME.html', 'user-NAME.html' or 'org-NAME.html'."""
@@ -81,45 +83,60 @@ def render_html(
 def period_requests(request: StatsRequest) -> list[StatsRequest]:
     """The five requests of an HTML report: `request` with granularity TOTAL, then YEAR, MONTH,
     WEEK and DAY, everything else unchanged (in `html.py`)."""
+@dataclasses.dataclass(frozen=True, slots=True)
+class PageFigures:
+    """Every figure of one page, each built once by `build_page_figures`: the per-period figures of
+    each granularity, the range figures and the calendar."""
+    periods: dict[Granularity, list[Figure]]
+    range_figures: list[Figure]
+    calendar: Figure | None
+def build_page_figures(report: HtmlReport) -> PageFigures: ...
 def html_report(results: list[StatsResult], initial: Granularity) -> HtmlReport:
     """The `HtmlReport` of the five results of `period_requests`, in that order (in `html.py`)."""
 
 # service.py: the sync-then-compute pipeline the CLI and the web app share
 def parse_target(text: str) -> Subject | str:
-    """A `Subject`, or a bare NAME's login for `build_results` to resolve; UsageError otherwise."""
+    """A `Subject`, or a bare NAME's login for `sync_and_compute` to resolve; UsageError otherwise."""
 def parse_date(text: str, flag: str = 'a date') -> datetime.date: ...
 def make_request(
     by: str, since: str | None, until: str | None, groups: str | None, by_author: bool,
-    tz: zoneinfo.ZoneInfo, settings: Settings,
+    settings: Settings, today: datetime.datetime,
 ) -> StatsRequest:
-    """The `StatsRequest` of the computing flags or query parameters; UsageError on a bad value."""
+    """The `StatsRequest` of the computing flags or query parameters; the zone is
+    `settings.stats.timezone` (a `--tz` or `tz` override is applied to `settings` first);
+    UsageError on a bad value."""
 def resolve_tz(settings: Settings) -> zoneinfo.ZoneInfo: ...
 def check_by_author(subject: Subject) -> None: ...
 def make_fetcher(token: str, cache: Cache, settings: FetchSettings) -> Fetcher: ...
 def needs_sync(provenance: dict[str, str], resources: frozenset[str], settings: FetchSettings,
                full_refresh: bool, no_fetch: bool, now: datetime.datetime) -> bool: ...
 def log_sync(report: SyncReport) -> None: ...
-async def build_results(
+async def sync_and_compute(
     settings: Settings, cache: Cache, target: Subject | str, requests: list[StatsRequest], *,
-    by_author: bool, full_refresh: bool, no_fetch: bool, sync: bool | None = None,
+    full_refresh: bool, no_fetch: bool, sync: bool | None = None,
     progress: SyncProgress | None = None,
     clock: Callable[[], datetime.datetime] = utc_now,
 ) -> tuple[Subject, list[StatsResult]]:
     """Resolve a bare NAME, sync when `sync` is True (or, when None, when `needs_sync` says so),
-    then compute every request with one `stats.compute_all`, so the cache is read once however
+    then compute every request (`by_author` is read from `requests[0]`) with one `stats.compute_all`, so the cache is read once however
     many requests there are; the network is used only to resolve or sync."""
 def redact_environment_token(text: str) -> str: ...
+def redact_error(error: BaseException) -> str:
+    """The message of `error` without the environment's token, which is also removed from the
+    args of `error` and of what it was raised from, so a logged traceback cannot carry it."""
 
 # web.py
 @dataclasses.dataclass(slots=True)
 class SyncJob:
     id: str                                  # opaque, unique for the server's lifetime
     key: tuple[str, frozenset[str]]          # (the target as given, the resources synced)
-    state: typing.Literal['queued', 'listing', 'syncing', 'done', 'failed']
+    phase: typing.Literal['queued', 'running', 'done', 'failed']
     progress: SyncProgress
     subject: Subject | None                  # set once a bare NAME is resolved
     error: str | None                        # the redacted message when failed
     status: int | None                       # the HTTP status the error maps to when failed
+    # state (a property): `listing` while running until `progress.repos_listed` is set, then
+    # `syncing`; otherwise the phase
 
 class Jobs:
     """Each key's latest job; one job syncs at a time, the others wait as `queued`."""
@@ -132,11 +149,10 @@ class Jobs:
         """Cancel the running and queued jobs."""
 
 def make_app(settings: Settings, cache: Cache, *, default_target: str | None = None,
-             check_host: bool = True,
              clock: Callable[[], datetime.datetime] = utc_now) -> fastapi.FastAPI: ...
 def is_loopback(host: str) -> bool:
     """Exactly 'localhost', or an IP address (IPv6 in brackets or not) that is loopback."""
-def check_bind(host: str, allow_remote: bool) -> None:
+def warn_on_bind(host: str, allow_remote: bool) -> None:
     """UsageError for a non-loopback host without `allow_remote`; a warning with it."""
 def serve(settings: Settings, *, default_target: str | None, ignore_cache_version: bool) -> None:
     """Open the cache, bind `report.web_host:report.web_port`, then run the app on uvicorn until
@@ -149,8 +165,17 @@ def main(argv: list[str] | None = None) -> int:
 def run() -> None:
     """The `wambatic` console script and `python -m wambatic`: `sys.exit(main())`."""
 
-class UsageError(Exception):
+class ReportsError(Exception):
+    """Base class of every error `wambatic.reports` raises itself."""
+
+class UsageError(ReportsError):
     """A command line that parses but cannot be run; exit status 2."""
+
+class OutputError(ReportsError):
+    """A report that was built but could not be written; exit status 1."""
+
+class ServeError(ReportsError):
+    """A web app that cannot listen on its address; exit status 1."""
 ```
 
 Command line (`wambatic <command> <target>`):
@@ -191,7 +216,7 @@ The CLI is defined with [cappa](https://cappa.readthedocs.io/) dataclasses, as t
 3. Decide whether to sync. The resources are `resources_for(groups) & BUILT_RESOURCES` (fetch spec): resources whose step is not built are never synced, so the default groups run before step 6. There is no sync when `--no-fetch` is given, when the resources are empty, or when `fetch.max_age` is above zero, `--full-refresh` is absent and every `fetched_at:<resource>` in `Fetcher.provenance(subject, resources)` is a time less than `max_age` before now. Otherwise sync.
 4. Only when a sync or a bare-`NAME` resolution is needed, resolve the token with `resolve_token()` and enter the `Fetcher` (which opens the aiohttp session). Otherwise the `Fetcher` is built with an empty token and never entered, so no session is opened and no request can be made; a warm cache with `--no-fetch` or a fresh `--max-age` needs no `GITHUB_TOKEN`.
 5. Sync, logging one `info` line from the `SyncReport`: repositories listed, unchanged, the rows written for each resource synced (`commits 12, issues 3, pull_requests 5`) and any full refetches.
-6. `compute`, then render to stdout with the selected format. For `html`, `compute` runs five times on the one synced cache, with the request's granularity set to `TOTAL`, `YEAR`, `MONTH`, `WEEK` and `DAY` and everything else unchanged, giving the `HtmlReport`; `render_html` writes the file with `report.html_theme`, and the path written is printed to stdout as one line (the report itself is the file).
+6. `compute`, then render to stdout with the selected format. For `html`, `compute_all` computes five requests from one read of the synced cache, with the request's granularity set to `TOTAL`, `YEAR`, `MONTH`, `WEEK` and `DAY` and everything else unchanged, giving the `HtmlReport`; `render_html` writes the file with `report.html_theme`, and the path written is printed to stdout as one line (the report itself is the file).
 
 **`cache info`** prints, for `fetch.cache_path`, what `Cache.inspect` (fetch spec) returns: the path and size, the recorded identity and every key that differs from the running code (with both values), `version_override_at` when set, the number of repositories, commits, pull requests, issues, releases, workflow runs, star events and forks, and the latest sync time. It opens the file read-only and never creates, migrates or stamps it, so it works on a cache that `report` refuses. A missing file prints that there is no cache at the path and exits 0.
 
@@ -207,11 +232,12 @@ The CLI is defined with [cappa](https://cappa.readthedocs.io/) dataclasses, as t
 | any `FetchError` (`AuthError`, `CacheVersionError`, `GraphQLError`, `NotFoundError`, `RateLimitError`, `StatsPendingError`) | 1 |
 | any `StatsError` (`EmptySubjectError`, `InvalidRangeError`, `InvalidRequestError`, `UnknownGroupError`) | 1 |
 | `OSError` writing `--out` (step 7), or binding `serve`'s port (step 9) | 1 |
+| `BrokenPipeError` (the reader of stdout went away): no message | 1 |
 | any other exception: logged with `loguru.logger.exception` (traceback included) | 1 |
 | `UsageError`, `SettingsError`, and a command line cappa cannot parse (cappa prints its own message) | 2 |
 | `KeyboardInterrupt`: no message | 130 |
 
-- Messages state the fix: `AuthError` says to set `GITHUB_TOKEN`, `RateLimitError` gives the reset time, `CacheVersionError` names `wambatic cache clear` and `--ignore-cache-version`, and `EmptySubjectError` with `--no-fetch` adds that the cache may only need a sync. These texts come from the errors themselves where they already carry them.
+- Messages state the fix: `AuthError` says to set `GITHUB_TOKEN` or run `gh auth login` when there is no token, `GitHub rejected the token (401)` for a 401 and `GitHub denied access (403)` with the reason for a 403; `RateLimitError` gives the reset time, `CacheVersionError` names `wambatic cache clear` and `--ignore-cache-version`, and `EmptySubjectError` with `--no-fetch` adds that the cache may only need a sync. These texts come from the errors themselves where they already carry them.
 - No message repeats a token or a config value (system spec, Settings).
 - `--out` (step 7), and the default HTML path, are written to a temporary file in the target's directory and moved into place with `os.replace`, so no partial file is left behind; the temporary file is removed when the write fails.
 - The web app answers 400 for `UsageError`, `SettingsError`, `UnknownGroupError`, `InvalidRangeError` and `InvalidRequestError`, and FastAPI's `RequestValidationError`; 404 for `NotFoundError` and `EmptySubjectError`; 502 with the upstream message for any other `FetchError`; and 500 with `internal error; see the server log` for anything else, logged with `loguru.logger.exception`. Messages pass through `redact_environment_token`, and no response shows a traceback. `/api/*` answers errors as `{"error": message}` JSON, `/` and `/report` as the `message.html` page (review-3.md choice 8).
@@ -233,7 +259,7 @@ The CLI is defined with [cappa](https://cappa.readthedocs.io/) dataclasses, as t
 9. **DORA proxies by period**: one row per bucket, columns Period, Deployments, Lead time p50, Lead time p90 (hours), Change failure (percentage), Restore p50 and Restore p90 (hours), holding only the columns of the proxies the result has; a `Total` footer row sums Deployments as in item 8. The caption says `proxies: see the README; hours; - no data`. Proxies that are not emitted are in item 13.
 10. **Popularity by period**: one row per bucket, columns Period, Stars added, Stars total, Forks added, Forks total, from the popularity series, with partial marks as in item 2. With more than one bucket a `Total` footer row sums Stars added and Forks added and gives the last bucket's Stars total and Forks total (cumulative counts do not add up over buckets). The caption says `totals: stars and forks that exist now, by when they were made`.
 11. **Popularity now**: `tables['popularity']`, columns Repository, Stars, Forks, Watchers, with a `Total` footer row summing each column when there is more than one row. The caption says `as of the last sync; forks: whole network`.
-12. **Languages**: `tables['languages']`, columns Language, Bytes and Share (percentage with one decimal place), the first `TOP_LANGUAGES_SHOWN = 10` rows, then a line `and N more` when there are more (the JSON output has every row), when the table is not empty.
+12. **Languages**: `tables['languages']`, columns Language, Bytes and Share (percentage with one decimal place), when the table is not empty: every row up to `TOP_LANGUAGES_SHOWN = 10`; with more, the first `TOP_LANGUAGES_SHOWN - 1` rows and one `Other` row summing the rest (the JSON output has every row).
 13. **Unavailable**: `tables['unavailable']`, columns Metric and Reason, when not empty. With the popularity group it also holds one row per repository whose stargazers the token could not see (stats spec, popularity), so a star series that leaves that repository out is never shown without the reason. Popularity now still shows GitHub's star count for it. The JSON output carries the same rows in `tables`, and the HTML page lists them in its Unavailable section.
 14. A provenance footer: `computed_at`, each `fetched_at:<resource>`, `wambatic_version` and `schema_version`; when `version_override_at` is present, a warning line that the cache was read with `--ignore-cache-version` at that time.
 
@@ -241,7 +267,7 @@ The CLI is defined with [cappa](https://cappa.readthedocs.io/) dataclasses, as t
 
 - `format_version`: `1`, raised whenever a key below changes meaning, per the shared versions rule;
 - `subject`: `{"kind", "login", "name"}`;
-- `request`: `{"granularity", "groups" (sorted list), "since", "until" (ISO date or null, as requested), "by_author", "tz" (`str(tz)`), "settings"}`, where `settings` is every `StatsSettings` field with tuples as lists and durations as `"<total seconds>s"`, which the settings parser reads back;
+- `request`: `{"granularity", "groups" (sorted list), "since", "until" (ISO date or null, as requested), "by_author", "tz" (`str(tz)`), "settings"}`, where `settings` is every `StatsSettings` field except `timezone` (`tz` is the one zone) with tuples as lists and durations as `"<total seconds>s"`, which the settings parser reads back;
 - `since`, `until`: the resolved range as ISO dates;
 - `series`: one object per series in result order, `{"metric", "unit", "by", "by_kind", "points"}`, with `points` a list of `{"label", "start", "value"}` in bucket order; a value whose unit is `count`, `days` or `lines` is an integer, any other a float;
 - `tables` and `provenance`: as in the result.
@@ -256,13 +282,13 @@ The CLI is defined with [cappa](https://cappa.readthedocs.io/) dataclasses, as t
   3. Activity: the per-period charts of `build_figures` for `activity`, the Commits by day calendar from the `DAY` result (not switched), the whole-range charts of `build_range_figures`, then the tables: Activity by period (one per granularity, all but the shown one `hidden`), By repository, By author and Top contributors (every row; the chart shows the first `TOP_CONTRIBUTORS_SHOWN`).
   4. Flow: the per-period charts of `build_figures` for `flow`, then Flow by period and Flow times by period, one table per granularity as above.
   5. Delivery: the per-period charts of `build_figures` for `delivery`, then Delivery by period and, when a proxy is emitted, DORA proxies by period, one table per granularity as above, with a line under the section heading that the DORA figures are proxies and how each is measured is in the README.
-  6. Popularity: the per-period charts of `build_figures` for `popularity`, the Languages chart of `build_range_figures`, then Popularity by period (one table per granularity, as above), Popularity now and Languages (every row; the chart shows the first `TOP_LANGUAGES_SHOWN`), with a line under the section heading that the counts are as of the last sync and the totals count the stars and forks that exist now.
+  6. Popularity: the per-period charts of `build_figures` for `popularity`, the Languages chart of `build_range_figures`, then Popularity by period (one table per granularity, as above), Popularity now and Languages (every row; the chart shows at most `TOP_LANGUAGES_SHOWN` bars, the last an `Other` bar summing the rest when there are more), with a line under the section heading that the counts are as of the last sync and the totals count the stars and forks that exist now.
   7. Unavailable, when `tables['unavailable']` is not empty.
   8. A provenance footer: the terminal's items, the plotly.js version (`plotly.offline.get_plotlyjs_version()`), and the `--ignore-cache-version` warning when `version_override_at` is present.
   Tables hold the same rows and columns as the terminal's, from `rows.py`, so the two never disagree; they are the page's data view and work without script.
 - *Built once.* `html_document` builds each period's `build_figures`, the `build_range_figures` of the `TOTAL` result and the `build_calendar` of the `DAY` result once, and every part of the page (the chart elements, the sections, the embedded data) reads those; it never calls a builder a second time for the same result. A section's presence test reuses the table it then renders rather than building it to test for `None`. In `rows.py`, `figures.py` and `terminal.py` a function that needs a result's total series and bucket list derives each once and passes them on. The output is unchanged byte for byte: the existing HTML, terminal and JSON tests are the check.
 - *Granularity switch.* All four period results are embedded as figures and pre-rendered tables. Choosing a granularity calls `Plotly.react` on each per-period chart with that granularity's figure and toggles the `hidden` attribute of the period tables; nothing is recomputed in the browser. Only total series are embedded per period (never the per-repo or per-author breakdowns, which would grow with repos times days); the breakdown charts and tables come from the `TOTAL` result.
-- *Charts* (`build_figures`, per period, in this order): Commits, Contributors and Active days per period (bars, one each), Lines added and deleted per period (added as bars above zero and deleted as negative bars below it with `barmode='relative'`, net as a line on the same axis); Pull requests per period (grouped bars, opened and merged), Issues per period (grouped bars, opened and closed), Time to first review, Time to merge and Time to close (each a p50 and a p90 line, hours, a gap where a bucket has no value), PR size (p50 line, lines); Workflow runs per period (bars), Workflow success rate (line, 0 to 100 per cent on a fixed axis), Workflow duration (p50 and p90 lines, minutes), Releases per period (bars), Release interval (p50 line, days), then, each only when its series is present, Deployments per period (bars), Lead time (p50 and p90 lines, hours), Change failure rate (line, per cent on a fixed 0 to 100 axis) and Time to restore (p50 and p90 lines, hours); Stars per period (bars, `stars_added`), Stars over time (line, `stars_total`), Forks per period (bars, `forks_added`) and Forks over time (line, `forks_total`). Ratios are shown as percentages, the series' 0 to 1 values multiplied by 100. `build_range_figures`: Top contributors (horizontal bars of commits, first `TOP_CONTRIBUTORS_SHOWN`, largest at the top), By repository and By author (horizontal bars of commits, each when that breakdown is present, all-zero rows left out as in the terminal), and Languages (horizontal bars of each language's share in per cent, the first `TOP_LANGUAGES_SHOWN` rows of `tables['languages']` in its order, so `Other` is the last bar when it is among them, first row at the top; group `popularity`, present when the table is not empty). `build_calendar`: a heat-map of commits by day, one column per ISO week (x is the week's Monday) and one row per weekday, Monday at the top. Every chart has one y-axis; there are no dual axes.
+- *Charts* (`build_figures`, per period, in this order): Commits, Contributors and Active days per period (bars, one each), Lines added and deleted per period (added as bars above zero and deleted as negative bars below it with `barmode='relative'`, net as a line on the same axis); Pull requests per period (grouped bars, opened and merged), Issues per period (grouped bars, opened and closed), Time to first review, Time to merge and Time to close (each a p50 and a p90 line, hours, a gap where a bucket has no value), PR size (p50 line, lines); Workflow runs per period (bars), Workflow success rate (line, 0 to 100 per cent on a fixed axis), Workflow duration (p50 and p90 lines, minutes), Releases per period (bars), Release interval (p50 line, days), then, each only when its series is present, Deployments per period (bars), Lead time (p50 and p90 lines, hours), Change failure rate (line, per cent on a fixed 0 to 100 axis) and Time to restore (p50 and p90 lines, hours); Stars per period (bars, `stars_added`), Stars over time (line, `stars_total`), Forks per period (bars, `forks_added`) and Forks over time (line, `forks_total`). Ratios are shown as percentages, the series' 0 to 1 values multiplied by 100. `build_range_figures`: Top contributors (horizontal bars of commits, first `TOP_CONTRIBUTORS_SHOWN`, largest at the top), By repository and By author (horizontal bars of commits, each when that breakdown is present, all-zero rows left out as in the terminal), and Languages (horizontal bars of each language's share in per cent, the rows of `tables['languages']` in its order, cut to `TOP_LANGUAGES_SHOWN` bars with one `Other` bar summing the rest when there are more, first row at the top; group `popularity`, present when the table is not empty). `build_calendar`: a heat-map of commits by day, one column per ISO week (x is the week's Monday) and one row per weekday, Monday at the top. Every chart has one y-axis; there are no dual axes.
 - *Partial buckets.* Bars of a bucket in `provenance['partial_buckets']` carry a diagonal hatch (`marker.pattern.shape` `'/'`); line points in such a bucket have open markers; a chart with a partial bucket has the caption `hatched or open: partial period`.
 - *Palette and themes.* Colours follow the validated reference palette of the dataviz skill (read 2026-10-30), held as `PALETTE` in `figures.py`: categorical slots 1 to 3, light `#2a78d6`, `#eb6834`, `#1baf7a`, dark `#3987e5`, `#d95926`, `#199e70` (no chart has more than three series, the most the palette validates for every pair); the heat-map's sequential blue ramp `#cde2fb`, `#86b6ef`, `#3987e5`, `#256abf`, `#0d366b` on light and `#104281`, `#1c5cab`, `#3987e5`, `#6da7ec`, `#b7d3f6` on dark (low to high, so more commits are brighter on the dark surface); chart surface `#fcfcfb` / `#1a1a19`, page `#f9f9f7` / `#0d0d0d`, primary ink `#0b0b0b` / `#f0efec`, secondary ink `#52514e` / `#c3c2b7`, gridlines `#e1e0d9` / `#2c2c2a`. Figures carry no colours: each trace has `meta: {"slot": n}` and the client script fills trace colours and layout colours from the active theme before each `Plotly.react`. `report.html_theme` `light` or `dark` sets `data-theme` on `<html>`; `auto` follows `prefers-color-scheme` and re-themes the charts when it changes. Text never wears a series colour.
 - *Labels and hover.* A chart with one series has no legend (its title names it); with two or three it has a legend and each line is labelled at its last point. Hover shows each point's value (`hovermode='x unified'` on per-period charts). Each chart's element has `role="img"` and its `description` as `aria-label`.
@@ -280,7 +306,7 @@ The CLI is defined with [cappa](https://cappa.readthedocs.io/) dataclasses, as t
 
 *Sync jobs* (review-3.md choices 5 and 6). `/report` and `/api/stats` compute at once when the request carries the id of the finished job for its own target and resources, or when the target is a `Subject` and `needs_sync` (with `fetch.max_age`, the fetching flags off) is false. Otherwise they start a job with `Jobs.start`, or join the one running or queued for the same key, and answer 202. A job resolves the token (`resolve_token`) and a bare NAME, then runs `Fetcher.sync` with a `SyncProgress` (fetch spec) as an asyncio task on the server's loop (uvicorn with `loop='asyncio'`; FastAPI's `BackgroundTasks` are not used, since they belong to one response), holding the one lock that lets one job sync at a time; `state` is `queued` until it holds the lock, `listing` until `repos_listed` is set, `syncing`, then `done` or `failed` with the redacted message and the status it maps to (see Error handling). Each key keeps its latest job; a failed job is forgotten after the request that reports its error, so the next request retries. The progress page shows the state and counts, polls `/api/progress` once a second with `progress.js` and, when the job is done, loads the same URL with `&job=ID` added; on failure it shows the message. The cache is one `Cache` opened by `serve` before it listens, shared by every job and computation.
 
-*Security.* The token comes from the server's environment only; no response carries it. Binding to a host other than loopback (`is_loopback`: exactly `localhost`, or an IP address whose `ipaddress` `is_loopback` is true; no name is resolved) needs `--allow-remote` or `report.allow_remote`, else `serve` exits 2 before binding; with it, a warning says that anyone who can reach the port acts with the operator's token (review-3.md choice 10). On a loopback bind, a middleware answers 403 to any request whose `Host` is not `localhost`, `127.0.0.1` or `[::1]` followed by the server's port, which stops DNS rebinding from reading the JSON; with remote access allowed the check is off. No CORS headers are sent (review-3.md choice 11).
+*Security.* The token comes from the server's environment only; no response carries it. Binding to a host other than loopback (`is_loopback`: exactly `localhost`, or an IP address whose `ipaddress` `is_loopback` is true; no name is resolved) needs `--allow-remote` or `report.allow_remote`, else `serve` exits 2 before binding; with it, a warning says that anyone who can reach the port acts with the operator's token (review-3.md choice 10). On a loopback bind, a middleware answers 403 to any request whose `Host` is not `localhost`, `127.0.0.1` or `[::1]` followed by the server's port, which stops DNS rebinding from reading the JSON; with remote access allowed the check is off (`make_app` reads `report.allow_remote` itself; it takes no separate switch). No CORS headers are sent (review-3.md choice 11).
 
 *Logging.* uvicorn runs with `log_config=None`, `access_log=False` and `log_level='warning'`, so its own stdlib logging stays unconfigured and only its warnings reach stderr; a middleware logs each request at `debug` through loguru (method, path, status and milliseconds). `serve` logs one `info` line when listening, `Serving on http://HOST:PORT/ (Ctrl-C to stop)`, and the report URL of its target when given (review-3.md choice 12).
 

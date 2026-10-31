@@ -12,6 +12,7 @@ import tests.conftest
 import tests.fixtures.fetch.server
 import tests.fixtures.fetch.upstream
 import tests.fixtures.reports
+import tests.reports.conftest
 import wambatic.fetch.cache
 import wambatic.reports.web
 import wambatic.settings
@@ -20,7 +21,7 @@ pytestmark = pytest.mark.browser
 
 SMALL_ORG_REPOS = 6
 HISTORY_DELAY = 0.3
-STATES = [
+STATES = [  # auditme: accept[non-alphabetical-literal] the order the states are shown in
     'Waiting for another sync to finish',
     'Listing repositories',
     'Syncing repositories',
@@ -84,19 +85,9 @@ def test_the_progress_page_becomes_the_report_with_every_chart_drawn(
     context = chromium.new_context()
     try:
         page = context.new_page()
-        foreign: list[str] = []
-        problems: list[str] = []
-
-        def route(route: playwright.sync_api.Route) -> None:
-            if route.request.url.startswith(running_server):
-                route.continue_()
-            else:
-                foreign.append(route.request.url)
-                route.abort()
-
-        page.route('**/*', route)
-        page.on('console', lambda m: problems.append(m.text) if m.type == 'error' else None)
-        page.on('pageerror', lambda e: problems.append(str(e)))
+        foreign, problems = tests.reports.conftest.watch_page(
+            page, lambda url: url.startswith(running_server)
+        )
         response = page.goto(f'{running_server}/report?target=org:octo-org')
         assert response is not None
         assert response.status == 202

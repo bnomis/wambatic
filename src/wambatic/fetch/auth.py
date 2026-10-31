@@ -5,11 +5,16 @@ import wambatic.fetch.errors
 
 
 def resolve_token() -> str:
-    """GITHUB_TOKEN from the environment, else `gh auth token`; raises AuthError if neither."""
+    """GITHUB_TOKEN from the environment, else `gh auth token`; raises AuthError if neither.
+
+    Raises:
+        AuthError: no token is found.
+    """
     token = os.environ.get('GITHUB_TOKEN', '').strip()
     if token:
         return token
     try:
+        # auditme: accept[subprocess-without-memoisation] once per sync; a cache outlives gh auth
         result = subprocess.run(
             ['gh', 'auth', 'token'],
             capture_output=True,

@@ -2,40 +2,36 @@ import datetime
 import zoneinfo
 
 import hypothesis
-import hypothesis.strategies as st
+import hypothesis.strategies
 import pytest
 
 import wambatic.stats.base
 import wambatic.stats.buckets
+import wambatic.stats.errors
 
-Granularity = wambatic.stats.base.Granularity
-Bucket = wambatic.stats.base.Bucket
-GRANULARITIES = [g for g in Granularity if g is not Granularity.TOTAL]
-UTC = datetime.UTC
+GRANULARITIES = [
+    g for g in wambatic.stats.base.Granularity if g is not wambatic.stats.base.Granularity.TOTAL
+]
 BERLIN = zoneinfo.ZoneInfo('Europe/Berlin')
 LONDON = zoneinfo.ZoneInfo('Europe/London')
-
-
-def date(text: str) -> datetime.date:
-    return datetime.date.fromisoformat(text)
-
-
-def utc(year: int, month: int, day: int, hour: int = 12, minute: int = 0) -> datetime.datetime:
-    return datetime.datetime(year, month, day, hour, minute, tzinfo=UTC)
 
 
 @pytest.mark.parametrize(
     ('granularity', 'start', 'label'),
     [
-        (Granularity.YEAR, '2026-01-01', '2026'),
-        (Granularity.MONTH, '2026-10-01', '2026-10'),
-        (Granularity.WEEK, '2026-10-26', '2026-W44'),
-        (Granularity.DAY, '2026-10-29', '2026-10-29'),
+        (wambatic.stats.base.Granularity.YEAR, '2026-01-01', '2026'),
+        (wambatic.stats.base.Granularity.MONTH, '2026-10-01', '2026-10'),
+        (wambatic.stats.base.Granularity.WEEK, '2026-10-26', '2026-W44'),
+        (wambatic.stats.base.Granularity.DAY, '2026-10-29', '2026-10-29'),
     ],
 )
-def test_labels_of_each_granularity(granularity: Granularity, start: str, label: str) -> None:
-    bucket = wambatic.stats.buckets.bucket_for(utc(2026, 10, 29), granularity, UTC)
-    assert bucket == Bucket(date(start), label)
+def test_labels_of_each_granularity(
+    granularity: wambatic.stats.base.Granularity, start: str, label: str
+) -> None:
+    bucket = wambatic.stats.buckets.bucket_for(
+        datetime.datetime(2026, 10, 29, 12, tzinfo=datetime.UTC), granularity, datetime.UTC
+    )
+    assert bucket == wambatic.stats.base.Bucket(datetime.date.fromisoformat(start), label)
 
 
 @pytest.mark.parametrize(
@@ -48,72 +44,118 @@ def test_labels_of_each_granularity(granularity: Granularity, start: str, label:
     ],
 )
 def test_a_week_is_labelled_with_its_iso_year(day: str, week_label: str, week_start: str) -> None:
-    when = datetime.datetime.combine(date(day), datetime.time(12), tzinfo=UTC)
-    bucket = wambatic.stats.buckets.bucket_for(when, Granularity.WEEK, UTC)
-    assert bucket == Bucket(date(week_start), week_label)
+    when = datetime.datetime.combine(
+        datetime.date.fromisoformat(day), datetime.time(12), tzinfo=datetime.UTC
+    )
+    bucket = wambatic.stats.buckets.bucket_for(
+        when, wambatic.stats.base.Granularity.WEEK, datetime.UTC
+    )
+    assert bucket == wambatic.stats.base.Bucket(datetime.date.fromisoformat(week_start), week_label)
 
 
 def test_a_commit_late_on_new_years_eve_is_january_in_berlin() -> None:
-    when = utc(2026, 12, 31, 23, 30)
-    assert wambatic.stats.buckets.bucket_for(when, Granularity.MONTH, UTC).label == '2026-12'
-    assert wambatic.stats.buckets.bucket_for(when, Granularity.MONTH, BERLIN).label == '2027-01'
+    when = datetime.datetime(2026, 12, 31, 23, 30, tzinfo=datetime.UTC)
+    assert (
+        wambatic.stats.buckets.bucket_for(
+            when, wambatic.stats.base.Granularity.MONTH, datetime.UTC
+        ).label
+        == '2026-12'
+    )
+    assert (
+        wambatic.stats.buckets.bucket_for(when, wambatic.stats.base.Granularity.MONTH, BERLIN).label
+        == '2027-01'
+    )
 
 
 def test_a_commit_after_the_clocks_go_forward_in_london_is_on_the_next_date() -> None:
-    summer = utc(2026, 3, 29, 23, 30)
-    winter = utc(2026, 3, 28, 23, 30)
-    assert wambatic.stats.buckets.bucket_for(summer, Granularity.DAY, LONDON).label == '2026-03-30'
-    assert wambatic.stats.buckets.bucket_for(winter, Granularity.DAY, LONDON).label == '2026-03-28'
+    summer = datetime.datetime(2026, 3, 29, 23, 30, tzinfo=datetime.UTC)
+    winter = datetime.datetime(2026, 3, 28, 23, 30, tzinfo=datetime.UTC)
+    assert (
+        wambatic.stats.buckets.bucket_for(summer, wambatic.stats.base.Granularity.DAY, LONDON).label
+        == '2026-03-30'
+    )
+    assert (
+        wambatic.stats.buckets.bucket_for(winter, wambatic.stats.base.Granularity.DAY, LONDON).label
+        == '2026-03-28'
+    )
 
 
 def test_bucket_for_rejects_total_and_a_naive_datetime() -> None:
-    with pytest.raises(ValueError, match='total'):
-        wambatic.stats.buckets.bucket_for(utc(2026, 10, 1), Granularity.TOTAL, UTC)
-    with pytest.raises(ValueError, match='aware'):
-        wambatic.stats.buckets.bucket_for(datetime.datetime(2026, 10, 1), Granularity.MONTH, UTC)
+    with pytest.raises(wambatic.stats.errors.InvalidRequestError, match='total'):
+        wambatic.stats.buckets.bucket_for(
+            datetime.datetime(2026, 10, 1, 12, tzinfo=datetime.UTC),
+            wambatic.stats.base.Granularity.TOTAL,
+            datetime.UTC,
+        )
+    with pytest.raises(wambatic.stats.errors.InvalidRequestError, match='aware'):
+        wambatic.stats.buckets.bucket_for(
+            datetime.datetime(2026, 10, 1), wambatic.stats.base.Granularity.MONTH, datetime.UTC
+        )
 
 
 def test_bucket_range_of_total_is_one_bucket() -> None:
     assert wambatic.stats.buckets.bucket_range(
-        date('2026-10-03'), date('2027-02-01'), Granularity.TOTAL
-    ) == [Bucket(date('2026-10-03'), 'total')]
+        datetime.date.fromisoformat('2026-10-03'),
+        datetime.date.fromisoformat('2027-02-01'),
+        wambatic.stats.base.Granularity.TOTAL,
+    ) == [wambatic.stats.base.Bucket(datetime.date.fromisoformat('2026-10-03'), 'total')]
 
 
 def test_bucket_range_rejects_since_after_until() -> None:
-    with pytest.raises(ValueError, match='after'):
-        wambatic.stats.buckets.bucket_range(date('2026-10-02'), date('2026-10-01'), Granularity.DAY)
+    with pytest.raises(wambatic.stats.errors.InvalidRangeError, match='after'):
+        wambatic.stats.buckets.bucket_range(
+            datetime.date.fromisoformat('2026-10-02'),
+            datetime.date.fromisoformat('2026-10-01'),
+            wambatic.stats.base.Granularity.DAY,
+        )
 
 
 def test_bucket_range_across_a_year_boundary_by_month() -> None:
     buckets = wambatic.stats.buckets.bucket_range(
-        date('2026-11-15'), date('2027-01-02'), Granularity.MONTH
+        datetime.date.fromisoformat('2026-11-15'),
+        datetime.date.fromisoformat('2027-01-02'),
+        wambatic.stats.base.Granularity.MONTH,
     )
     assert [b.label for b in buckets] == ['2026-11', '2026-12', '2027-01']
 
 
 def test_bucket_range_by_week_includes_the_iso_year_week() -> None:
     buckets = wambatic.stats.buckets.bucket_range(
-        date('2026-12-28'), date('2027-01-04'), Granularity.WEEK
+        datetime.date.fromisoformat('2026-12-28'),
+        datetime.date.fromisoformat('2027-01-04'),
+        wambatic.stats.base.Granularity.WEEK,
     )
     assert [b.label for b in buckets] == ['2026-W53', '2027-W01']
 
 
 def test_a_one_day_range_at_year_granularity_is_one_partial_bucket() -> None:
-    since = until = date('2026-10-29')
-    buckets = wambatic.stats.buckets.bucket_range(since, until, Granularity.YEAR)
+    since = until = datetime.date.fromisoformat('2026-10-29')
+    buckets = wambatic.stats.buckets.bucket_range(
+        since, until, wambatic.stats.base.Granularity.YEAR
+    )
     assert wambatic.stats.buckets.partial_buckets(since, until, buckets) == buckets
     assert len(buckets) == 1
 
 
 def test_a_range_of_whole_months_has_no_partial_bucket() -> None:
-    since, until = date('2026-10-01'), date('2026-12-31')
-    buckets = wambatic.stats.buckets.bucket_range(since, until, Granularity.MONTH)
+    since, until = (
+        datetime.date.fromisoformat('2026-10-01'),
+        datetime.date.fromisoformat('2026-12-31'),
+    )
+    buckets = wambatic.stats.buckets.bucket_range(
+        since, until, wambatic.stats.base.Granularity.MONTH
+    )
     assert wambatic.stats.buckets.partial_buckets(since, until, buckets) == []
 
 
 def test_partial_buckets_names_the_first_and_the_last() -> None:
-    since, until = date('2026-10-15'), date('2026-12-10')
-    buckets = wambatic.stats.buckets.bucket_range(since, until, Granularity.MONTH)
+    since, until = (
+        datetime.date.fromisoformat('2026-10-15'),
+        datetime.date.fromisoformat('2026-12-10'),
+    )
+    buckets = wambatic.stats.buckets.bucket_range(
+        since, until, wambatic.stats.base.Granularity.MONTH
+    )
     assert wambatic.stats.buckets.partial_buckets(since, until, buckets) == [
         buckets[0],
         buckets[-1],
@@ -121,36 +163,58 @@ def test_partial_buckets_names_the_first_and_the_last() -> None:
 
 
 def test_partial_buckets_names_only_the_first_when_only_it_is_cut() -> None:
-    since, until = date('2026-10-15'), date('2026-12-31')
-    buckets = wambatic.stats.buckets.bucket_range(since, until, Granularity.MONTH)
+    since, until = (
+        datetime.date.fromisoformat('2026-10-15'),
+        datetime.date.fromisoformat('2026-12-31'),
+    )
+    buckets = wambatic.stats.buckets.bucket_range(
+        since, until, wambatic.stats.base.Granularity.MONTH
+    )
     assert wambatic.stats.buckets.partial_buckets(since, until, buckets) == [buckets[0]]
 
 
 def test_partial_buckets_of_total_is_empty() -> None:
-    since, until = date('2026-10-15'), date('2026-10-20')
-    buckets = wambatic.stats.buckets.bucket_range(since, until, Granularity.TOTAL)
+    since, until = (
+        datetime.date.fromisoformat('2026-10-15'),
+        datetime.date.fromisoformat('2026-10-20'),
+    )
+    buckets = wambatic.stats.buckets.bucket_range(
+        since, until, wambatic.stats.base.Granularity.TOTAL
+    )
     assert wambatic.stats.buckets.partial_buckets(since, until, buckets) == []
 
 
 def test_partial_weeks() -> None:
-    since, until = date('2026-10-28'), date('2026-11-01')
-    buckets = wambatic.stats.buckets.bucket_range(since, until, Granularity.WEEK)
+    since, until = (
+        datetime.date.fromisoformat('2026-10-28'),
+        datetime.date.fromisoformat('2026-11-01'),
+    )
+    buckets = wambatic.stats.buckets.bucket_range(
+        since, until, wambatic.stats.base.Granularity.WEEK
+    )
     assert wambatic.stats.buckets.partial_buckets(since, until, buckets) == [buckets[0]]
 
 
-DATES = st.dates(min_value=date('1971-01-01'), max_value=date('2100-12-31'))
+DATES = hypothesis.strategies.dates(
+    min_value=datetime.date.fromisoformat('1971-01-01'),
+    max_value=datetime.date.fromisoformat('2100-12-31'),
+)
 
 
-@st.composite
-def ranges(draw: st.DrawFn) -> tuple[datetime.date, datetime.date]:
+@hypothesis.strategies.composite
+def ranges(draw: hypothesis.strategies.DrawFn) -> tuple[datetime.date, datetime.date]:
     first, second = sorted([draw(DATES), draw(DATES)])
     return first, second
 
 
 @hypothesis.settings(max_examples=20, deadline=10000)
-@hypothesis.given(ranges(), st.sampled_from(GRANULARITIES), st.data())
+@hypothesis.given(
+    ranges(), hypothesis.strategies.sampled_from(GRANULARITIES), hypothesis.strategies.data()
+)
 def test_buckets_partition_any_range(
-    span: tuple[datetime.date, datetime.date], granularity: Granularity, data: st.DataObject
+    span: tuple[datetime.date, datetime.date],
+    granularity: wambatic.stats.base.Granularity,
+    data: hypothesis.strategies.DataObject,
 ) -> None:
     since, until = span
     buckets = wambatic.stats.buckets.bucket_range(since, until, granularity)
@@ -163,11 +227,12 @@ def test_buckets_partition_any_range(
     assert [b.label for b in buckets] == [b.label for b in sorted(buckets, key=lambda b: b.start)]
     span_days = (until - since).days
     sample = [since, until] + [
-        since + datetime.timedelta(days=data.draw(st.integers(0, span_days))) for _ in range(5)
+        since + datetime.timedelta(days=data.draw(hypothesis.strategies.integers(0, span_days)))
+        for _ in range(5)
     ]
     for day in sample:
-        noon = datetime.datetime.combine(day, datetime.time(12), tzinfo=UTC)
-        found = wambatic.stats.buckets.bucket_for(noon, granularity, UTC)
+        noon = datetime.datetime.combine(day, datetime.time(12), tzinfo=datetime.UTC)
+        found = wambatic.stats.buckets.bucket_for(noon, granularity, datetime.UTC)
         containing = [
             b
             for b in buckets
@@ -178,16 +243,16 @@ def test_buckets_partition_any_range(
 
 @hypothesis.settings(max_examples=20, deadline=10000)
 @hypothesis.given(
-    st.datetimes(
+    hypothesis.strategies.datetimes(
         min_value=datetime.datetime(1971, 1, 2),
         max_value=datetime.datetime(2100, 12, 30),
-        timezones=st.timezones(),
+        timezones=hypothesis.strategies.timezones(),
     ),
-    st.timezones(),
-    st.sampled_from(GRANULARITIES),
+    hypothesis.strategies.timezones(),
+    hypothesis.strategies.sampled_from(GRANULARITIES),
 )
 def test_bucket_for_contains_the_local_date(
-    when: datetime.datetime, tz: datetime.tzinfo, granularity: Granularity
+    when: datetime.datetime, tz: datetime.tzinfo, granularity: wambatic.stats.base.Granularity
 ) -> None:
     bucket = wambatic.stats.buckets.bucket_for(when, granularity, tz)
     local = when.astimezone(tz).date()
@@ -198,29 +263,50 @@ def test_bucket_for_contains_the_local_date(
 
 
 def test_placer_gives_the_bucket_index_of_a_moments_local_date_or_none() -> None:
-    since, until = date('2026-10-01'), date('2026-12-31')
-    buckets = wambatic.stats.buckets.bucket_range(since, until, Granularity.MONTH)
+    since, until = (
+        datetime.date.fromisoformat('2026-10-01'),
+        datetime.date.fromisoformat('2026-12-31'),
+    )
+    buckets = wambatic.stats.buckets.bucket_range(
+        since, until, wambatic.stats.base.Granularity.MONTH
+    )
     place = wambatic.stats.buckets.placer(buckets, BERLIN, since, until)
-    assert place(utc(2026, 10, 1, 0, 30)) == 0  # 02:30 in Berlin
-    assert place(utc(2026, 11, 30, 23, 30)) == 2  # 00:30 on 12-01 in Berlin
-    assert place(utc(2026, 9, 30, 23, 0)) == 0  # 01:00 on 10-01 in Berlin
-    assert place(utc(2026, 9, 30, 21, 0)) is None  # 23:00 on 09-30 in Berlin
+    assert place(datetime.datetime(2026, 10, 1, 0, 30, tzinfo=datetime.UTC)) == 0  # 02:30 in Berlin
+    assert (
+        place(datetime.datetime(2026, 11, 30, 23, 30, tzinfo=datetime.UTC)) == 2
+    )  # 00:30 on 12-01 in Berlin
+    assert (
+        place(datetime.datetime(2026, 9, 30, 23, 0, tzinfo=datetime.UTC)) == 0
+    )  # 01:00 on 10-01 in Berlin
+    assert (
+        place(datetime.datetime(2026, 9, 30, 21, 0, tzinfo=datetime.UTC)) is None
+    )  # 23:00 on 09-30 in Berlin
     assert place(None) is None
 
 
 def test_placer_ignores_a_date_outside_the_range_even_inside_a_bucket() -> None:
-    since, until = date('2026-10-10'), date('2026-10-20')
-    buckets = wambatic.stats.buckets.bucket_range(since, until, Granularity.MONTH)
-    place = wambatic.stats.buckets.placer(buckets, UTC, since, until)
-    assert place(utc(2026, 10, 9)) is None
-    assert place(utc(2026, 10, 10)) == 0
-    assert place(utc(2026, 10, 20, 23, 59)) == 0
-    assert place(utc(2026, 10, 21)) is None
+    since, until = (
+        datetime.date.fromisoformat('2026-10-10'),
+        datetime.date.fromisoformat('2026-10-20'),
+    )
+    buckets = wambatic.stats.buckets.bucket_range(
+        since, until, wambatic.stats.base.Granularity.MONTH
+    )
+    place = wambatic.stats.buckets.placer(buckets, datetime.UTC, since, until)
+    assert place(datetime.datetime(2026, 10, 9, 12, tzinfo=datetime.UTC)) is None
+    assert place(datetime.datetime(2026, 10, 10, 12, tzinfo=datetime.UTC)) == 0
+    assert place(datetime.datetime(2026, 10, 20, 23, 59, tzinfo=datetime.UTC)) == 0
+    assert place(datetime.datetime(2026, 10, 21, 12, tzinfo=datetime.UTC)) is None
 
 
 def test_placer_puts_everything_in_range_in_the_one_total_bucket() -> None:
-    since, until = date('2026-10-10'), date('2026-12-20')
-    buckets = wambatic.stats.buckets.bucket_range(since, until, Granularity.TOTAL)
-    place = wambatic.stats.buckets.placer(buckets, UTC, since, until)
-    assert place(utc(2026, 11, 3)) == 0
-    assert place(utc(2027, 1, 3)) is None
+    since, until = (
+        datetime.date.fromisoformat('2026-10-10'),
+        datetime.date.fromisoformat('2026-12-20'),
+    )
+    buckets = wambatic.stats.buckets.bucket_range(
+        since, until, wambatic.stats.base.Granularity.TOTAL
+    )
+    place = wambatic.stats.buckets.placer(buckets, datetime.UTC, since, until)
+    assert place(datetime.datetime(2026, 11, 3, 12, tzinfo=datetime.UTC)) == 0
+    assert place(datetime.datetime(2027, 1, 3, 12, tzinfo=datetime.UTC)) is None

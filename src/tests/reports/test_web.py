@@ -1,6 +1,7 @@
 import asyncio
 import collections.abc
 import contextlib
+import dataclasses
 import datetime
 import ipaddress
 import json
@@ -9,11 +10,10 @@ import re
 import subprocess
 import time
 import typing
-import zoneinfo
 
 import httpx
 import hypothesis
-import hypothesis.strategies as st
+import hypothesis.strategies
 import loguru
 import pytest
 
@@ -31,22 +31,22 @@ import wambatic.reports.html
 import wambatic.reports.service
 import wambatic.reports.web
 import wambatic.settings
-import wambatic.stats
+import wambatic.stats.errors
 
-KEY = ('org:octo-org', frozenset({'commits'}))
-OTHER = ('org:other', frozenset({'commits'}))
+KEY = ('org:octo-org', tests.fixtures.stats.RESOURCES_ACTIVITY)
+OTHER = ('org:other', tests.fixtures.stats.RESOURCES_ACTIVITY)
 
 
 @pytest.mark.parametrize(
-    ('error', 'status'),
+    'error,status',
     [
         (wambatic.reports.errors.UsageError('x'), 400),
         (wambatic.settings.SettingsError('x'), 400),
-        (wambatic.stats.UnknownGroupError('x'), 400),
-        (wambatic.stats.InvalidRangeError('x'), 400),
-        (wambatic.stats.InvalidRequestError('x'), 400),
+        (wambatic.stats.errors.UnknownGroupError('x'), 400),
+        (wambatic.stats.errors.InvalidRangeError('x'), 400),
+        (wambatic.stats.errors.InvalidRequestError('x'), 400),
         (wambatic.fetch.errors.NotFoundError('x'), 404),
-        (wambatic.stats.EmptySubjectError('x'), 404),
+        (wambatic.stats.errors.EmptySubjectError('x'), 404),
         (wambatic.fetch.errors.AuthError('x'), 502),
         (
             wambatic.fetch.errors.RateLimitError(
@@ -191,9 +191,9 @@ def test_close_cancels_a_running_job() -> None:
 # The app
 
 BASE = 'http://127.0.0.1:8000'
-FRESH_PARAMS = 'target=org:octo-org&since=2026-10-01&until=2027-01-31&by=month&by_author=1'
-ALPHA_PARAMS = 'target=repo:octo-org/alpha&since=2026-10-01&until=2027-01-31'
-NOW = tests.fixtures.stats.NOW
+FRESH_PARAMS = 'target=org:octo-org&since=2026-10-01&until=2027-01-21&by=month&by_author=1'
+HTML_PARAMS = FRESH_PARAMS.replace('until=2027-01-21', 'until=2027-01-31')
+ALPHA_PARAMS = 'target=repo:octo-org/alpha&since=2026-10-01&until=2027-01-21'
 
 
 def web_settings(max_age: str = '30d', theme: str = 'auto') -> wambatic.settings.Settings:
@@ -207,12 +207,16 @@ async def serving(
     settings: wambatic.settings.Settings,
     cache: wambatic.fetch.cache.Cache,
     *,
-    check_host: bool = True,
+    allow_remote: bool = False,
     default_target: str | None = None,
+    clock: datetime.datetime = tests.fixtures.stats.NOW,
 ) -> collections.abc.AsyncIterator[httpx.AsyncClient]:
     """An HTTPX client for the app, with its lifespan entered (`ASGITransport` does not)."""
+    settings = dataclasses.replace(
+        settings, report=dataclasses.replace(settings.report, allow_remote=allow_remote)
+    )
     app = wambatic.reports.web.make_app(
-        settings, cache, default_target=default_target, check_host=check_host, clock=lambda: NOW
+        settings, cache, default_target=default_target, clock=lambda: clock
     )
     async with app.router.lifespan_context(app):
         transport = httpx.ASGITransport(app=app)
@@ -240,9 +244,15 @@ def direct(
     subject: wambatic.fetch.base.Subject = tests.fixtures.stats.ORG,
 ) -> dict[str, object]:
     request = wambatic.reports.service.make_request(
-        by, '2026-10-01', '2027-01-31', None, True, zoneinfo.ZoneInfo('UTC'), settings
+        by,
+        '2026-10-01',
+        '2027-01-21',
+        None,
+        True,
+        settings,
+        tests.fixtures.stats.NOW,
     )
-    result = tests.conftest.compute_stats(cache_fetcher, subject, request)
+    result = tests.conftest.run_stats(cache_fetcher, subject, request)
     return typing.cast(
         dict[str, object], json.loads(json.dumps(wambatic.reports.base.result_to_dict(result)))
     )
@@ -276,6 +286,8 @@ def test_api_stats_of_a_fresh_cache_is_the_json_report(
         ('target=org:octo-org&tz=Mars/Base', 'stats.timezone is not a known time zone'),
         ('target=user:octocat&by_author=1', '--by-author is for an organisation'),
         ('target=org:octo-org&since=2027-01-31&until=2026-10-01', ''),
+        ('target=org:octo-org&since=0001-01-01', '--since may not be before 2008-01-01'),
+        ('target=org:octo-org&until=2027-01-22', '--until may not be after 2027-01-21'),
     ],
 )
 def test_invalid_parameters_answer_400_with_the_cli_message(
@@ -289,6 +301,16 @@ def test_invalid_parameters_answer_400_with_the_cli_message(
     status, error = asyncio.run(scenario())
     assert status == 400
     assert message in error
+
+
+def test_a_report_page_with_a_date_before_github_answers_400(
+    stats_cache: wambatic.fetch.cache.Cache,
+) -> None:
+    async def scenario() -> int:
+        async with serving(web_settings(), stats_cache) as client:
+            return (await client.get('/report?target=org:octo-org&since=0001-01-01')).status_code
+
+    assert asyncio.run(scenario()) == 400
 
 
 def test_a_stale_cache_answers_202_and_the_job_result_needs_no_second_sync(
@@ -455,9 +477,11 @@ def test_the_host_header_is_checked_against_loopback_and_the_port(
         assert json.loads(text) == {'error': 'unexpected Host header'}
 
 
-def test_the_host_check_can_be_turned_off(stats_cache: wambatic.fetch.cache.Cache) -> None:
+def test_the_host_check_is_off_when_remote_access_is_allowed(
+    stats_cache: wambatic.fetch.cache.Cache,
+) -> None:
     async def scenario() -> int:
-        async with serving(web_settings(), stats_cache, check_host=False) as client:
+        async with serving(web_settings(), stats_cache, allow_remote=True) as client:
             return (await client.get('/', headers={'Host': 'example.com'})).status_code
 
     assert asyncio.run(scenario()) == 200
@@ -530,14 +554,24 @@ def test_the_form_posts_to_report_and_escapes_the_default_target(
 @pytest.mark.parametrize('theme', ['auto', 'dark'])
 def test_report_of_a_fresh_cache_is_the_html_report_document(
     stats_cache: wambatic.fetch.cache.Cache,
-    org_report: wambatic.reports.html.HtmlReport,
+    stats_fetcher: wambatic.fetch.base.Fetcher,
     theme: str,
 ) -> None:
-    expected = wambatic.reports.html.html_document(org_report, theme)  # type: ignore[arg-type]
+    report = tests.conftest.make_report(
+        stats_fetcher,
+        tests.fixtures.stats.ORG,
+        by_author=True,
+        clock=tests.fixtures.stats.AFTER_FIXTURE_RANGES,
+    )
+    expected = wambatic.reports.html.html_document(report, theme)  # type: ignore[arg-type]
 
     async def scenario() -> tuple[int, str, str]:
-        async with serving(web_settings(theme=theme), stats_cache) as client:
-            response = await client.get(f'/report?{FRESH_PARAMS}')
+        async with serving(
+            web_settings(theme=theme),
+            stats_cache,
+            clock=tests.fixtures.stats.AFTER_FIXTURE_RANGES,
+        ) as client:
+            response = await client.get(f'/report?{HTML_PARAMS}')
             return response.status_code, response.headers['content-type'], response.text
 
     assert asyncio.run(scenario()) == (200, 'text/html; charset=utf-8', expected)
@@ -651,15 +685,15 @@ def test_other_hosts_are_not_loopback(host: str) -> None:
 
 
 @hypothesis.settings(max_examples=20, deadline=10000)
-@hypothesis.given(address=st.ip_addresses(v=4))
+@hypothesis.given(address=hypothesis.strategies.ip_addresses(v=4))
 def test_is_loopback_agrees_with_ipaddress_for_ipv4(address: ipaddress.IPv4Address) -> None:
     assert wambatic.reports.web.is_loopback(str(address)) is address.is_loopback
 
 
-def test_check_bind_refuses_a_public_host_unless_allowed_and_then_warns() -> None:
-    wambatic.reports.web.check_bind('127.0.0.1', False)
+def test_warn_on_bind_refuses_a_public_host_unless_allowed_and_then_warns() -> None:
+    wambatic.reports.web.warn_on_bind('127.0.0.1', False)
     with pytest.raises(wambatic.reports.errors.UsageError, match='--allow-remote'):
-        wambatic.reports.web.check_bind('0.0.0.0', False)
+        wambatic.reports.web.warn_on_bind('0.0.0.0', False)
     messages: list[str] = []
     sink = loguru.logger.add(
         lambda message: messages.append(
@@ -667,8 +701,8 @@ def test_check_bind_refuses_a_public_host_unless_allowed_and_then_warns() -> Non
         )
     )
     try:
-        wambatic.reports.web.check_bind('0.0.0.0', True)
-        wambatic.reports.web.check_bind('127.0.0.1', True)
+        wambatic.reports.web.warn_on_bind('0.0.0.0', True)
+        wambatic.reports.web.warn_on_bind('127.0.0.1', True)
     finally:
         loguru.logger.remove(sink)
     assert len(messages) == 1

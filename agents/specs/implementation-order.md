@@ -1,8 +1,8 @@
 # Implementation order
 
-**Version:** 1.9
+**Version:** 1.10
 **Status:** implemented
-**Date:** 2026-10-30
+**Date:** 2026-10-31
 
 The order in which wambatic is built, with what each step delivers, what it depends on and how to tell it is done. It sequences the components in the [system spec](system/spec.md) into steps that [taskdev](../../.agents/claude/skills/taskdev/SKILL.md) can break into tasks. Component detail stays in the component specs; this document only sequences them.
 
@@ -28,8 +28,9 @@ The order in which wambatic is built, with what each step delivers, what it depe
 | 8 | Delivery data and stats (releases, Actions, DORA proxies) | [fetch](fetch/spec.md), [cache](cache/spec.md), [stats](stats/spec.md), [reports](reports/spec.md) | 6, 7 | done: [tasks-3](../tasks/stats/tasks-3.md) |
 | 9 | Local web app | [reports](reports/spec.md), [fetch](fetch/spec.md), [cache](cache/spec.md) | 7 | done: [tasks-3](../tasks/reports/tasks-3.md) |
 | 10 | Popularity data and stats (stars, forks, watchers, languages) | [fetch](fetch/spec.md), [cache](cache/spec.md), [stats](stats/spec.md), [reports](reports/spec.md) | 7 | done: [tasks-4](../tasks/stats/tasks-4.md) |
+| 11 | Audit work: errors, specs and code fixes from the two audit reviews | every spec | 10 | [tasks-1](../tasks/audit-reviews/tasks-1.md) done; [tasks-2](../tasks/audit-reviews/tasks-2.md) in progress |
 
-Steps 6 and 7 are independent and may be built in either order or in parallel once 5 is done. Step 10 was split from step 8 on 2026-10-30 (stats review 3), because its fetch resources were not specified and the two together were more than one task list; it was specified on 2026-10-30 (stats review 4). Steps 9 and 10 are independent of each other.
+Steps 6 and 7 are independent and may be built in either order or in parallel once 5 is done. Step 10 was split from step 8 on 2026-10-30 (stats review 3), because its fetch resources were not specified and the two together were more than one task list; it was specified on 2026-10-30 (stats review 4). Steps 9 and 10 are independent of each other. Step 11 is the audit work after step 10; it changes no feature.
 
 ## Step detail
 
@@ -51,12 +52,12 @@ Done when: a second run of the same fixture fetches nothing; an interrupted run 
 
 ### 4. Activity stats
 
-Deliver: `Granularity`, `bucket_for` and `bucket_range` (ISO weeks, timezones, partial buckets), the stats errors, `Fetcher.provenance`, and `compute` for the `activity` group's commit metrics: commits, contributors, active days, lines added, deleted and net, per-repo and `by_author` breakdowns, and the top-contributors table. Groups and metrics not built yet are listed as `unavailable`; stars, forks, watchers and languages wait for step 10.
+Deliver: `Granularity`, `bucket_for` and `bucket_range` (ISO weeks, timezones, partial buckets), the stats errors, `Fetcher.provenance`, and `compute` (with `compute_all` from stats spec 1.6) for the `activity` group's commit metrics: commits, contributors, active days, lines added, deleted and net, per-repo and `by_author` breakdowns, and the top-contributors table. Groups and metrics not built yet are listed as `unavailable`; stars, forks, watchers and languages wait for step 10.
 Done when: hypothesis tests show buckets partition any date range with no gaps or overlaps, and known-good fixture totals match by hand.
 
 ### 5. Terminal report and CLI
 
-Deliver: the `rich` and `cappa` dependencies, `cli.main` with `report` and `cache` commands, `<target>` parsing (bare `NAME` through `Fetcher.owner_kind`), `--by`, `--since`, `--until`, `--groups`, `--by-author`, `--tz`, `--format terminal|json`, `--full-refresh`, `--no-fetch`, `--max-age`, `--ignore-cache-version`, `-v`/`-q`, the terminal renderer and JSON output, `BUILT_RESOURCES`, `inspect_cache` and `clear_cache`, the `wambatic` console script, a README user guide, and the single error-to-exit-status conversion. `--format html` and `--out` wait for step 7 and `serve` for step 9.
+Deliver: the `rich` and `cappa` dependencies, `cli.main` with `report` and `cache` commands, `<target>` parsing (bare `NAME` through `Fetcher.owner_kind`), `--by`, `--since`, `--until`, `--groups`, `--by-author`, `--tz`, `--format terminal|json`, `--full-refresh`, `--no-fetch`, `--max-age`, `--ignore-cache-version`, `-v`/`-q`, the terminal renderer and JSON output, `BUILT_RESOURCES`, `inspect_cache` and `clear_cache`, the `wambatic` console script, a README user guide, the single error-to-exit-status conversion, and the sync-then-compute call (`compute`, or `compute_all` from stats spec 1.6 when several granularities share one read). `--format html` and `--out` wait for step 7 and `serve` for step 9.
 Done when: `wambatic report repo:OWNER/NAME --by month --no-fetch` (or with a `--max-age` the cache is younger than) prints a correct report from a warm cache with no network and no `GITHUB_TOKEN`, and every typed error maps to its documented exit status. Without either flag the report syncs first, since `fetch.max_age` defaults to zero.
 
 ### 6. Flow data and stats
@@ -83,6 +84,11 @@ Done when: a large-org fixture does not block the page, invalid parameters retur
 
 Deliver: the `StarEvent` and `Fork` records and tables, the listing's star, fork and watcher counts and language sizes, the star and fork probes (cache schema 4), `star_events()` (GraphQL stargazers, newest first, stopping at the watermark) and `forks()` (the REST fork list), both read in full when their count falls, `star_events` and `forks` in `BUILT_RESOURCES`, the `popularity` group (stars and forks added and cumulative per period, the `popularity` and `languages` tables) in `compute`, with the four metrics leaving `activity`'s unavailable list, the terminal's Popularity by period, Popularity now and Languages tables, the HTML page's popularity tiles, charts, languages chart and tables, the star and fork counts in `cache info`, and the README's popularity section. Fetch spec 1.8, stats spec 1.4 and reports spec 1.7; the choices are in the [stats review 4](stats/review-4.md).
 Done when: an unchanged repo's stars and forks cost no request, a removed star leaves the cache on the next sync, the default report lists nothing as unavailable, and `--groups popularity` renders in the terminal, JSON and HTML formats.
+
+### 11. Audit work
+
+Deliver: the fixes for [review-1](../audit-reviews/review-1.md) ([tasks-1](../tasks/audit-reviews/tasks-1.md)) and [review-2](../audit-reviews/review-2.md) ([tasks-2](../tasks/audit-reviews/tasks-2.md)): every error that reaches a caller is typed and listed in its `Raises` section, the specs match the code, the fetch-and-cache spec is split into the fetch and cache specs, and the whole-tree audit check passes.
+Done when: `bin/audit-check.sh` reports no unaccepted hit and every task in both lists is done.
 
 ## Not in scope for this order
 

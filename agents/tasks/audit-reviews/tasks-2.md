@@ -170,7 +170,7 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 ## Task 5: Fix the specs' version history, prerequisites and the implementation order
 
-**Status:** todo
+**Status:** done
 **Priority:** low
 **Complexity:** small
 **Source Reference:** G16 (the rest of the spec review)
@@ -179,19 +179,19 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 **Subtasks:**
 
-- [ ] Put each spec's version paragraphs in order, one paragraph per version (`stats/spec.md` 1.7 before 1.8, `reports/spec.md` 1.10 before 1.11, the fetch 1.12 paragraph of its own in the new fetch spec)
-- [ ] `agents/specs/implementation-order.md`: a step (or a closing section) for the audit work after step 10, linking review-1, review-2, tasks-1 and tasks-2; steps 4 and 5 name `compute_all` beside `compute`; bump its version
-- [ ] `agents/specs/index.md:10`: true once Task 4's specs carry Prerequisite lines; check it
+- [x] Put each spec's version paragraphs in order, one paragraph per version (`stats/spec.md` 1.7 before 1.8, `reports/spec.md` 1.10 before 1.11, the fetch 1.12 paragraph of its own in the new fetch spec)
+- [x] `agents/specs/implementation-order.md`: a step (or a closing section) for the audit work after step 10, linking review-1, review-2, tasks-1 and tasks-2; steps 4 and 5 name `compute_all` beside `compute`; bump its version
+- [x] `agents/specs/index.md:10`: true once Task 4's specs carry Prerequisite lines; check it
 
 **Acceptance Criteria:**
 
-- [ ] Every spec's version paragraphs are in ascending order
-- [ ] `implementation-order.md` mentions every task list under `agents/tasks/`
+- [x] Every spec's version paragraphs are in ascending order
+- [x] `implementation-order.md` mentions every task list under `agents/tasks/`
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [ ] `source bin/activate.sh` succeeds (not run: the sandbox refused `source`; ruff, mypy, pre-commit and `bin/audit-check.sh` all ran and passed)
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
 
 **Notes:**
 

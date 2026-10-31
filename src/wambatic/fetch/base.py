@@ -538,6 +538,15 @@ class Fetcher:
         *,
         client: wambatic.fetch.client.GitHubClient | None = None,
     ) -> None:
+        """`client`, when given, must have been built from this very `settings` object.
+
+        Raises:
+            InvalidRequestError: `client` holds a different settings object.
+        """
+        if client is not None and client.settings is not settings:
+            raise wambatic.fetch.errors.InvalidRequestError(
+                'the injected client and the fetcher must share one settings object'
+            )
         self.cache = cache
         self.settings = settings
         self.client = client or wambatic.fetch.client.GitHubClient(token, settings)

@@ -222,7 +222,6 @@ class Query:
 
     target: wambatic.fetch.base.Subject | str
     request: wambatic.stats.base.StatsRequest
-    by_author: bool
     key: JobKey
     job: str | None
 
@@ -272,12 +271,11 @@ def parse_query(
         blank_to_none(raw.until),
         blank_to_none(raw.groups),
         by_author,
-        wambatic.reports.service.resolve_tz(effective),
         effective,
         today,
     )
     resources = wambatic.stats.resources_for(request.groups) & wambatic.fetch.base.BUILT_RESOURCES
-    return Query(target, request, by_author, (text, resources), blank_to_none(raw.job))
+    return Query(target, request, (text, resources), blank_to_none(raw.job))
 
 
 CallNext = collections.abc.Callable[[fastapi.Request], collections.abc.Awaitable[fastapi.Response]]
@@ -311,7 +309,6 @@ def make_app(
     cache: wambatic.fetch.cache.Cache,
     *,
     default_target: str | None = None,
-    check_host: bool = True,
     clock: collections.abc.Callable[[], datetime.datetime] = wambatic.fetch.ratelimit.utc_now,
 ) -> fastapi.FastAPI:
     jobs = Jobs()
@@ -351,7 +348,6 @@ def make_app(
             cache,
             subject,
             requests,
-            by_author=query.by_author,
             full_refresh=False,
             no_fetch=False,
             sync=False,
@@ -365,8 +361,7 @@ def make_app(
                 settings,
                 cache,
                 query.target,
-                query.request.groups,
-                by_author=query.by_author,
+                query.request,
                 full_refresh=False,
                 no_fetch=False,
                 sync=True,
@@ -422,7 +417,7 @@ def make_app(
         request: fastapi.Request,
         call_next: CallNext,
     ) -> fastapi.Response:
-        if check_host:
+        if not settings.report.allow_remote:
             server = request.scope.get('server')
             port = server[1] if server else None
             suffix = '' if port is None else f':{port}'
@@ -581,9 +576,7 @@ def serve(
     sock: socket.socket | None = None
     try:
         sock = listen(report.web_host, report.web_port)
-        app = make_app(
-            settings, cache, default_target=default_target, check_host=not report.allow_remote
-        )
+        app = make_app(settings, cache, default_target=default_target)
         shown = f'[{report.web_host}]' if ':' in report.web_host else report.web_host
         base = f'http://{shown}:{sock.getsockname()[1]}'
         loguru.logger.info(f'Serving on {base}/ (Ctrl-C to stop)')

@@ -16,6 +16,7 @@ import tests.fixtures.fetch.server
 import tests.fixtures.fetch.upstream
 import wambatic.fetch.base
 import wambatic.fetch.cache
+import wambatic.fetch.client
 import wambatic.fetch.errors
 import wambatic.settings
 
@@ -128,6 +129,18 @@ def test_the_fetcher_builds_a_client_when_given_none(tmp_path: pathlib.Path) -> 
             'test-token', cache, wambatic.settings.FetchSettings()
         )
         assert fetcher.client.token == 'test-token'
+    finally:
+        cache.close()
+
+
+def test_a_client_with_other_settings_is_refused(tmp_path: pathlib.Path) -> None:
+    cache = wambatic.fetch.cache.Cache.open(tmp_path / 'cache.sqlite3')
+    try:
+        client = wambatic.fetch.client.GitHubClient('test-token', wambatic.settings.FetchSettings())
+        with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='one settings object'):
+            wambatic.fetch.base.Fetcher(
+                'test-token', cache, wambatic.settings.FetchSettings(), client=client
+            )
     finally:
         cache.close()
 

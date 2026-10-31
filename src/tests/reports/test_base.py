@@ -70,6 +70,14 @@ def test_the_header_fields_are_as_requested_and_as_resolved(
     assert request['tz'] == 'UTC'
 
 
+def test_the_time_zone_is_written_once_as_the_request_tz(
+    org_result: wambatic.stats.base.StatsResult,
+) -> None:
+    request = as_dict(org_result)['request']
+    assert request['tz'] == 'UTC'
+    assert 'timezone' not in request['settings']
+
+
 def test_unrequested_dates_are_null_and_a_repo_subject_has_its_name(
     stats_fetcher: wambatic.fetch.base.Fetcher,
 ) -> None:

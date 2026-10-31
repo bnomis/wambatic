@@ -83,7 +83,6 @@ def test_the_request_defaults_follow_the_stats_request() -> None:
     request = wambatic.cli.build_request(
         flags,
         settings,
-        wambatic.reports.service.resolve_tz(settings),
         tests.fixtures.stats.AFTER_FIXTURE_RANGES,
     )
     assert request.granularity is wambatic.stats.base.Granularity.MONTH
@@ -98,7 +97,6 @@ def test_the_request_carries_the_flags() -> None:
     request = wambatic.cli.build_request(
         flags,
         settings,
-        wambatic.reports.service.resolve_tz(settings),
         tests.fixtures.stats.AFTER_FIXTURE_RANGES,
     )
     assert request.granularity is wambatic.stats.base.Granularity.WEEK
@@ -113,7 +111,6 @@ def test_groups_are_split_on_commas_and_stripped() -> None:
     request = wambatic.cli.build_request(
         flags,
         settings,
-        wambatic.reports.service.resolve_tz(settings),
         tests.fixtures.stats.AFTER_FIXTURE_RANGES,
     )
     assert request.groups == frozenset({'activity', 'flow'})
@@ -125,7 +122,6 @@ def test_an_unknown_group_is_passed_through_for_compute_to_reject() -> None:
     request = wambatic.cli.build_request(
         flags,
         settings,
-        wambatic.reports.service.resolve_tz(settings),
         tests.fixtures.stats.AFTER_FIXTURE_RANGES,
     )
     assert request.groups == frozenset({'activity', 'bogus'})
@@ -138,7 +134,6 @@ def test_no_group_at_all_is_a_usage_error() -> None:
         wambatic.cli.build_request(
             flags,
             settings,
-            wambatic.reports.service.resolve_tz(settings),
             tests.fixtures.stats.AFTER_FIXTURE_RANGES,
         )
 
@@ -151,7 +146,6 @@ def test_a_bad_date_flag_is_a_usage_error(since: str | None, until: str | None) 
         wambatic.cli.build_request(
             flags,
             settings,
-            wambatic.reports.service.resolve_tz(settings),
             tests.fixtures.stats.AFTER_FIXTURE_RANGES,
         )
 

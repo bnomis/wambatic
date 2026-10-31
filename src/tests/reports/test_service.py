@@ -258,7 +258,6 @@ def month_request(max_age: str = '0s') -> tuple[wambatic.settings.Settings, Stat
         '2027-01-31',
         None,
         False,
-        zoneinfo.ZoneInfo('UTC'),
         settings,
         tests.fixtures.stats.AFTER_FIXTURE_RANGES,
     )
@@ -305,7 +304,6 @@ def test_an_unknown_granularity_is_a_usage_error(by: str) -> None:
             None,
             None,
             False,
-            zoneinfo.ZoneInfo('UTC'),
             settings,
             tests.fixtures.stats.AFTER_FIXTURE_RANGES,
         )
@@ -321,7 +319,6 @@ def test_build_results_with_sync_false_makes_no_request_and_needs_no_token(
             stats_cache,
             ALPHA,
             [request],
-            by_author=False,
             full_refresh=False,
             no_fetch=False,
             sync=False,
@@ -352,7 +349,6 @@ def build_with(
                 stats_cache,
                 ALPHA,
                 [request],
-                by_author=False,
                 full_refresh=False,
                 no_fetch=False,
                 sync=sync,
@@ -395,19 +391,18 @@ def test_a_date_outside_the_bounds_is_a_usage_error(
             until,
             None,
             False,
-            zoneinfo.ZoneInfo('UTC'),
             settings,
             tests.fixtures.stats.AFTER_FIXTURE_RANGES,
         )
 
 
 def test_tomorrow_is_taken_in_the_requested_time_zone() -> None:
-    settings = wambatic.settings.load_settings(None, {})
     clock = datetime.datetime(2027, 2, 1, 20, 0, tzinfo=datetime.UTC)
 
     def make(tz: str) -> StatsRequest:
+        zoned = wambatic.settings.load_settings(None, {'stats': {'timezone': tz}})
         return wambatic.reports.service.make_request(
-            'month', None, '2027-02-03', None, False, zoneinfo.ZoneInfo(tz), settings, clock
+            'month', None, '2027-02-03', None, False, zoned, clock
         )
 
     assert make('Pacific/Auckland').until == datetime.date(2027, 2, 3)

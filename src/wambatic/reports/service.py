@@ -96,16 +96,18 @@ def make_request(
     until: str | None,
     groups: str | None,
     by_author: bool,
-    tz: zoneinfo.ZoneInfo,
     settings: wambatic.settings.Settings,
     today: datetime.datetime,
 ) -> wambatic.stats.base.StatsRequest:
-    """The `StatsRequest` of the computing flags or query parameters. `today` is the caller's
-    clock; `until` may not be after tomorrow in `tz`.
+    """The `StatsRequest` of the computing flags or query parameters. The time zone is
+    `settings.stats.timezone`. `today` is the caller's clock; `until` may not be after
+    tomorrow in that zone.
 
     Raises:
         UsageError: an option is invalid or conflicts with another.
+        SettingsError: `settings.stats.timezone` is not a known time zone.
     """
+    tz = resolve_tz(settings)
     fields: dict[str, object] = {}
     if groups is not None:
         names = frozenset(name.strip() for name in groups.split(',') if name.strip())
@@ -187,9 +189,8 @@ async def sync_target(
     settings: wambatic.settings.Settings,
     cache: wambatic.fetch.cache.Cache,
     target: wambatic.fetch.base.Subject | str,
-    groups: frozenset[str],
+    request: wambatic.stats.base.StatsRequest,
     *,
-    by_author: bool,
     full_refresh: bool,
     no_fetch: bool,
     sync: bool | None = None,
@@ -205,11 +206,13 @@ async def sync_target(
             token = wambatic.fetch.auth.resolve_token()
             online = await stack.enter_async_context(make_fetcher(token, cache, settings.fetch))
             subject = wambatic.fetch.base.Subject(await online.owner_kind(target), target)
-            if by_author:
+            if request.by_author:
                 check_by_author(subject)
         else:
             subject = target
-        resources = wambatic.stats.resources_for(groups) & wambatic.fetch.base.BUILT_RESOURCES
+        resources = (
+            wambatic.stats.resources_for(request.groups) & wambatic.fetch.base.BUILT_RESOURCES
+        )
         if sync is None:
             provenance = await reader.provenance(subject, resources)
             sync = needs_sync(
@@ -235,7 +238,6 @@ async def build_results(
     target: wambatic.fetch.base.Subject | str,
     requests: list[wambatic.stats.base.StatsRequest],
     *,
-    by_author: bool,
     full_refresh: bool,
     no_fetch: bool,
     sync: bool | None = None,
@@ -252,8 +254,7 @@ async def build_results(
         settings,
         cache,
         target,
-        requests[0].groups,
-        by_author=by_author,
+        requests[0],
         full_refresh=full_refresh,
         no_fetch=no_fetch,
         sync=sync,

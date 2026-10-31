@@ -167,7 +167,9 @@ class Fork:                          # a direct fork that still exists (step 10)
 
 class Fetcher:
     def __init__(self, token: str, cache: Cache, settings: FetchSettings, *, client: GitHubClient | None = None) -> None:
-        """`client` defaults to `GitHubClient(token, settings)`; tests pass one pointed at a replay server."""
+        """`client` defaults to `GitHubClient(token, settings)`; tests pass one pointed at a replay server.
+        A given `client` must hold this very `settings` object (`client.settings is settings`);
+        otherwise `InvalidRequestError`."""
 
     async def __aenter__(self) -> Fetcher: ...
     async def __aexit__(self, *exc_info: object) -> None:

@@ -7,7 +7,6 @@ import os
 import pathlib
 import sys
 import typing
-import zoneinfo
 
 import cappa
 import loguru
@@ -205,11 +204,10 @@ def check_report(report: Report, settings: wambatic.settings.Settings) -> None:
 def build_request(
     report: Report,
     settings: wambatic.settings.Settings,
-    tz: zoneinfo.ZoneInfo,
     today: datetime.datetime,
 ) -> wambatic.stats.base.StatsRequest:
     return wambatic.reports.service.make_request(
-        report.by, report.since, report.until, report.groups, report.by_author, tz, settings, today
+        report.by, report.since, report.until, report.groups, report.by_author, settings, today
     )
 
 
@@ -251,9 +249,7 @@ async def run_report(
     """Check the flags, bring the cache up to date if needed, compute and print the report."""
     target = wambatic.reports.service.parse_target(report.target)
     check_report(report, settings)
-    request = build_request(
-        report, settings, wambatic.reports.service.resolve_tz(settings), clock()
-    )
+    request = build_request(report, settings, clock())
     wambatic.stats.resources_for(request.groups)
     cache = wambatic.fetch.cache.Cache.open(
         settings.fetch.cache_path, ignore_version=report.ignore_cache_version
@@ -266,7 +262,6 @@ async def run_report(
             cache,
             target,
             requests,
-            by_author=report.by_author,
             full_refresh=report.full_refresh,
             no_fetch=report.no_fetch,
             clock=clock,

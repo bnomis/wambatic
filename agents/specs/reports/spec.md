@@ -92,9 +92,11 @@ def parse_target(text: str) -> Subject | str:
 def parse_date(text: str, flag: str = 'a date') -> datetime.date: ...
 def make_request(
     by: str, since: str | None, until: str | None, groups: str | None, by_author: bool,
-    tz: zoneinfo.ZoneInfo, settings: Settings,
+    settings: Settings, today: datetime.datetime,
 ) -> StatsRequest:
-    """The `StatsRequest` of the computing flags or query parameters; UsageError on a bad value."""
+    """The `StatsRequest` of the computing flags or query parameters; the zone is
+    `settings.stats.timezone` (a `--tz` or `tz` override is applied to `settings` first);
+    UsageError on a bad value."""
 def resolve_tz(settings: Settings) -> zoneinfo.ZoneInfo: ...
 def check_by_author(subject: Subject) -> None: ...
 def make_fetcher(token: str, cache: Cache, settings: FetchSettings) -> Fetcher: ...
@@ -103,12 +105,12 @@ def needs_sync(provenance: dict[str, str], resources: frozenset[str], settings: 
 def log_sync(report: SyncReport) -> None: ...
 async def build_results(
     settings: Settings, cache: Cache, target: Subject | str, requests: list[StatsRequest], *,
-    by_author: bool, full_refresh: bool, no_fetch: bool, sync: bool | None = None,
+    full_refresh: bool, no_fetch: bool, sync: bool | None = None,
     progress: SyncProgress | None = None,
     clock: Callable[[], datetime.datetime] = utc_now,
 ) -> tuple[Subject, list[StatsResult]]:
     """Resolve a bare NAME, sync when `sync` is True (or, when None, when `needs_sync` says so),
-    then compute every request with one `stats.compute_all`, so the cache is read once however
+    then compute every request (`by_author` is read from `requests[0]`) with one `stats.compute_all`, so the cache is read once however
     many requests there are; the network is used only to resolve or sync."""
 def redact_environment_token(text: str) -> str: ...
 
@@ -134,7 +136,6 @@ class Jobs:
         """Cancel the running and queued jobs."""
 
 def make_app(settings: Settings, cache: Cache, *, default_target: str | None = None,
-             check_host: bool = True,
              clock: Callable[[], datetime.datetime] = utc_now) -> fastapi.FastAPI: ...
 def is_loopback(host: str) -> bool:
     """Exactly 'localhost', or an IP address (IPv6 in brackets or not) that is loopback."""
@@ -252,7 +253,7 @@ The CLI is defined with [cappa](https://cappa.readthedocs.io/) dataclasses, as t
 
 - `format_version`: `1`, raised whenever a key below changes meaning, per the shared versions rule;
 - `subject`: `{"kind", "login", "name"}`;
-- `request`: `{"granularity", "groups" (sorted list), "since", "until" (ISO date or null, as requested), "by_author", "tz" (`str(tz)`), "settings"}`, where `settings` is every `StatsSettings` field with tuples as lists and durations as `"<total seconds>s"`, which the settings parser reads back;
+- `request`: `{"granularity", "groups" (sorted list), "since", "until" (ISO date or null, as requested), "by_author", "tz" (`str(tz)`), "settings"}`, where `settings` is every `StatsSettings` field except `timezone` (`tz` is the one zone) with tuples as lists and durations as `"<total seconds>s"`, which the settings parser reads back;
 - `since`, `until`: the resolved range as ISO dates;
 - `series`: one object per series in result order, `{"metric", "unit", "by", "by_kind", "points"}`, with `points` a list of `{"label", "start", "value"}` in bucket order; a value whose unit is `count`, `days` or `lines` is an integer, any other a float;
 - `tables` and `provenance`: as in the result.
@@ -291,7 +292,7 @@ The CLI is defined with [cappa](https://cappa.readthedocs.io/) dataclasses, as t
 
 *Sync jobs* (review-3.md choices 5 and 6). `/report` and `/api/stats` compute at once when the request carries the id of the finished job for its own target and resources, or when the target is a `Subject` and `needs_sync` (with `fetch.max_age`, the fetching flags off) is false. Otherwise they start a job with `Jobs.start`, or join the one running or queued for the same key, and answer 202. A job resolves the token (`resolve_token`) and a bare NAME, then runs `Fetcher.sync` with a `SyncProgress` (fetch spec) as an asyncio task on the server's loop (uvicorn with `loop='asyncio'`; FastAPI's `BackgroundTasks` are not used, since they belong to one response), holding the one lock that lets one job sync at a time; `state` is `queued` until it holds the lock, `listing` until `repos_listed` is set, `syncing`, then `done` or `failed` with the redacted message and the status it maps to (see Error handling). Each key keeps its latest job; a failed job is forgotten after the request that reports its error, so the next request retries. The progress page shows the state and counts, polls `/api/progress` once a second with `progress.js` and, when the job is done, loads the same URL with `&job=ID` added; on failure it shows the message. The cache is one `Cache` opened by `serve` before it listens, shared by every job and computation.
 
-*Security.* The token comes from the server's environment only; no response carries it. Binding to a host other than loopback (`is_loopback`: exactly `localhost`, or an IP address whose `ipaddress` `is_loopback` is true; no name is resolved) needs `--allow-remote` or `report.allow_remote`, else `serve` exits 2 before binding; with it, a warning says that anyone who can reach the port acts with the operator's token (review-3.md choice 10). On a loopback bind, a middleware answers 403 to any request whose `Host` is not `localhost`, `127.0.0.1` or `[::1]` followed by the server's port, which stops DNS rebinding from reading the JSON; with remote access allowed the check is off. No CORS headers are sent (review-3.md choice 11).
+*Security.* The token comes from the server's environment only; no response carries it. Binding to a host other than loopback (`is_loopback`: exactly `localhost`, or an IP address whose `ipaddress` `is_loopback` is true; no name is resolved) needs `--allow-remote` or `report.allow_remote`, else `serve` exits 2 before binding; with it, a warning says that anyone who can reach the port acts with the operator's token (review-3.md choice 10). On a loopback bind, a middleware answers 403 to any request whose `Host` is not `localhost`, `127.0.0.1` or `[::1]` followed by the server's port, which stops DNS rebinding from reading the JSON; with remote access allowed the check is off (`make_app` reads `report.allow_remote` itself; it takes no separate switch). No CORS headers are sent (review-3.md choice 11).
 
 *Logging.* uvicorn runs with `log_config=None`, `access_log=False` and `log_level='warning'`, so its own stdlib logging stays unconfigured and only its warnings reach stderr; a middleware logs each request at `debug` through loguru (method, path, status and milliseconds). `serve` logs one `info` line when listening, `Serving on http://HOST:PORT/ (Ctrl-C to stop)`, and the report URL of its target when given (review-3.md choice 12).
 

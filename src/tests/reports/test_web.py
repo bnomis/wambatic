@@ -1,6 +1,7 @@
 import asyncio
 import collections.abc
 import contextlib
+import dataclasses
 import datetime
 import ipaddress
 import json
@@ -9,7 +10,6 @@ import re
 import subprocess
 import time
 import typing
-import zoneinfo
 
 import httpx
 import hypothesis
@@ -208,13 +208,16 @@ async def serving(
     settings: wambatic.settings.Settings,
     cache: wambatic.fetch.cache.Cache,
     *,
-    check_host: bool = True,
+    allow_remote: bool = False,
     default_target: str | None = None,
     clock: datetime.datetime = NOW,
 ) -> collections.abc.AsyncIterator[httpx.AsyncClient]:
     """An HTTPX client for the app, with its lifespan entered (`ASGITransport` does not)."""
+    settings = dataclasses.replace(
+        settings, report=dataclasses.replace(settings.report, allow_remote=allow_remote)
+    )
     app = wambatic.reports.web.make_app(
-        settings, cache, default_target=default_target, check_host=check_host, clock=lambda: clock
+        settings, cache, default_target=default_target, clock=lambda: clock
     )
     async with app.router.lifespan_context(app):
         transport = httpx.ASGITransport(app=app)
@@ -247,7 +250,6 @@ def direct(
         '2027-01-21',
         None,
         True,
-        zoneinfo.ZoneInfo('UTC'),
         settings,
         tests.fixtures.stats.NOW,
     )
@@ -476,9 +478,11 @@ def test_the_host_header_is_checked_against_loopback_and_the_port(
         assert json.loads(text) == {'error': 'unexpected Host header'}
 
 
-def test_the_host_check_can_be_turned_off(stats_cache: wambatic.fetch.cache.Cache) -> None:
+def test_the_host_check_is_off_when_remote_access_is_allowed(
+    stats_cache: wambatic.fetch.cache.Cache,
+) -> None:
     async def scenario() -> int:
-        async with serving(web_settings(), stats_cache, check_host=False) as client:
+        async with serving(web_settings(), stats_cache, allow_remote=True) as client:
             return (await client.get('/', headers={'Host': 'example.com'})).status_code
 
     assert asyncio.run(scenario()) == 200

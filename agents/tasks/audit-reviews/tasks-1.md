@@ -197,7 +197,7 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 ## Task 5: Give every setting one owner
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** medium
 **Source Reference:** F6 (A5)
@@ -206,23 +206,23 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 **Subtasks:**
 
-- [ ] `StatsRequest`: keep `tz` as the single zone; remove `timezone` from what `reports/base.py:57-61` writes from `settings`, or write `tz` there, so the JSON output holds one zone; record which in `reports/spec.md` (JSON output)
-- [ ] `service.make_request`: take no separate `tz` when it can resolve it from `settings` and the `--tz`/`tz` override, so `tz` and `settings.stats.timezone` cannot disagree
-- [ ] `service.build_results` and `sync_target`: drop the `by_author` parameter and read `requests[0].by_author`; `web.Query` drops its own `by_author`; `cli.py:257-262` follows
-- [ ] `web.make_app`: derive `check_host` from `settings.report.allow_remote` inside `make_app`; drop the parameter; `serve` and the tests follow
-- [ ] `fetch.base.Fetcher.__init__`: when a `client` is injected, raise the fetch `InvalidRequestError` if `client.settings is not settings` (a caller bug), and document that the two are one object
-- [ ] Tests for each: the JSON output's zone, a disagreeing `client.settings`, `make_app` with `allow_remote` on and off
+- [x] `StatsRequest`: keep `tz` as the single zone; remove `timezone` from what `reports/base.py:57-61` writes from `settings`, or write `tz` there, so the JSON output holds one zone; record which in `reports/spec.md` (JSON output)
+- [x] `service.make_request`: take no separate `tz` when it can resolve it from `settings` and the `--tz`/`tz` override, so `tz` and `settings.stats.timezone` cannot disagree
+- [x] `service.build_results` and `sync_target`: drop the `by_author` parameter and read `requests[0].by_author`; `web.Query` drops its own `by_author`; `cli.py:257-262` follows
+- [x] `web.make_app`: derive `check_host` from `settings.report.allow_remote` inside `make_app`; drop the parameter; `serve` and the tests follow
+- [x] `fetch.base.Fetcher.__init__`: when a `client` is injected, raise the fetch `InvalidRequestError` if `client.settings is not settings` (a caller bug), and document that the two are one object
+- [x] Tests for each: the JSON output's zone, a disagreeing `client.settings`, `make_app` with `allow_remote` on and off
 
 **Acceptance Criteria:**
 
-- [ ] No public function takes both a value and a settings object that holds the same value
-- [ ] The API sections of the stats and reports specs match the new signatures
+- [x] No public function takes both a value and a settings object that holds the same value
+- [x] The API sections of the stats and reports specs match the new signatures
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/reports/test_service.py src/tests/reports/test_web.py src/tests/reports/test_base.py src/tests/test_cli.py src/tests/fetch/test_fetcher.py src/tests/stats` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/reports/test_service.py src/tests/reports/test_web.py src/tests/reports/test_base.py src/tests/test_cli.py src/tests/fetch/test_fetcher.py src/tests/stats` passes
 
 **Notes:**
 

@@ -587,7 +587,7 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 **Acceptance Criteria:**
 
 - [x] A push with a deliberately added unaccepted hit (a `typing.Callable` in a scratch commit) is refused by the pre-push hook, then the scratch commit is dropped
-- [ ] The CI `audit` job passes on the branch's pull request
+- [x] The CI `audit` job passes on the branch's pull request (PR #39, 2026-10-31: `audit` passed with the `AGENTS_DEPLOY_KEY` checkout, as did `check`, `browser`, `live` and CodeQL)
 - [x] `bin/audit-check.sh` exits 0
 
 **Definition of Done:**

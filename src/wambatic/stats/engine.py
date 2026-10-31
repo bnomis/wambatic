@@ -44,9 +44,9 @@ async def read_commits(
     fetcher: wambatic.fetch.base.Fetcher,
     repos: list[wambatic.fetch.base.Repo],
     request: wambatic.stats.base.StatsRequest,
-) -> list[wambatic.fetch.base.Commit]:
-    """The cached commits whose local date is inside the requested bounds, from the subject's
-    own authors only for a user subject."""
+) -> list[wambatic.stats.activity.DatedCommit]:
+    """The cached commits whose local date is inside the requested bounds, each with that date,
+    from the subject's own authors only for a user subject."""
     lo = (
         None
         if request.since is None
@@ -59,7 +59,7 @@ async def read_commits(
         + wambatic.stats.buckets.ONE_DAY
     )
     login = subject.login.casefold()
-    kept: list[wambatic.fetch.base.Commit] = []
+    kept: list[wambatic.stats.activity.DatedCommit] = []
     for repo in repos:
         async for commit in fetcher.commits(repo, lo, hi):
             day = commit.authored_at.astimezone(request.tz).date()
@@ -69,7 +69,7 @@ async def read_commits(
                 continue
             if subject.kind == 'user' and (commit.author_login or '').casefold() != login:
                 continue
-            kept.append(commit)
+            kept.append(wambatic.stats.activity.DatedCommit(commit, day))
     return kept
 
 
@@ -129,7 +129,9 @@ async def read_delivery(
 
 
 async def read_popularity(
-    fetcher: wambatic.fetch.base.Fetcher, repos: list[wambatic.fetch.base.Repo]
+    fetcher: wambatic.fetch.base.Fetcher,
+    repos: list[wambatic.fetch.base.Repo],
+    states: collections.abc.Mapping[tuple[str, str], wambatic.fetch.base.SyncState | None],
 ) -> tuple[
     list[wambatic.fetch.base.StarEvent],
     list[wambatic.fetch.base.Fork],
@@ -137,12 +139,13 @@ async def read_popularity(
 ]:
     """Every cached star and fork of the subject's repositories, since a cumulative count reaches
     back before any range, and the repositories whose stargazers the token could not see (their
-    stars are left out). No author filter: a star is given to a repository, not to an author."""
+    stars are left out), read from the `star_events` sync `states` the caller holds. No author
+    filter: a star is given to a repository, not to an author."""
     stars: list[wambatic.fetch.base.StarEvent] = []
     forks: list[wambatic.fetch.base.Fork] = []
     hidden: list[wambatic.fetch.base.Repo] = []
     for repo in repos:
-        if await fetcher.stars_hidden(repo):
+        if wambatic.fetch.base.hides_stars(states[repo.name_with_owner, 'star_events']):
             hidden.append(repo)
         else:
             stars.extend([star async for star in fetcher.star_events(repo)])
@@ -156,7 +159,7 @@ class CachedRecords:
     is resolved. Nothing in it depends on the request's granularity."""
 
     repos: tuple[wambatic.fetch.base.Repo, ...]
-    commits: tuple[wambatic.fetch.base.Commit, ...]
+    commits: tuple[wambatic.stats.activity.DatedCommit, ...]
     pulls: tuple[wambatic.fetch.base.PullRequest, ...]
     issues: tuple[wambatic.fetch.base.Issue, ...]
     runs: tuple[wambatic.fetch.base.WorkflowRun, ...]
@@ -200,7 +203,8 @@ async def read_records(
         raise wambatic.stats.errors.EmptySubjectError(
             f'the cache holds no repositories for {subject.login}'
         )
-    commits: list[wambatic.fetch.base.Commit] = []
+    states = await fetcher.sync_states(repos, resources)
+    commits: list[wambatic.stats.activity.DatedCommit] = []
     pulls: list[wambatic.fetch.base.PullRequest] = []
     issues: list[wambatic.fetch.base.Issue] = []
     runs: list[wambatic.fetch.base.WorkflowRun] = []
@@ -216,8 +220,8 @@ async def read_records(
     if 'delivery' in built:
         runs, releases, delivery_pulls = await read_delivery(fetcher, repos, request)
     if 'popularity' in built:
-        stars, forks, hidden = await read_popularity(fetcher, repos)
-    provenance = await fetcher.provenance(subject, resources)
+        stars, forks, hidden = await read_popularity(fetcher, repos, states)
+    provenance = await fetcher.provenance(subject, resources, repos, states)
     return CachedRecords(
         repos=tuple(repos),
         commits=tuple(commits),
@@ -270,11 +274,13 @@ def aggregate(
     until = request.until if request.until is not None else now.astimezone(tz).date()
     since = request.since
     if since is None:
-        firsts = [commit.authored_at for commit in commits]
-        firsts += [pull.created_at for pull in pulls] + [issue.created_at for issue in issues]
-        firsts += [run.created_at for run in runs] + [release.published_at for release in releases]
-        firsts += [star.starred_at for star in stars] + [fork.created_at for fork in forks]
-        earliest = min(firsts).astimezone(tz).date() if firsts else until
+        moments = [pull.created_at for pull in pulls] + [issue.created_at for issue in issues]
+        moments += [run.created_at for run in runs]
+        moments += [release.published_at for release in releases]
+        moments += [star.starred_at for star in stars] + [fork.created_at for fork in forks]
+        firsts = [day for _, day in commits]
+        firsts += [moment.astimezone(tz).date() for moment in moments]
+        earliest = min(firsts) if firsts else until
         since = (
             earliest
             if granularity is wambatic.stats.base.Granularity.TOTAL
@@ -282,7 +288,7 @@ def aggregate(
         )
     if since > until:
         raise wambatic.stats.errors.InvalidRangeError(f'since {since} is after until {until}')
-    commits = [c for c in commits if since <= c.authored_at.astimezone(tz).date() <= until]
+    commits = [dated for dated in commits if since <= dated.day <= until]
     flow_found = wambatic.stats.flow.has_event_in_range(pulls, issues, tz, since, until)
     delivery_found = wambatic.stats.delivery.has_event_in_range(runs, releases, tz, since, until)
     if not (commits or flow_found or delivery_found or popularity):
@@ -294,7 +300,6 @@ def aggregate(
         series, tables = wambatic.stats.activity.aggregate(
             commits,
             buckets,
-            tz,
             request.settings,
             by_author=request.by_author,
             by_repo=subject.kind != 'repo',

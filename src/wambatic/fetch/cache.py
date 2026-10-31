@@ -251,7 +251,7 @@ class Table[T: Record]:
         return cls(name, record_type, column_names(record_type), converters, key)
 
     def values(self, record: T) -> tuple[object, ...]:
-        return record_values(record)
+        return tuple(to_column(getattr(record, name)) for name in self.columns)
 
     def record(self, repo: str, row: tuple[typing.Any, ...]) -> T:
         """Build a record from a row of the columns after `repo`."""

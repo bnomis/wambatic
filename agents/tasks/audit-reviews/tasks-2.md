@@ -234,7 +234,7 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 ## Task 7: Remove the reads and derivations left after read-once
 
-**Status:** todo
+**Status:** done
 **Priority:** low
 **Complexity:** medium
 **Source Reference:** G6 (A14, P2, P3)
@@ -243,29 +243,32 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 **Subtasks:**
 
-- [ ] `fetch/base.py` `provenance`: accept the repos and sync states the caller already holds (`read_records` has them), so a report reads the repo list and each `star_events` sync state once; `stars_hidden` uses the same states
-- [ ] `reports/html.py` `sections_html`: build each section's table once and use it for both the presence test and the render; derive `popularity_now(total)` and `languages_rows(total)` once per document
-- [ ] `reports/terminal.py` `render_terminal`: derive `total_series` and `bucket_list` once and pass them to the table builders
-- [ ] `fetch/cache.py`: compute `column_names` once per `Table`, not per row
-- [ ] `stats/engine.py:283`: keep each commit's local date from `read_commits` instead of recomputing it in `aggregate` and `activity`
-- [ ] `reports/web.py`: read every template once when the app is made, not on the first request
-- [ ] A counting test: one HTML report reads each `Fetcher` method once per repository, and `sync_state` once per (repo, resource)
+- [x] `fetch/base.py` `provenance`: accept the repos and sync states the caller already holds (`read_records` has them), so a report reads the repo list and each `star_events` sync state once; `stars_hidden` uses the same states
+- [x] `reports/html.py` `sections_html`: build each section's table once and use it for both the presence test and the render; derive `popularity_now(total)` and `languages_rows(total)` once per document
+- [x] `reports/terminal.py` `render_terminal`: derive `total_series` and `bucket_list` once and pass them to the table builders
+- [x] `fetch/cache.py`: compute `column_names` once per `Table`, not per row
+- [x] `stats/engine.py:283`: keep each commit's local date from `read_commits` instead of recomputing it in `aggregate` and `activity`
+- [x] `reports/web.py`: read every template once when the app is made, not on the first request
+- [x] A counting test: one HTML report reads each `Fetcher` method once per repository, and `sync_state` once per (repo, resource)
 
 **Acceptance Criteria:**
 
-- [ ] Every HTML, terminal, JSON and web test passes unchanged (output byte for byte)
+- [x] Every HTML, terminal, JSON and web test passes unchanged (output byte for byte)
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `bin/audit-check.sh --path src/wambatic` exits 0
-- [ ] `pytest src/tests/stats src/tests/reports src/tests/fetch/test_fetcher.py src/tests/fetch/test_cache.py src/tests/test_cli.py` passes
-- [ ] `pytest -m browser src/tests/reports` passes
+- [x] `source bin/activate.sh` succeeds (not run: the sandbox refuses `source`; the checks ran through `.venv/bin` with `PYTHONPATH=src`)
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `bin/audit-check.sh --path src/wambatic` exits 0
+- [x] `pytest src/tests/stats src/tests/reports src/tests/fetch/test_fetcher.py src/tests/fetch/test_cache.py src/tests/test_cli.py` passes
+- [x] `pytest -m browser src/tests/reports` passes
 
 **Notes:**
 
 - Depends on Task 6
+- `reports/html.py` `sections_html`: each section's presence test reads the whole-range result and its tables read the per-period results, so no table was built twice; the repeated derivations were `popularity_now` and `languages_rows`, now derived once in `html_document`
+- `reports/web.py`: `make_app` reads the templates listed in `html.TEMPLATE_NAMES` at start-up, so a missing template fails then, not on the first request
+- Also fixed: `test_any_stats_settings_survive_json_and_durations_parse_back` generated timezones that Task 6's `StatsRequest` check rejects
 
 ---
 

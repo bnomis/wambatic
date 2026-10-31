@@ -137,6 +137,17 @@ def check_report(report: HtmlReport) -> None:
             )
 
 
+TEMPLATE_NAMES = (
+    'form.html',
+    'message.html',
+    'progress.html',
+    'progress.js',
+    'report.css',
+    'report.html',
+    'report.js',
+)
+
+
 @functools.cache
 def read_template(name: str) -> str:
     """The packaged template `name`.
@@ -299,8 +310,7 @@ def dora_note(table: wambatic.reports.rows.PeriodTable) -> str:
     return wambatic.reports.terminal.delivery_caption(table, 'proxies: see the README; hours')
 
 
-def popularity_now_html(result: wambatic.stats.base.StatsResult) -> str:
-    now = wambatic.reports.rows.popularity_now(result)
+def popularity_now_html(now: wambatic.reports.rows.PopularityNow | None) -> str:
     if now is None:
         return ''
     format_number = wambatic.reports.terminal.format_number
@@ -322,8 +332,7 @@ def popularity_now_html(result: wambatic.stats.base.StatsResult) -> str:
     )
 
 
-def languages_html(result: wambatic.stats.base.StatsResult) -> str:
-    languages = wambatic.reports.rows.languages_rows(result)
+def languages_html(languages: wambatic.reports.rows.Languages | None) -> str:
     if languages is None:
         return ''
     return table_html(
@@ -445,7 +454,11 @@ def tile(label: str, value: str) -> str:
     return f'<div class="tile"><dt>{escape(label)}</dt><dd>{escape(value)}</dd></div>'
 
 
-def tiles_html(total: wambatic.stats.base.StatsResult) -> str:
+def tiles_html(
+    total: wambatic.stats.base.StatsResult,
+    now: wambatic.reports.rows.PopularityNow | None,
+    languages: wambatic.reports.rows.Languages | None,
+) -> str:
     series = wambatic.reports.rows.total_series(total)
     format_number = wambatic.reports.terminal.format_number
 
@@ -492,17 +505,18 @@ def tiles_html(total: wambatic.stats.base.StatsResult) -> str:
                     'Median lead time (hours)', format_cell('lead_time_p50', value('lead_time_p50'))
                 )
             )
-    pieces += popularity_tiles(total)
+    pieces += popularity_tiles(now, languages)
     return f'<dl class="tiles">{"".join(pieces)}</dl>' if pieces else ''
 
 
-def popularity_tiles(total: wambatic.stats.base.StatsResult) -> list[str]:
-    now = wambatic.reports.rows.popularity_now(total)
+def popularity_tiles(
+    now: wambatic.reports.rows.PopularityNow | None,
+    languages: wambatic.reports.rows.Languages | None,
+) -> list[str]:
     if now is None:
         return []
     format_number = wambatic.reports.terminal.format_number
     sums = now.total or (now.rows[0] if now.rows else wambatic.reports.rows.PopularityRow.empty())
-    languages = wambatic.reports.rows.languages_rows(total)
     named = (
         [row.language for row in languages.rows if row.language != OTHER_LANGUAGE]
         if languages
@@ -550,7 +564,12 @@ def footer_html(total: wambatic.stats.base.StatsResult) -> str:
     )
 
 
-def sections_html(report: HtmlReport, built: PageFigures) -> str:
+def sections_html(
+    report: HtmlReport,
+    built: PageFigures,
+    now: wambatic.reports.rows.PopularityNow | None,
+    languages: wambatic.reports.rows.Languages | None,
+) -> str:
     total = report.total
     figures = period_figures(report, built)
     range_figures = built.range_figures
@@ -613,8 +632,8 @@ def sections_html(report: HtmlReport, built: PageFigures) -> str:
                 wambatic.reports.rows.popularity_table,
                 wambatic.reports.terminal.popularity_caption,
             ),
-            popularity_now_html(total),
-            languages_html(total),
+            popularity_now_html(now),
+            languages_html(languages),
             '</section>',
         ]
         sections.append(''.join(pieces))
@@ -647,14 +666,16 @@ def html_document(report: HtmlReport, theme: wambatic.settings.Theme) -> str:
     Raises UsageError when the five results differ in anything but granularity."""
     check_report(report)
     built = build_page_figures(report)
+    now = wambatic.reports.rows.popularity_now(report.total)
+    languages = wambatic.reports.rows.languages_rows(report.total)
     title = f'wambatic: {wambatic.reports.rows.subject_text(report.total)}'
     return string.Template(read_template('report.html')).substitute(
         theme_attribute=theme_attribute(theme),
         title=escape(title),
         style=stylesheet(),
         header=header_html(report),
-        tiles=tiles_html(report.total),
-        sections=sections_html(report, built),
+        tiles=tiles_html(report.total, now, languages),
+        sections=sections_html(report, built, now, languages),
         footer=footer_html(report.total),
         data=json_for_script(page_data(report, theme, built)),
         plotlyjs=read_plotlyjs(),

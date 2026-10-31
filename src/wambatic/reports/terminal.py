@@ -132,10 +132,9 @@ def value_range(values: list[float], *, signed: bool) -> str:
     return f'{low} to {high}'
 
 
-def trend_lines(result: wambatic.stats.base.StatsResult, width: int) -> list[str]:
+def trend_lines(series: wambatic.reports.rows.TotalSeries, width: int) -> list[str]:
     """One `<metric>  <sparkline>  <min> to <max>` line per total series, cropped to the latest
     buckets that fit `width` with `last N periods` added."""
-    series = wambatic.reports.rows.total_series(result)
     buckets = len(wambatic.reports.rows.buckets_from(series))
     metrics = [
         m for m in wambatic.reports.rows.TREND_METRICS if m in series and len(series[m]) == buckets
@@ -248,10 +247,14 @@ def render_unavailable(
     console.print(table)
 
 
-def render_flow(result: wambatic.stats.base.StatsResult, console: rich.console.Console) -> None:
+def render_flow(
+    result: wambatic.stats.base.StatsResult,
+    series: wambatic.reports.rows.TotalSeries,
+    console: rich.console.Console,
+) -> None:
     """Flow by period and Flow times by period (items 6 and 7 of the terminal layout)."""
-    flow = wambatic.reports.rows.flow_table(result)
-    times = wambatic.reports.rows.flow_times_table(result)
+    flow = wambatic.reports.rows.flow_table(result, series)
+    times = wambatic.reports.rows.flow_times_table(result, series)
     if flow is None or times is None:
         return
     console.print()
@@ -260,11 +263,15 @@ def render_flow(result: wambatic.stats.base.StatsResult, console: rich.console.C
     console.print(period_table(times, caption=flow_times_caption(times)))
 
 
-def render_delivery(result: wambatic.stats.base.StatsResult, console: rich.console.Console) -> None:
+def render_delivery(
+    result: wambatic.stats.base.StatsResult,
+    series: wambatic.reports.rows.TotalSeries,
+    console: rich.console.Console,
+) -> None:
     """Delivery by period and DORA proxies by period (items 8 and 9 of the terminal layout)."""
     for table, unit in (
-        (wambatic.reports.rows.delivery_table(result), 'minutes and days'),
-        (wambatic.reports.rows.dora_table(result), 'proxies: see the README; hours'),
+        (wambatic.reports.rows.delivery_table(result, series), 'minutes and days'),
+        (wambatic.reports.rows.dora_table(result, series), 'proxies: see the README; hours'),
     ):
         if table is not None:
             console.print()
@@ -282,10 +289,12 @@ def popularity_caption(table: wambatic.reports.rows.PeriodTable) -> str:
 
 
 def render_popularity(
-    result: wambatic.stats.base.StatsResult, console: rich.console.Console
+    result: wambatic.stats.base.StatsResult,
+    series: wambatic.reports.rows.TotalSeries,
+    console: rich.console.Console,
 ) -> None:
     """Popularity by period, Popularity now and Languages (items 10 to 12 of the layout)."""
-    by_period = wambatic.reports.rows.popularity_table(result)
+    by_period = wambatic.reports.rows.popularity_table(result, series)
     if by_period is None:
         return
     console.print()
@@ -344,7 +353,7 @@ def render_popularity(
 
 def render_terminal(result: wambatic.stats.base.StatsResult, console: rich.console.Console) -> None:
     series = wambatic.reports.rows.total_series(result)
-    activity = wambatic.reports.rows.activity_table(result)
+    activity = wambatic.reports.rows.activity_table(result, series)
     console.print(title_line(result))
     if activity is not None:
         console.print(period_table(activity))
@@ -352,14 +361,14 @@ def render_terminal(result: wambatic.stats.base.StatsResult, console: rich.conso
         metric in series for metric in wambatic.reports.rows.TREND_METRICS
     ):
         heading(console, 'Trends')
-        for line in trend_lines(result, console.width):
+        for line in trend_lines(series, console.width):
             console.print(rich.text.Text(line))
     if activity is not None:
         render_breakdowns(result, console)
         render_top_contributors(result, console)
-    render_flow(result, console)
-    render_delivery(result, console)
-    render_popularity(result, console)
+    render_flow(result, series, console)
+    render_delivery(result, series, console)
+    render_popularity(result, series, console)
     render_unavailable(result, console)
     heading(console, 'Provenance')
     for line in wambatic.reports.rows.provenance_lines(result):

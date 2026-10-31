@@ -535,6 +535,11 @@ def split_name(name_with_owner: str) -> tuple[str, str]:
     return owner, name
 
 
+def hides_stars(state: SyncState | None) -> bool:
+    """Whether a `star_events` sync state records the stargazers as not visible to the token."""
+    return state is not None and state.probe == STARS_HIDDEN
+
+
 class Fetcher:
     """Brings the cache up to date from GitHub and reads records back from it.
 
@@ -730,10 +735,35 @@ class Fetcher:
         for commit in await self.db(self.cache.read_commits, repo.name_with_owner, since, until):
             yield commit
 
-    async def provenance(self, subject: Subject, resources: frozenset[str]) -> dict[str, str]:
+    async def sync_states(
+        self, repos: collections.abc.Sequence[Repo], resources: collections.abc.Iterable[str]
+    ) -> dict[tuple[str, str], SyncState | None]:
+        """From the cache: the sync state of each (repo, resource), None where there is none.
+
+        Raises:
+            CacheError: the cache cannot be read.
+        """
+        return {
+            (repo.name_with_owner, resource): await self.db(
+                self.cache.sync_state, repo.name_with_owner, resource
+            )
+            for repo in repos
+            for resource in sorted(resources)
+        }
+
+    async def provenance(
+        self,
+        subject: Subject,
+        resources: frozenset[str],
+        repos: collections.abc.Sequence[Repo] | None = None,
+        states: collections.abc.Mapping[tuple[str, str], SyncState | None] | None = None,
+    ) -> dict[str, str]:
         """From the cache: the cache identity, `version_override_at` when recorded, and for each
         resource `fetched_at:<resource>`, the earliest `synced_at` over the subject's repos, or
         `never` when one of them has no sync state for it.
+
+        A caller that already holds the subject's `repos` and their `sync_states` for `resources`
+        passes them, so they are not read again.
 
         Raises:
             InvalidRequestError: `resources` names an unknown resource.
@@ -748,13 +778,16 @@ class Fetcher:
         override = await self.db(self.cache.version_override_at)
         if override is not None:
             result['version_override_at'] = override
-        repos = await self.repos(subject)
+        if repos is None:
+            repos = await self.repos(subject)
+        if states is None:
+            states = await self.sync_states(repos, resources)
         for resource in sorted(resources):
-            synced: list[datetime.datetime] = []
-            for repo in repos:
-                state = await self.db(self.cache.sync_state, repo.name_with_owner, resource)
-                if state is not None:
-                    synced.append(state.synced_at)
+            synced = [
+                state.synced_at
+                for repo in repos
+                if (state := states[repo.name_with_owner, resource]) is not None
+            ]
             if len(synced) < len(repos) or not synced:
                 result[f'fetched_at:{resource}'] = 'never'
             else:
@@ -1285,7 +1318,7 @@ class Fetcher:
         """From the cache: whether the last star sync of the repo found its stargazers not visible
         to the token (`STARS_HIDDEN`), so it has no star history."""
         state = await self.db(self.cache.sync_state, repo.name_with_owner, 'star_events')
-        return state is not None and state.probe == STARS_HIDDEN
+        return hides_stars(state)
 
     async def forks(self, repo: Repo) -> collections.abc.AsyncIterator[Fork]:
         """From the cache: every direct fork of the repo, oldest first."""

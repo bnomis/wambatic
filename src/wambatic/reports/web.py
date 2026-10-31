@@ -320,6 +320,8 @@ def make_app(
     default_target: str | None = None,
     clock: collections.abc.Callable[[], datetime.datetime] = wambatic.fetch.ratelimit.utc_now,
 ) -> fastapi.FastAPI:
+    for name in wambatic.reports.html.TEMPLATE_NAMES:
+        wambatic.reports.html.read_template(name)
     jobs = Jobs()
     theme = settings.report.html_theme
 

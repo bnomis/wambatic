@@ -149,9 +149,10 @@ class Contributor:
     active_days: int
 
 
-def total_series(
-    result: wambatic.stats.base.StatsResult,
-) -> dict[str, list[tuple[wambatic.stats.base.Bucket, float]]]:
+TotalSeries = dict[str, list[tuple[wambatic.stats.base.Bucket, float]]]
+
+
+def total_series(result: wambatic.stats.base.StatsResult) -> TotalSeries:
     """Each total series' points (the ones with no breakdown) in bucket order, by metric."""
     return {
         series.metric: sorted(series.points.items())
@@ -185,9 +186,7 @@ def has_dora(result: wambatic.stats.base.StatsResult) -> bool:
     return any(s.metric in DORA_TABLE_METRICS and s.by is None for s in result.series)
 
 
-def buckets_from(
-    series: dict[str, list[tuple[wambatic.stats.base.Bucket, float]]],
-) -> list[wambatic.stats.base.Bucket]:
+def buckets_from(series: TotalSeries) -> list[wambatic.stats.base.Bucket]:
     """The buckets of `total_series` output, from whichever total series is present."""
     for metric in (*TOTAL_METRICS, *FLOW_COUNTS, *DELIVERY_COUNTS, *POPULARITY_TABLE_METRICS):
         if metric in series:
@@ -226,11 +225,13 @@ def period_row(
     return PeriodRow(label, label in partial, tuple(values))
 
 
-def activity_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | None:
+def activity_table(
+    result: wambatic.stats.base.StatsResult, series: TotalSeries | None = None
+) -> PeriodTable | None:
     """Activity by period; None without activity series."""
     if not has_activity(result):
         return None
-    series = total_series(result)
+    series = total_series(result) if series is None else series
     partial = partial_labels(result)
     rows = tuple(
         period_row(bucket.label, partial, (series[metric][index][1] for metric in TOTAL_METRICS))
@@ -244,11 +245,13 @@ def activity_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | Non
     return PeriodTable('Activity by period', ACTIVITY_HEADERS, TOTAL_METRICS, rows, total)
 
 
-def flow_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | None:
+def flow_table(
+    result: wambatic.stats.base.StatsResult, series: TotalSeries | None = None
+) -> PeriodTable | None:
     """Flow by period; None without flow series."""
     if not has_flow(result):
         return None
-    series = total_series(result)
+    series = total_series(result) if series is None else series
     partial = partial_labels(result)
     rows = tuple(
         period_row(bucket.label, partial, (series[metric][index][1] for metric in FLOW_COUNTS))
@@ -260,12 +263,14 @@ def flow_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | None:
     return PeriodTable('Flow by period', FLOW_HEADERS, FLOW_COUNTS, rows, total)
 
 
-def flow_times_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | None:
+def flow_times_table(
+    result: wambatic.stats.base.StatsResult, series: TotalSeries | None = None
+) -> PeriodTable | None:
     """Flow times by period, a bucket with no value `None`; there is no total, because medians
     do not add up over buckets. None without flow series."""
     if not has_flow(result):
         return None
-    series = total_series(result)
+    series = total_series(result) if series is None else series
     partial = partial_labels(result)
     points = {metric: dict(series[metric]) for metric in FLOW_TIMES_METRICS}
     rows = tuple(
@@ -278,11 +283,14 @@ def flow_times_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | N
 
 
 def delivery_period_table(
-    result: wambatic.stats.base.StatsResult, title: str, wanted: tuple[str, ...]
+    result: wambatic.stats.base.StatsResult,
+    title: str,
+    wanted: tuple[str, ...],
+    series: TotalSeries | None = None,
 ) -> PeriodTable | None:
     """A table of the delivery series in `wanted` that the result has, a bucket with no value
     `None`; the footer adds up the counts and is `None` in the other columns."""
-    series = total_series(result)
+    series = total_series(result) if series is None else series
     metrics = tuple(metric for metric in wanted if metric in series)
     if not metrics:
         return None
@@ -301,26 +309,32 @@ def delivery_period_table(
     return PeriodTable(title, tuple(DELIVERY_HEADERS[m] for m in metrics), metrics, rows, total)
 
 
-def delivery_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | None:
+def delivery_table(
+    result: wambatic.stats.base.StatsResult, series: TotalSeries | None = None
+) -> PeriodTable | None:
     """Delivery by period; None without delivery series."""
     if not has_delivery(result):
         return None
-    return delivery_period_table(result, 'Delivery by period', DELIVERY_TABLE_METRICS)
+    return delivery_period_table(result, 'Delivery by period', DELIVERY_TABLE_METRICS, series)
 
 
-def dora_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | None:
+def dora_table(
+    result: wambatic.stats.base.StatsResult, series: TotalSeries | None = None
+) -> PeriodTable | None:
     """DORA proxies by period, with the columns of the proxies the result has; None without any."""
     if not has_dora(result):
         return None
-    return delivery_period_table(result, 'DORA proxies by period', DORA_TABLE_METRICS)
+    return delivery_period_table(result, 'DORA proxies by period', DORA_TABLE_METRICS, series)
 
 
-def popularity_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | None:
+def popularity_table(
+    result: wambatic.stats.base.StatsResult, series: TotalSeries | None = None
+) -> PeriodTable | None:
     """Popularity by period; the footer adds up the stars and forks added and gives the last
     bucket's cumulative totals. None without popularity series."""
     if not has_popularity(result):
         return None
-    series = total_series(result)
+    series = total_series(result) if series is None else series
     partial = partial_labels(result)
     rows = tuple(
         period_row(

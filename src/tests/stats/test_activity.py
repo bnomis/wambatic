@@ -33,9 +33,11 @@ def run(
 ) -> tuple[list[wambatic.stats.base.Series], dict[str, list[dict[str, object]]]]:
     buckets = wambatic.stats.buckets.bucket_range(since, until, granularity)
     return wambatic.stats.activity.aggregate(
-        tests.fixtures.stats.ORG_COMMITS if commits is None else commits,
+        [
+            wambatic.stats.activity.DatedCommit(commit, commit.authored_at.astimezone(tz).date())
+            for commit in (tests.fixtures.stats.ORG_COMMITS if commits is None else commits)
+        ],
         buckets,
-        tz,
         settings,
         by_author=by_author,
         by_repo=by_repo,

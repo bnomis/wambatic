@@ -134,10 +134,9 @@ class Language:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class Languages:
-    """The first `limit` rows of the languages table and how many were left out."""
+    """The rows of the languages table, ending in one `Other` row when it was cut at a limit."""
 
     rows: tuple[Language, ...]
-    more: int
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -368,13 +367,21 @@ def popularity_now(result: wambatic.stats.base.StatsResult) -> PopularityNow | N
 def languages_rows(
     result: wambatic.stats.base.StatsResult, limit: int | None = None
 ) -> Languages | None:
-    """The languages table in its own order, the first `limit` rows when given; None when it is
-    empty or absent."""
+    """The languages table in its own order; None when it is empty or absent. When there are
+    more than `limit` rows, the first `limit - 1` and one `Other` row summing the rest."""
     rows = result.tables.get('languages', [])
     if not rows:
         return None
-    shown = tuple(Language(row['language'], row['bytes'], row['share']) for row in rows[:limit])
-    return Languages(shown, len(rows) - len(shown))
+    languages = [Language(row['language'], row['bytes'], row['share']) for row in rows]
+    if limit is None or len(languages) <= limit:
+        return Languages(tuple(languages))
+    rest = languages[limit - 1 :]
+    other = Language(
+        wambatic.stats.popularity.OTHER,
+        sum(language.bytes for language in rest),
+        sum(language.share for language in rest),
+    )
+    return Languages((*languages[: limit - 1], other))
 
 
 def breakdown_rows(result: wambatic.stats.base.StatsResult, kind: str) -> list[BreakdownRow] | None:

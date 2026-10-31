@@ -1,6 +1,6 @@
 # System
 
-**Version:** 1.7
+**Version:** 1.8
 **Status:** implemented
 **Date:** 2026-10-30
 
@@ -45,7 +45,7 @@ def load_settings(config_path: pathlib.Path | None, overrides: dict[str, object]
 
 ## Architecture
 
-Three layers with one-way dependencies: `reports` imports `stats`, `stats` imports `fetch`, and `fetch` imports nothing from wambatic except `settings` and `version`. `settings` and `version` are leaves: they import nothing from wambatic, and any layer may import them. No layer reaches around the one beneath it. `wambatic.cli` sits above the three as the composition root: it builds the `Cache` and `Fetcher`, syncs, calls `compute` and a renderer, so it alone imports every layer (and `wambatic.logs`).
+Three layers with one-way dependencies: `reports` imports `stats`, `stats` imports `fetch`, and `fetch` imports nothing from wambatic except `settings` and `version`. `settings` and `version` are leaves: they import nothing from wambatic, and any layer may import them. `reports` may also import `fetch` directly, for the `Fetcher`, the cache and the fetch errors it presents (reports spec, review 3 choice 2); `stats` never imports `reports`, and `fetch` never imports `stats` or `reports`. `wambatic.cli` sits above the three as the composition root: it builds the `Cache` and `Fetcher`, syncs, calls `compute` and a renderer (and uses `wambatic.logs`).
 
 ```text
 GitHub GraphQL / REST
@@ -78,7 +78,7 @@ Rules that hold across the system:
 Errors are typed in the layer that detects them and presented only at the edge:
 
 - `settings` raises `SettingsError`.
-- `fetch` raises `AuthError`, `NotFoundError`, `RateLimitError`, `StatsPendingError`, `GraphQLError`, `CacheVersionError`, all subclasses of `FetchError`.
+- `fetch` raises `AuthError`, `NotFoundError`, `RateLimitError`, `StatsPendingError`, `GraphQLError`, `CacheVersionError`, `CacheError`, `InvalidRequestError`, all subclasses of `FetchError`.
 - `stats` raises `InvalidRangeError`, `InvalidRequestError`, `UnknownGroupError`, `EmptySubjectError`, all subclasses of `StatsError`.
 - `reports` raises `UsageError`, `OutputError` and `ServeError`, all `ReportsError`s, and converts all of the above once, in `cli.main` (exit status 1, or 2 for `UsageError` and `SettingsError`) and in the web app's error middleware (HTTP 400, 404, 502 or 500, as the reports spec lists).
 - Unexpected exceptions propagate and are logged with `loguru.logger.exception`.
@@ -89,7 +89,7 @@ Errors are typed in the layer that detects them and presented only at the edge:
 
 **Build order.** The sequence of steps, with deliverables, dependencies and done criteria, is in [Implementation order](../implementation-order.md).
 
-**Testing.** Unit tests run on recorded fixture responses and never touch the network. One opt-in integration test, skipped without `GITHUB_TOKEN`, fetches a small public repository and checks line totals against the REST `stats/code_frequency` endpoint. Tests are scoped to changed modules, as the shared rules require.
+**Testing.** Unit tests run on recorded fixture responses and never touch the network. The opt-in live tests, skipped without `GITHUB_TOKEN`, fetch a small public repository and check line totals against the REST `stats/code_frequency` endpoint, and read its star events and forks. Tests are scoped to changed modules, as the shared rules require.
 
 **Limits accepted for the first release.** Default-branch history only; line counts are not filtered for generated files; one timezone per report; GitHub Enterprise Server is out of scope.
 
@@ -97,10 +97,10 @@ Errors are typed in the layer that detects them and presented only at the edge:
 
 Layered, later wins: built-in defaults, `~/.config/wambatic/config.json`, command-line flags. Component settings are defined in the component specs under the `fetch.`, `stats.` and `report.` prefixes. The token is never a setting: it is read from the environment only. The two environment variables the system reads are:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `GITHUB_TOKEN` | none | API token |
-| `WAMBATIC_CONFIG` | `~/.config/wambatic/config.json` | Config file path |
+| Variable | Type | Default | Description |
+|----------|------|---------|-------------|
+| `GITHUB_TOKEN` | string | none | API token |
+| `WAMBATIC_CONFIG` | path | `~/.config/wambatic/config.json` | Config file path |
 
 **Config file.** A JSON object with optional `fetch`, `stats` and `report` objects whose keys are the setting names without their prefix, for example `{"fetch": {"workers": 8}}`. The file is chosen as `config_path`, else `WAMBATIC_CONFIG`, else the default path. A missing default file means built-in defaults; a missing file named by `config_path` or `WAMBATIC_CONFIG` raises `SettingsError`.
 
@@ -110,7 +110,7 @@ Layered, later wins: built-in defaults, `~/.config/wambatic/config.json`, comman
 
 **Errors.** An unknown section or key, a token-like key among them, a value of the wrong type, a malformed duration or a value outside a `Literal` set raises `SettingsError`. The message names the key and, for a `Literal`, the allowed values; it never echoes the value, so a token put in the wrong place is not repeated in logs.
 
-**Version identity.** `src/wambatic/version.py` defines `VERSION`, read once from the installed package metadata. The cache identity and `StatsResult.provenance` both take the version from it.
+**Version identity.** `src/wambatic/version.py` defines `VERSION`, read once by `package_version()` from the installed package metadata (`UNKNOWN_VERSION` when the source tree was never installed). The cache identity and `StatsResult.provenance` both take the version from it.
 
 ## External dependencies
 

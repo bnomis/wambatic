@@ -526,7 +526,7 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 ## Task 14: Bring the specs, README and AGENTS.md in line, and fix the two behaviour rows
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** medium
 **Source Reference:** F9 (Doc4), F10 (Doc5), F11 (Doc1-Doc3), F18 (D2), F19 (spec review)
@@ -535,26 +535,26 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 **Subtasks:**
 
-- [ ] F9 code: `fetch/cache.py:911` `inspect_cache` opens `file:<path>?mode=ro` with `uri=True`; test that `cache info` leaves the file's modification time unchanged
-- [ ] F9 specs: fix each stale Doc4 row of review-1 (`system/spec.md:48`, `:83`, `:92`; `reports/spec.md:19`, `:117`, `:208-209`, `:213`; `fetch-and-cache/spec.md:365`, `:396`, `:426`, `:448`; `stats/spec.md:122`, `:134`, `:138`, `:213`, `:217`); amend `stats/spec.md:174` to measure the failure window to the end of the range and `fetch-and-cache/spec.md:436` to treat a `FORBIDDEN` on any page as hidden (both chosen 2026-10-31)
-- [ ] F10 code: the Languages table (`reports/terminal.py:312-333`) and chart (`reports/figures.py:525-527`) show the top `TOP_LANGUAGES_SHOWN - 1` languages and then one `Other` row summing the rest, whenever there are more than `TOP_LANGUAGES_SHOWN`; tests for 9, 10 and 11 languages
-- [ ] F10 README: Trends only with more than one period (`README.md:41`); the Languages cap and the `Other` row (`:172`); `-h/--help` and `--completion` in the global options table (`:222-227`)
-- [ ] F11: add a Layout section (`src/wambatic/{fetch,stats,reports}`, `src/tests`, `bin`, `agents/specs`, `agents/tasks`, `agents/audit-reviews`) and a Tools section (runtime: aiohttp, cappa, fastapi, loguru, plotly, rich, uvicorn; dev: hypothesis, httpx, mypy, playwright, pre-commit, pytest, ruff; uv) to `AGENTS.md`; say in AGENTS.md that `git submodule update --init` must run before the hooks work; `pyproject.toml` `readme = 'README.md'`; `README.md:325` points contributors at AGENTS.md for the layout and at `.agents` for the shared rules
-- [ ] F18: no change (dev tools are declared so `uv sync` installs them)
-- [ ] F19: add a Type column to `system/spec.md:100-103`; in `implementation-order.md` link step 1's task list, link the specs of steps 6, 8 and 10, and put step 9's detail before step 10's
-- [ ] Add every public function the earlier tasks added or renamed to the API sections of the specs (at least `service.redact_error`, from Task 2, and the Task 8 renames)
-- [ ] Bump the minor version of each spec changed, citing review-1
+- [x] F9 code: `fetch/cache.py:911` `inspect_cache` opens `file:<path>?mode=ro` with `uri=True`; test that `cache info` leaves the file's modification time unchanged
+- [x] F9 specs: fix each stale Doc4 row of review-1 (`system/spec.md:48`, `:83`, `:92`; `reports/spec.md:19`, `:117`, `:208-209`, `:213`; `fetch-and-cache/spec.md:365`, `:396`, `:426`, `:448`; `stats/spec.md:122`, `:134`, `:138`, `:213`, `:217`); amend `stats/spec.md:174` to measure the failure window to the end of the range and `fetch-and-cache/spec.md:436` to treat a `FORBIDDEN` on any page as hidden (both chosen 2026-10-31)
+- [x] F10 code: the Languages table (`reports/terminal.py:312-333`) and chart (`reports/figures.py:525-527`) show the top `TOP_LANGUAGES_SHOWN - 1` languages and then one `Other` row summing the rest, whenever there are more than `TOP_LANGUAGES_SHOWN`; tests for 9, 10 and 11 languages
+- [x] F10 README: Trends only with more than one period (`README.md:41`); the Languages cap and the `Other` row (`:172`); `-h/--help` and `--completion` in the global options table (`:222-227`)
+- [x] F11: add a Layout section (`src/wambatic/{fetch,stats,reports}`, `src/tests`, `bin`, `agents/specs`, `agents/tasks`, `agents/audit-reviews`) and a Tools section (runtime: aiohttp, cappa, fastapi, loguru, plotly, rich, uvicorn; dev: hypothesis, httpx, mypy, playwright, pre-commit, pytest, ruff; uv) to `AGENTS.md`; say in AGENTS.md that `git submodule update --init` must run before the hooks work; `pyproject.toml` `readme = 'README.md'`; `README.md:325` points contributors at AGENTS.md for the layout and at `.agents` for the shared rules
+- [x] F18: no change (dev tools are declared so `uv sync` installs them)
+- [x] F19: add a Type column to `system/spec.md:100-103`; in `implementation-order.md` link step 1's task list, link the specs of steps 6, 8 and 10, and put step 9's detail before step 10's
+- [x] Add every public function the earlier tasks added or renamed to the API sections of the specs (at least `service.redact_error`, from Task 2, and the Task 8 renames)
+- [x] Bump the minor version of each spec changed, citing review-1
 
 **Acceptance Criteria:**
 
-- [ ] Each Doc4 and Doc5 row of review-1 is fixed (checked one by one against the code)
-- [ ] `cache info` on a read-only cache file succeeds
+- [x] Each Doc4 and Doc5 row of review-1 is fixed (checked one by one against the code)
+- [x] `cache info` on a read-only cache file succeeds
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/fetch/test_cache.py src/tests/reports/test_terminal.py src/tests/reports/test_figures.py src/tests/reports/test_rows.py src/tests/test_cli.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/fetch/test_cache.py src/tests/reports/test_terminal.py src/tests/reports/test_figures.py src/tests/reports/test_rows.py src/tests/test_cli.py` passes
 
 **Notes:**
 

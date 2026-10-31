@@ -383,18 +383,44 @@ def test_popularity_now_of_one_repository_has_no_total(
     assert now.total is None
 
 
-def test_languages_rows_cut_at_the_limit_and_count_what_is_left(
+def test_languages_rows_keep_everything_up_to_the_limit(
     popularity_result: wambatic.stats.base.StatsResult,
 ) -> None:
     everything = wambatic.reports.rows.languages_rows(popularity_result)
     assert everything is not None
     assert [row.language for row in everything.rows] == list(tests.fixtures.stats.LANGUAGES_BY_SIZE)
-    assert everything.more == 0
+    exact = wambatic.reports.rows.languages_rows(popularity_result, len(everything.rows))
+    assert exact == everything
+    assert wambatic.reports.rows.TOP_LANGUAGES_SHOWN == 10
+
+
+def test_languages_rows_cut_at_the_limit_end_in_one_other_row(
+    popularity_result: wambatic.stats.base.StatsResult,
+) -> None:
     cut = wambatic.reports.rows.languages_rows(popularity_result, 3)
     assert cut is not None
-    assert [row.language for row in cut.rows] == ['Python', 'Go', 'Shell']
-    assert cut.more == 1
-    assert wambatic.reports.rows.TOP_LANGUAGES_SHOWN == 10
+    assert [row.language for row in cut.rows] == ['Python', 'Go', 'Other']
+    assert cut.rows[-1].bytes == 1000 + 500
+
+
+@pytest.mark.parametrize('count', [9, 10, 11])
+def test_languages_rows_never_exceed_the_limit(
+    popularity_result: wambatic.stats.base.StatsResult, count: int
+) -> None:
+    many = [
+        {'language': f'L{n:02d}', 'bytes': 100 - n, 'share': (100 - n) / 1000} for n in range(count)
+    ]
+    result = dataclasses.replace(popularity_result, tables={'languages': many})
+    shown = wambatic.reports.rows.languages_rows(result, wambatic.reports.rows.TOP_LANGUAGES_SHOWN)
+    assert shown is not None
+    names = [row.language for row in shown.rows]
+    if count <= wambatic.reports.rows.TOP_LANGUAGES_SHOWN:
+        assert names == [row['language'] for row in many]
+    else:
+        assert names[:-1] == [f'L{n:02d}' for n in range(9)]
+        assert names[-1] == 'Other'
+        assert shown.rows[-1].bytes == sum(100 - n for n in range(9, count))
+        assert len(names) == wambatic.reports.rows.TOP_LANGUAGES_SHOWN
 
 
 def test_there_are_no_popularity_rows_without_the_group(

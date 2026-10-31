@@ -340,8 +340,6 @@ def render_popularity(
         )
     console.print()
     console.print(table)
-    if languages.more:
-        console.print(rich.text.Text(f'and {languages.more} more'))
 
 
 def render_terminal(result: wambatic.stats.base.StatsResult, console: rich.console.Console) -> None:

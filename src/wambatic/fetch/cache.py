@@ -793,7 +793,7 @@ def inspect_cache(path: pathlib.Path) -> CacheInfo | None:
 def read_cache_info(path: pathlib.Path) -> CacheInfo | None:
     if not path.exists():
         return None
-    connection = sqlite3.connect(path)
+    connection = sqlite3.connect(f'{path.resolve().as_uri()}?mode=ro', uri=True)
     try:
         tables = {
             name

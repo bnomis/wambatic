@@ -1051,6 +1051,18 @@ def test_inspect_cache_of_a_missing_path_is_none_and_creates_nothing(
     assert not cache_path.parent.exists()
 
 
+def test_inspect_cache_leaves_the_file_unchanged_and_reads_a_read_only_file(
+    stats_cache_path: pathlib.Path,
+) -> None:
+    before = stats_cache_path.stat().st_mtime_ns
+    stats_cache_path.chmod(0o444)
+    try:
+        assert wambatic.fetch.cache.inspect_cache(stats_cache_path) is not None
+    finally:
+        stats_cache_path.chmod(0o644)
+    assert stats_cache_path.stat().st_mtime_ns == before
+
+
 def test_inspect_cache_reports_counts_identity_and_latest_sync(
     stats_cache_path: pathlib.Path,
 ) -> None:

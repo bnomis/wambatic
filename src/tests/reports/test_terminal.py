@@ -613,7 +613,7 @@ def test_the_languages_table_gives_shares_as_percentages_with_one_decimal(
     ]
 
 
-def test_languages_beyond_the_limit_are_counted_in_an_and_more_line(
+def test_languages_beyond_the_limit_end_in_one_other_row(
     stats_fetcher: wambatic.fetch.base.Fetcher,
 ) -> None:
     result = recompute(stats_fetcher, groups=tests.fixtures.stats.GROUP_POPULARITY)
@@ -623,8 +623,9 @@ def test_languages_beyond_the_limit_are_counted_in_an_and_more_line(
     output = render(dataclasses.replace(result, tables={**result.tables, 'languages': many}))
     shown = table_lines(output, 'Languages')[2:]
     assert len(shown) == wambatic.reports.rows.TOP_LANGUAGES_SHOWN
-    assert shown[-1].split()[0] == 'L09'
-    assert 'and 4 more' in output
+    assert shown[-2].split()[0] == 'L08'
+    assert shown[-1].split()[0] == 'Other'
+    assert 'more' not in shown[-1]
 
 
 def test_an_empty_languages_table_prints_no_languages_section(

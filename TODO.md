@@ -30,3 +30,5 @@ the change to `agents/audit-reviews/summary.md`, under its checker changes, so
 the next audit's convergence note accounts for it.
 Re-run with `pre-commit run auditme-all --hook-stage manual --all-files` once
 the hooks are adopted, or `python3 ~/.claude/skills/auditme/checks/audit.py .`.
+
+Spec: agents/audit-reviews/review-2.md (G2); tasks: agents/tasks/audit-reviews/tasks-2.md.

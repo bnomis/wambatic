@@ -597,7 +597,7 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 - [x] `pre-commit run --hook-stage pre-push --all-files` passes
 - [x] `bin/audit-check.sh` exits 0
 - [x] `pytest -m 'not slow and not live and not browser'` passes: the list changes every source package, so every test module imports a changed module (this is the importer set, not a routine full run)
-- [ ] `pytest -m browser` passes
+- [x] `pytest -m browser` passes (operator session, 2026-10-31: Chromium installed with `playwright install chromium`; 8 passed)
 
 **Notes:**
 

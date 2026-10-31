@@ -565,7 +565,7 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 ## Task 15: Turn on the audit gates and close the audit
 
-**Status:** todo
+**Status:** in-progress
 **Priority:** high
 **Complexity:** medium
 **Source Reference:** user request of 2026-10-31 (gates: pre-push and CI with a deploy key); review-1 steps 8b and the audit's convergence rule
@@ -574,7 +574,7 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 **Subtasks:**
 
-- [ ] `.pre-commit-config.yaml`: add a local hook `audit` with `entry: bin/audit-check.sh`, `language: system`, `pass_filenames: false`, `always_run: true`, `stages: [pre-push]`; set `default_install_hook_types: [pre-commit, pre-push]`; run `pre-commit install --hook-type pre-commit --hook-type pre-push`
+- [x] `.pre-commit-config.yaml`: add a local hook `audit` with `entry: bin/audit-check.sh`, `language: system`, `pass_filenames: false`, `always_run: true`, `stages: [pre-push]`; set `default_install_hook_types: [pre-commit, pre-push]`; run `pre-commit install --hook-type pre-commit --hook-type pre-push`
 - [ ] Stop the task as `blocked` until the operator has added a read-only deploy key: generate a key pair (`ssh-keygen -t ed25519 -N '' -f agents_deploy_key`), add the public half to `bnomis/agents` as a read-only deploy key, and store the private half in `bnomis/wambatic` as the Actions secret `AGENTS_DEPLOY_KEY`. Check: `gh secret list -R bnomis/wambatic` lists `AGENTS_DEPLOY_KEY`. Write these steps in the task's blocked note so the operator can follow them
 - [ ] `.github/workflows/ci.yml`: add an `audit` job that checks out with `submodules: false` (actions/checkout pinned as the other jobs are), loads `${{ secrets.AGENTS_DEPLOY_KEY }}` into an ssh-agent (webfactory/ssh-agent pinned by commit hash, or `ssh-add` from a temporary file deleted at the end of the step), fills the submodule with `git -c url."git@github.com:".insteadOf=https://github.com/ submodule update --init .agents`, then runs `uv sync --locked` and `bin/audit-check.sh`
 - [ ] Keep `.gitmodules` on `https://github.com/bnomis/agents`: Claude Code cloud sessions fill the submodule from that URL in `.claude/hooks/session-start.sh` and have no SSH key, so switching it would break them. Say in AGENTS.md that an SSH-only checkout sets `git config submodule..agents.url git@github.com:bnomis/agents.git` locally
@@ -601,4 +601,5 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 **Notes:**
 
 - Depends on Task 14
+- Blocked on the operator (checked 2026-10-31: `gh secret list` returns 403 for the available token, so the secret cannot be confirmed). Steps: run `ssh-keygen -t ed25519 -N '' -f agents_deploy_key`; add `agents_deploy_key.pub` to `bnomis/agents` as a read-only deploy key; store `agents_deploy_key` in `bnomis/wambatic` as the Actions secret `AGENTS_DEPLOY_KEY`; delete both key files; confirm with `gh secret list -R bnomis/wambatic`. Then re-run this task for the remaining subtasks.
 - The deploy key is the user's step on GitHub; this task never creates or reads a secret itself

@@ -15,6 +15,7 @@ class Canned:
     body: object | None = None
     headers: collections.abc.Mapping[str, str] = dataclasses.field(default_factory=dict)
     delay: float = 0.0
+    raw: bytes | None = None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -76,6 +77,10 @@ class ReplayServer:
             await asyncio.sleep(canned.delay)
         finally:
             self.in_flight -= 1
+        if canned.raw is not None:
+            return aiohttp.web.Response(
+                status=canned.status, headers=canned.headers, body=canned.raw
+            )
         if canned.body is None:
             return aiohttp.web.Response(status=canned.status, headers=canned.headers)
         return aiohttp.web.json_response(

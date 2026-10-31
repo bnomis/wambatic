@@ -126,9 +126,14 @@ class Recorder:
             raise RecordingError(f'{method} {url} failed: {error}') from error
 
     def graphql(self, query: str, **variables: object) -> dict[str, object]:
+        """POST a GraphQL query.
+
+        Raises:
+            RecordingError: the request fails or GitHub answers with errors.
+        """
         body, _ = self.send('POST', '/graphql', body={'query': query, 'variables': variables})
         if not isinstance(body, dict) or 'errors' in body:
-            raise RuntimeError(f'GraphQL error: {body!r}')
+            raise RecordingError(f'GraphQL error: {body!r}')
         return body
 
     def rest(self, path: str, params: dict[str, str] | None = None) -> object:
@@ -136,18 +141,27 @@ class Recorder:
 
 
 def pick(node: object, fields: tuple[str, ...]) -> dict[str, object]:
+    """The named fields of `node`.
+
+    Raises:
+        RecordingError: `node` is not an object.
+    """
     if not isinstance(node, dict):
-        raise RuntimeError(f'Expected an object, got {node!r}')
+        raise RecordingError(f'Expected an object, got {node!r}')
     return {field: node[field] for field in fields if field in node}
 
 
 def compare_commit(node: dict[str, object]) -> dict[str, object]:
-    """A compare commit trimmed to what `parse_compare_commit` reads."""
+    """A compare commit trimmed to what `parse_compare_commit` reads.
+
+    Raises:
+        RecordingError: the commit or its parents have an unexpected shape.
+    """
     commit = node['commit']
     account = node['author']
     parents = node['parents']
     if not isinstance(commit, dict) or not isinstance(parents, list):
-        raise RuntimeError(f'Unexpected compare commit: {node!r}')
+        raise RecordingError(f'Unexpected compare commit: {node!r}')
     return {
         'sha': node['sha'],
         'commit': {'author': pick(commit['author'], ('date',))},

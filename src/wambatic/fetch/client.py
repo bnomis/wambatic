@@ -245,7 +245,8 @@ class GitHubClient:
         """One request; no classification.
 
         Raises:
-            FetchError: the client is used outside `async with`.
+            FetchError: the client is used outside `async with`, or GitHub sent an OK response
+                that is not JSON.
         """
         if self.session is None:
             raise wambatic.fetch.errors.FetchError('GitHubClient must be used inside `async with`')
@@ -259,9 +260,11 @@ class GitHubClient:
             if body:
                 try:
                     data = await raw.json(content_type=None)
-                except ValueError:
+                except ValueError as error:
                     if raw.ok:
-                        raise
+                        raise wambatic.fetch.errors.FetchError(
+                            f'GitHub sent a response that is not JSON for {method} {path}'
+                        ) from error
             return Response(raw.status, raw.headers, data, raw.request_info)
 
     def update_limits(self, endpoint: str, response: Response) -> None:

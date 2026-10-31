@@ -144,3 +144,20 @@ def test_a_failing_checker_exits_2(
     monkeypatch.setattr(audit_check, 'run_checker', run_checker)
     assert audit_check.main([], root=tmp_path) == 2
     assert errors == [f'{audit_check.CHECKER} exited with status 3']
+
+
+def test_a_checker_that_cannot_run_exits_2(
+    audit_check: types.ModuleType,
+    errors: list[str],
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: pathlib.Path,
+) -> None:
+    (tmp_path / audit_check.CHECKER).parent.mkdir(parents=True)
+    (tmp_path / audit_check.CHECKER).touch()
+
+    def run_checker(root: pathlib.Path) -> subprocess.CompletedProcess[str]:
+        raise FileNotFoundError(2, 'No such file or directory', 'python3')
+
+    monkeypatch.setattr(audit_check, 'run_checker', run_checker)
+    assert audit_check.main([], root=tmp_path) == 2
+    assert errors == [f'cannot run {audit_check.CHECKER}: No such file or directory']

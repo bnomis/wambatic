@@ -320,6 +320,15 @@ def test_other_status_raises_without_retry(
     assert sleeps == []
 
 
+def test_a_non_json_ok_response_is_a_fetch_error_naming_the_endpoint(
+    make_client: tests.conftest.MakeClient,
+) -> None:
+    html = tests.fixtures.fetch.server.Canned(200, raw=b'<html>bad gateway</html>')
+    with pytest.raises(wambatic.fetch.errors.FetchError, match='not JSON for GET /repos') as info:
+        run_rest({REPO: [html]}, make_client)
+    assert isinstance(info.value.__cause__, ValueError)
+
+
 # GraphQL
 
 

@@ -66,7 +66,7 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 ## Task 2: Translate the remaining stdlib errors
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** small
 **Source Reference:** G1 (A1-A3, review-1 F2/F5), G3
@@ -75,23 +75,23 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 **Subtasks:**
 
-- [ ] `fetch/client.py:254-257`: on a `ValueError` from `raw.json()` for an OK response, raise `FetchError` naming the endpoint (`GitHub sent a response that is not JSON for ...`), chained from the `ValueError`; add a test with the fake upstream answering `200` with a non-JSON body, and check it fails on the old code
-- [ ] `version.py:10-11`: catch `OSError` and `UnicodeDecodeError` too, with the same `'0+unknown'` fallback; test each
-- [ ] `bin/audit-check.py:97`: an `OSError` from running the checker exits 2 with a one-line message naming the command; test it
-- [ ] `bin/record-fixtures.py:131`, `:140`, `:150`: raise `RecordingError` instead of `RuntimeError`; update the tests that expect `RuntimeError`
-- [ ] Add each new error to the function's `Raises:` section
+- [x] `fetch/client.py:254-257`: on a `ValueError` from `raw.json()` for an OK response, raise `FetchError` naming the endpoint (`GitHub sent a response that is not JSON for ...`), chained from the `ValueError`; add a test with the fake upstream answering `200` with a non-JSON body, and check it fails on the old code
+- [x] `version.py:10-11`: catch `OSError` and `UnicodeDecodeError` too, with the same `'0+unknown'` fallback; test each
+- [x] `bin/audit-check.py:97`: an `OSError` from running the checker exits 2 with a one-line message naming the command; test it
+- [x] `bin/record-fixtures.py:131`, `:140`, `:150`: raise `RecordingError` instead of `RuntimeError`; update the tests that expect `RuntimeError`
+- [x] Add each new error to the function's `Raises:` section
 
 **Acceptance Criteria:**
 
-- [ ] `grep -rn "raise RuntimeError\|^\s*raise$" src/wambatic bin` finds no re-raise of a stdlib error out of a translating function
-- [ ] `wambatic report` against a fake upstream returning non-JSON exits 1 with one error line and no traceback
+- [x] `grep -rn "raise RuntimeError\|^\s*raise$" src/wambatic bin` finds no re-raise of a stdlib error out of a translating function
+- [x] `wambatic report` against a fake upstream returning non-JSON exits 1 with one error line and no traceback
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `bin/audit-check.sh --path src/wambatic/fetch/client.py --path src/wambatic/version.py --path bin` exits 0
-- [ ] `pytest src/tests/fetch/test_client.py src/tests/test_version.py src/tests/test_audit_check.py src/tests/test_record_fixtures.py src/tests/test_cli.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `bin/audit-check.sh --path src/wambatic/fetch/client.py --path src/wambatic/version.py --path bin` exits 0
+- [x] `pytest src/tests/fetch/test_client.py src/tests/test_version.py src/tests/test_audit_check.py src/tests/test_record_fixtures.py src/tests/test_cli.py` passes
 
 **Notes:**
 

@@ -765,6 +765,8 @@ class Fetcher:
         self, repo: Repo, resource: str, full_synced_at: datetime.datetime | None
     ) -> SyncState:
         now = self.client.clock()
+        # A first full read (no earlier `full_synced_at`) starts the full-read clock now.
+        first_full_read = full_synced_at if full_synced_at is not None else now
         return SyncState(
             repo=repo.name_with_owner,
             resource=resource,
@@ -773,7 +775,7 @@ class Fetcher:
             pushed_at=repo.pushed_at,
             updated_at=repo.updated_at,
             synced_at=now,
-            full_synced_at=full_synced_at or now,
+            full_synced_at=first_full_read,
         )
 
     async def backfill_commits(self, repo: Repo) -> int:

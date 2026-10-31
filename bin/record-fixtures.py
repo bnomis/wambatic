@@ -311,7 +311,7 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    recorder = Recorder(wambatic.fetch.auth.resolve_token())
+    recorder = Recorder(wambatic.fetch.auth.fetch_token())
     recorded_at = datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
     try:
         write_fixtures(module_text(recorded_at, record(recorder)), args.out)

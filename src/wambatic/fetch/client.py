@@ -5,6 +5,7 @@ import datetime
 import email.utils
 import random
 import re
+import typing
 
 import aiohttp
 import loguru
@@ -302,6 +303,8 @@ class GitHubClient:
         """
         if self.settings.on_rate_limit == 'fail':
             raise wambatic.fetch.errors.RateLimitError(reset_at)
+        if self.settings.on_rate_limit != 'wait':
+            typing.assert_never(self.settings.on_rate_limit)
         wait = (reset_at - self.clock()).total_seconds() + 1
         self.logger.info(
             f'ETA: GitHub rate limit resets in {datetime.timedelta(seconds=round(wait))}'

@@ -26,13 +26,13 @@ def test_environment_token_wins(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(subprocess, 'run', fail)
     monkeypatch.setenv('GITHUB_TOKEN', '  env-token \n')
-    assert wambatic.fetch.auth.resolve_token() == 'env-token'
+    assert wambatic.fetch.auth.fetch_token() == 'env-token'
 
 
 def test_blank_environment_falls_through_to_gh(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv('GITHUB_TOKEN', '   ')
     fake_run(monkeypatch, stdout='gh-token\n')
-    assert wambatic.fetch.auth.resolve_token() == 'gh-token'
+    assert wambatic.fetch.auth.fetch_token() == 'gh-token'
 
 
 @pytest.mark.parametrize(
@@ -44,7 +44,7 @@ def test_gh_failure_or_empty_raises(
 ) -> None:
     fake_run(monkeypatch, stdout=stdout, stderr='secret-err', code=code)
     with pytest.raises(wambatic.fetch.errors.AuthError) as info:
-        wambatic.fetch.auth.resolve_token()
+        wambatic.fetch.auth.fetch_token()
     assert 'secret-out' not in str(info.value)
     assert 'secret-err' not in str(info.value)
     assert str(info.value) == wambatic.fetch.errors.NO_TOKEN_MESSAGE
@@ -60,7 +60,7 @@ def test_gh_missing_or_timeout_raises(monkeypatch: pytest.MonkeyPatch, exc: Exce
 
     monkeypatch.setattr(subprocess, 'run', run)
     with pytest.raises(wambatic.fetch.errors.AuthError):
-        wambatic.fetch.auth.resolve_token()
+        wambatic.fetch.auth.fetch_token()
 
 
 def test_a_gh_that_cannot_be_executed_raises_auth_error(
@@ -71,7 +71,7 @@ def test_a_gh_that_cannot_be_executed_raises_auth_error(
     gh.chmod(0o644)
     monkeypatch.setenv('PATH', str(tmp_path))
     with pytest.raises(wambatic.fetch.errors.AuthError) as info:
-        wambatic.fetch.auth.resolve_token()
+        wambatic.fetch.auth.fetch_token()
     assert str(info.value) == wambatic.fetch.errors.NO_TOKEN_MESSAGE
 
 
@@ -81,7 +81,7 @@ def test_gh_output_that_is_not_text_raises_auth_error(monkeypatch: pytest.Monkey
 
     monkeypatch.setattr(subprocess, 'run', run)
     with pytest.raises(wambatic.fetch.errors.AuthError):
-        wambatic.fetch.auth.resolve_token()
+        wambatic.fetch.auth.fetch_token()
 
 
 def test_redact_known_pair() -> None:

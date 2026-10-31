@@ -268,12 +268,14 @@ async def run_report(
         )
     finally:
         cache.close()
-    if as_html:
+    if settings.report.format == 'html':
         render_html_report(report, settings, subject, results, stdout)
     elif settings.report.format == 'json':
         wambatic.reports.base.render_json(results[0], stdout)
-    else:
+    elif settings.report.format == 'terminal':
         wambatic.reports.terminal.render_terminal(results[0], console)
+    else:
+        typing.assert_never(settings.report.format)
 
 
 def cache_info_table(info: wambatic.fetch.cache.CacheInfo) -> rich.table.Table:
@@ -324,6 +326,8 @@ def run_cache(
         else:
             console.print(cache_info_table(info))
         return
+    if command.action != 'clear':
+        typing.assert_never(command.action)
     removed = wambatic.fetch.cache.clear_cache(path)
     for deleted in removed:
         loguru.logger.info(f'Removed {deleted}')

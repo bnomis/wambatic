@@ -324,6 +324,8 @@ def trace_json(
             'marker': {'pattern': {'shape': ['/' if flag else '' for flag in partial]}},
             'meta': {'slot': trace.slot},
         }
+    if trace.kind != 'line':
+        typing.assert_never(trace.kind)
     return {
         'type': 'scatter',
         'mode': 'lines+markers',

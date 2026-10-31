@@ -54,6 +54,12 @@ class StatsRequest:
         default_factory=wambatic.settings.StatsSettings
     )
 
+    def __post_init__(self) -> None:
+        if str(self.tz) != self.settings.timezone:
+            raise wambatic.stats.errors.InvalidRequestError(
+                f'tz {str(self.tz)!r} differs from settings.timezone {self.settings.timezone!r}'
+            )
+
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class StatsResult:

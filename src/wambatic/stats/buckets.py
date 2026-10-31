@@ -67,8 +67,10 @@ def label(start: datetime.date, granularity: wambatic.stats.base.Granularity) ->
             return f'{iso.year:04d}-W{iso.week:02d}'
         case wambatic.stats.base.Granularity.DAY:
             return start.isoformat()
-        case _:
+        case wambatic.stats.base.Granularity.TOTAL:
             return 'total'
+        case _:
+            typing.assert_never(granularity)
 
 
 def bucket_for(

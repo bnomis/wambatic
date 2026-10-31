@@ -344,7 +344,7 @@ def make_app(
         reader = wambatic.reports.service.make_fetcher('', cache, settings.fetch)
         provenance = await reader.provenance(subject, resources)
         return wambatic.reports.service.needs_sync(
-            provenance, resources, settings.fetch, False, False, clock()
+            provenance, resources, settings.fetch, full_refresh=False, no_fetch=False, now=clock()
         )
 
     async def compute(

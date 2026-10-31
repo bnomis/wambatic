@@ -205,7 +205,7 @@ async def sync_target(
     async with contextlib.AsyncExitStack() as stack:
         online: wambatic.fetch.base.Fetcher | None = None
         if isinstance(target, str):
-            token = await asyncio.to_thread(wambatic.fetch.auth.resolve_token)
+            token = await asyncio.to_thread(wambatic.fetch.auth.fetch_token)
             online = await stack.enter_async_context(make_fetcher(token, cache, settings.fetch))
             subject = wambatic.fetch.base.Subject(await online.owner_kind(target), target)
             if request.by_author:
@@ -223,7 +223,7 @@ async def sync_target(
             )
         if sync:
             if online is None:
-                token = await asyncio.to_thread(wambatic.fetch.auth.resolve_token)
+                token = await asyncio.to_thread(wambatic.fetch.auth.fetch_token)
                 online = await stack.enter_async_context(make_fetcher(token, cache, settings.fetch))
             if progress is None:
                 report = await online.sync(subject, resources, full_refresh=full_refresh)

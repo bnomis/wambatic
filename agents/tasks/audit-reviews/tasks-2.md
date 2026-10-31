@@ -201,7 +201,7 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 ## Task 6: One timezone owner, exhaustive splits and honest names
 
-**Status:** todo
+**Status:** done
 **Priority:** low
 **Complexity:** medium
 **Source Reference:** G4 (A5), G5 (A9, A11, A13)
@@ -210,21 +210,21 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 **Subtasks:**
 
-- [ ] G4: `StatsRequest.__post_init__` raises the stats `InvalidRequestError` when `str(tz)` differs from `settings.timezone`; test it; fix any caller the check catches
-- [ ] G5 A11: end each split review-2 names (`cli.py:271`, `:320`, `fetch/client.py:293`, `stats/buckets.py:70`, `reports/figures.py:318`) with an explicit last branch and `typing.assert_never`
-- [ ] G5 A13: pass `full_refresh` and `no_fetch` by keyword at `reports/web.py:345`; in `fetch/base.py:766` `new_state`, name the fallback (`full_synced_at if full_synced_at is not None else now`) with a comment saying a first full read starts the full-read clock
-- [ ] G5 A9: rename `fetch/cache.py` `check_identity` to `record_identity` and `fetch/auth.py` `resolve_token` to `fetch_token`, with every caller, test and spec mention; leave the tz lookups (`resolve_tz`, `build_request`, `parse_query`), `compute_all` and `check_host_header` as they are (library reads of package data, or names the spec defines)
+- [x] G4: `StatsRequest.__post_init__` raises the stats `InvalidRequestError` when `str(tz)` differs from `settings.timezone`; test it; fix any caller the check catches
+- [x] G5 A11: end each split review-2 names (`cli.py:271`, `:320`, `fetch/client.py:293`, `stats/buckets.py:70`, `reports/figures.py:318`) with an explicit last branch and `typing.assert_never`
+- [x] G5 A13: pass `full_refresh` and `no_fetch` by keyword at `reports/web.py:345`; in `fetch/base.py:766` `new_state`, name the fallback (`full_synced_at if full_synced_at is not None else now`) with a comment saying a first full read starts the full-read clock
+- [x] G5 A9: rename `fetch/cache.py` `check_identity` to `record_identity` and `fetch/auth.py` `resolve_token` to `fetch_token`, with every caller, test and spec mention; leave the tz lookups (`resolve_tz`, `build_request`, `parse_query`), `compute_all` and `check_host_header` as they are (library reads of package data, or names the spec defines)
 
 **Acceptance Criteria:**
 
-- [ ] `mypy src` passes and would fail if a member were added to any of those `Literal`s or enums (check once by adding one locally)
+- [x] `mypy src` passes and would fail if a member were added to any of those `Literal`s or enums (check once by adding one locally)
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `bin/audit-check.sh --path src/wambatic` exits 0
-- [ ] `pytest src/tests/stats src/tests/test_cli.py src/tests/fetch src/tests/reports/test_web.py src/tests/reports/test_figures.py src/tests/reports/test_service.py` passes
+- [x] `source bin/activate.sh` succeeds (not run: the sandbox refused `source`; the checks ran through `.venv/bin`)
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `bin/audit-check.sh --path src/wambatic` exits 0
+- [x] `pytest src/tests/stats src/tests/test_cli.py src/tests/fetch src/tests/reports/test_web.py src/tests/reports/test_figures.py src/tests/reports/test_service.py` passes
 
 **Notes:**
 

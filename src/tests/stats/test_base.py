@@ -1,5 +1,6 @@
 import dataclasses
 import datetime
+import zoneinfo
 
 import pytest
 
@@ -32,6 +33,16 @@ def test_a_default_request_is_monthly_activity_and_flow_in_utc() -> None:
     assert request.by_author is False
     assert request.tz is datetime.UTC
     assert request.settings == wambatic.settings.StatsSettings()
+
+
+def test_a_request_whose_zone_differs_from_its_settings_is_refused() -> None:
+    with pytest.raises(wambatic.stats.errors.InvalidRequestError, match='Europe/Berlin'):
+        wambatic.stats.base.StatsRequest(tz=zoneinfo.ZoneInfo('Europe/Berlin'))
+    request = wambatic.stats.base.StatsRequest(
+        tz=zoneinfo.ZoneInfo('Europe/Berlin'),
+        settings=wambatic.settings.StatsSettings(timezone='Europe/Berlin'),
+    )
+    assert str(request.tz) == request.settings.timezone
 
 
 def test_a_request_is_hashable() -> None:

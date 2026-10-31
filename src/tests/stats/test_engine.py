@@ -39,6 +39,9 @@ def request(**changes: object) -> Request:
         'groups': ACTIVITY,
     }
     fields.update(changes)
+    tz = fields.get('tz')
+    if tz is not None and 'settings' not in fields:
+        fields['settings'] = wambatic.settings.StatsSettings(timezone=str(tz))
     return Request(**fields)  # type: ignore[arg-type]
 
 

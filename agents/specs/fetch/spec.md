@@ -15,7 +15,7 @@ Fetches raw data about a GitHub user, repository or organisation and hands it to
 | Module | Holds | Built in implementation step |
 |--------|-------|------------------------------|
 | `errors.py` | `FetchError` and every typed error below | 2 (`CacheVersionError` in 3) |
-| `auth.py` | `resolve_token`, `redact` | 2 |
+| `auth.py` | `fetch_token`, `redact` | 2 |
 | `ratelimit.py` | `RateLimitState`, `backoff_delay` | 2 |
 | `client.py` | `GitHubClient`, `RestResponse`: the aiohttp transport | 2 |
 | `queries.py` | GraphQL query texts | 2 (first query), 3 onwards |
@@ -232,7 +232,7 @@ class Fetcher:
     async def forks(self, repo: Repo) -> typing.AsyncIterator[Fork]:
         """From the cache: the repo's direct forks, oldest `created_at` first (then `id`), all of them."""
 
-def resolve_token() -> str:
+def fetch_token() -> str:
     """GITHUB_TOKEN from the environment, else `gh auth token`; raises AuthError if neither."""
 
 def redact(text: str, token: str) -> str:

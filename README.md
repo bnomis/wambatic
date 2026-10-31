@@ -325,3 +325,35 @@ Each failure prints one line to stderr that says what to do, such as setting `GI
 ## More
 
 The design is in [the system spec](agents/specs/system/spec.md), [fetch and cache](agents/specs/fetch-and-cache/spec.md), [stats](agents/specs/stats/spec.md) and [reports](agents/specs/reports/spec.md); the order of work is in [the implementation order](agents/specs/implementation-order.md). Contributors: the project layout, tools and checks are in [AGENTS.md](AGENTS.md), and the shared rules are in the `.agents` submodule.
+
+## Updating the shared rules
+
+The shared rules, skills and audit checker come from the [agents](https://github.com/bnomis/agents) repository, pinned as the git submodule `.agents`. The pin means the pre-push hook, CI and an audit all run the same checker, and a checker change reaches this project only when the pointer is moved on purpose.
+
+To move it to the latest `agents` commit:
+
+1. Push the change in `agents` first: the update fetches from GitHub, not from a local clone.
+
+   ```shell
+   git -C ~/src/agents push
+   ```
+
+2. Move the submodule to the tip of agents' `main`, or pin a particular commit:
+
+   ```shell
+   git submodule update --remote .agents
+   # or: git -C .agents fetch && git -C .agents checkout <commit>
+   ```
+
+3. Check it, then commit the new pointer:
+
+   ```shell
+   git submodule status    # the new commit, with no leading + or -
+   bin/audit-check.sh      # a newer checker may report hits in unchanged code
+   git add .agents
+   git commit -m "chore: update agents submodule"
+   ```
+
+Run `bin/audit-check.sh` before committing the pointer: the pre-push hook runs the same check and refuses the push until every hit is fixed or accepted.
+
+After a pull, or in another checkout, `git submodule update` (without `--remote`) checks out the commit this repository records. A fresh clone needs `git submodule update --init` once; an SSH-only checkout first sets `git config submodule..agents.url git@github.com:bnomis/agents.git`, since `.gitmodules` keeps the HTTPS URL for Claude Code cloud sessions.

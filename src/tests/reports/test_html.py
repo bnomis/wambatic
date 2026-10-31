@@ -8,19 +8,21 @@ import pathlib
 import re
 import stat
 import string
-import typing
 
 import plotly.offline
 import pytest
 
 import tests.conftest
+import tests.fixtures.reports
 import tests.fixtures.stats
 import wambatic.fetch.base
 import wambatic.reports.errors
 import wambatic.reports.figures
 import wambatic.reports.html
+import wambatic.settings
 import wambatic.stats.base
 
+PERIOD_NAMES = ('day', 'month', 'week', 'year')
 HOSTILE = '<b>&"\'</script>'
 
 
@@ -107,15 +109,11 @@ def test_the_figures_of_every_granularity_are_in_the_embedded_data(
     data = json.loads(page.data)
     assert data['initial'] == 'month'
     assert data['theme'] == 'dark'
-    assert sorted(data['periods']) == ['day', 'month', 'week', 'year']
+    assert sorted(data['periods']) == list(PERIOD_NAMES)
     months = data['periods']['month'][0]['data'][0]['x']
     assert months == list(tests.fixtures.stats.LABELS)
     assert data['calendar']['key'] == 'activity-calendar'
-    assert [f['key'] for f in data['range']] == [
-        'activity-top-contributors',
-        'activity-by-repository',
-        'activity-by-author',
-    ]
+    assert [f['key'] for f in data['range']] == list(tests.fixtures.reports.RANGE_FIGURE_KEYS)
     assert data['palette']['light']['categorical'] == ['#2a78d6', '#eb6834', '#1baf7a']
     assert set(data['palette']) == {'light', 'dark'}
 
@@ -130,10 +128,10 @@ def test_period_tables_appear_once_per_granularity_with_only_the_initial_one_vis
         granularity = table['data-granularity']
         assert granularity is not None
         seen.setdefault(granularity, []).append('hidden' if 'hidden' in table else None)
-    assert sorted(seen) == ['day', 'month', 'week', 'year']
+    assert sorted(seen) == list(PERIOD_NAMES)
     assert all(len(hidden) == 3 for hidden in seen.values())  # activity, flow, flow times
     visible = {g for g, hidden in seen.items() if hidden[0] is None}
-    assert visible == {'month'}
+    assert visible == tests.fixtures.reports.MONTH_ONLY
     assert all(h is None for h in seen['month'])
     assert all(h == 'hidden' for g, hidden in seen.items() if g != 'month' for h in hidden)
     other = Page(
@@ -352,7 +350,7 @@ def test_a_result_for_another_subject_or_groups_is_refused(
             'auto',
         )
     groups = dataclasses.replace(
-        day, request=dataclasses.replace(day.request, groups=frozenset({'activity'}))
+        day, request=dataclasses.replace(day.request, groups=tests.fixtures.stats.GROUP_ACTIVITY)
     )
     with pytest.raises(wambatic.reports.errors.UsageError, match='request groups'):
         wambatic.reports.html.html_document(
@@ -384,7 +382,7 @@ def test_a_result_filed_under_the_wrong_granularity_is_refused(
 )
 def test_each_theme_sets_data_theme_on_the_html_element_as_it_should(
     org_report: wambatic.reports.html.HtmlReport,
-    theme: typing.Literal['auto', 'dark', 'light'],
+    theme: wambatic.settings.Theme,
     attribute: str | None,
 ) -> None:
     page = Page(wambatic.reports.html.html_document(org_report, theme))
@@ -471,7 +469,9 @@ def test_render_html_writes_the_document_and_returns_the_path(
     assert out.read_text(encoding='utf-8') == wambatic.reports.html.html_document(
         org_report, 'light'
     )
-    assert sorted(path.name for path in out.parent.iterdir()) == ['report.html']
+    assert sorted(path.name for path in out.parent.iterdir()) == list(
+        tests.fixtures.reports.REPORT_FILES
+    )
     assert stat.S_IMODE(out.stat().st_mode) == 0o644
 
 
@@ -519,7 +519,7 @@ def test_a_failed_move_leaves_the_file_as_it_was_and_no_temporary_file(
         with pytest.raises(wambatic.reports.errors.OutputError, match='no space left'):
             wambatic.reports.html.render_html(org_report, out, 'auto')
     assert out.read_text() == 'earlier'
-    assert [path.name for path in directory.iterdir()] == ['report.html']
+    assert [path.name for path in directory.iterdir()] == list(tests.fixtures.reports.REPORT_FILES)
 
 
 def test_a_bad_report_writes_nothing(

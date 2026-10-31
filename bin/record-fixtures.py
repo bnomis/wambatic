@@ -14,11 +14,11 @@ REST lists are asked for a short page (REST_PAGE), because the tests read a page
 its length.
 """
 
+import collections.abc
 import datetime
 import hashlib
 import json
 import pathlib
-import pprint
 import subprocess
 import sys
 import urllib.parse
@@ -215,6 +215,22 @@ def record(recorder: Recorder) -> dict[str, object]:
     }
 
 
+def frozen_text(value: object) -> str:
+    """The source of `value` deeply read-only: dicts become proxies and lists tuples.
+
+    Keys are sorted: the order GitHub sent them in means nothing to the tests. The wrapper at the
+    top is shallow, so each nested container is frozen too (audit rule
+    mutable-members-in-immutable-wrapper).
+    """
+    if isinstance(value, collections.abc.Mapping):
+        items = ', '.join(f'{key!r}: {frozen_text(value[key])}' for key in sorted(value))
+        return f'types.MappingProxyType({{{items}}})'
+    if isinstance(value, (list, tuple)):
+        members = ''.join(f'{frozen_text(member)}, ' for member in value)
+        return f'({members.rstrip()})'
+    return repr(value)
+
+
 def module_text(recorded_at: str, responses: dict[str, object]) -> str:
     hashes = {
         name: query_sha256(getattr(wambatic.fetch.queries, name)) for name in RECORDED_QUERIES
@@ -233,13 +249,15 @@ def module_text(recorded_at: str, responses: dict[str, object]) -> str:
         '',
         '# ruff: noqa: E501',
         '',
+        'import types',
+        '',
         f'RECORDED_AT = {recorded_at!r}',
         f'WAMBATIC_VERSION = {wambatic.version.VERSION!r}',
         '# sha256 of each wambatic.fetch.queries text the recording was made with',
-        f'QUERY_SHA256 = {pprint.pformat(hashes, width=99, sort_dicts=True)}',
+        f'QUERY_SHA256 = {frozen_text(hashes)}',
     ]
     for name, value in responses.items():
-        lines += ['', f'{name} = {pprint.pformat(value, width=99, sort_dicts=False)}']
+        lines += ['', f'{name} = {frozen_text(value)}']
     return '\n'.join(lines) + '\n'
 
 

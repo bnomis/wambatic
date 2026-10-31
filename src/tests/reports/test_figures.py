@@ -8,12 +8,13 @@ import pytest
 
 import tests.fixtures.reports
 import tests.fixtures.stats
+import tests.fixtures.thaw
 import wambatic.reports.errors
 import wambatic.reports.figures
 import wambatic.reports.rows
 import wambatic.stats.base
 
-ORDER = [
+ORDER = [  # auditme: accept[non-alphabetical-literal] the order the figures come in
     'activity-commits',
     'activity-contributors',
     'activity-active-days',
@@ -25,7 +26,7 @@ ORDER = [
     'flow-close-time',
     'flow-pr-size',
 ]
-DELIVERY_ORDER = [
+DELIVERY_ORDER = [  # auditme: accept[non-alphabetical-literal] the order the figures come in
     'delivery-runs',
     'delivery-success-rate',
     'delivery-duration',
@@ -36,7 +37,8 @@ DELIVERY_ORDER = [
     'delivery-change-failure-rate',
     'delivery-time-to-restore',
 ]
-PROXY_METRICS = ('deployments', 'lead_time', 'change_failure_rate', 'time_to_restore')
+PROXY_METRICS = ('change_failure_rate', 'deployments', 'lead_time', 'time_to_restore')
+FLOW_PREFIXES = ('issues', 'prs')
 HEX = re.compile(r'#[0-9a-f]{6}')
 
 
@@ -146,7 +148,7 @@ def test_only_the_buckets_the_provenance_names_are_hatched_or_open(
     assert symbols == {'symbol': ['circle-open', 'circle', 'circle', 'circle-open']}
     whole = wambatic.reports.figures.build_figures(org_result)
     assert traces(whole, 'activity-commits')['Commits']['marker'] == {
-        'pattern': {'shape': ['', '', '', '']}
+        'pattern': {'shape': list(tests.fixtures.reports.BLANK_SHAPES)}
     }
 
 
@@ -280,18 +282,14 @@ def test_the_builder_reproduces_the_hand_checked_figures(
 ) -> None:
     figures = {f.key: f for f in wambatic.reports.figures.build_figures(org_result)}
     for key, expected in tests.fixtures.reports.ORG_MONTH_FIGURES.items():
-        assert dataclasses.asdict(figures[key]) == expected
+        assert dataclasses.asdict(figures[key]) == tests.fixtures.thaw.thaw(expected)
 
 
 def test_the_range_figures_are_the_top_contributors_and_the_breakdowns(
     org_total_result: wambatic.stats.base.StatsResult,
 ) -> None:
     figures = wambatic.reports.figures.build_range_figures(org_total_result)
-    assert [f.key for f in figures] == [
-        'activity-top-contributors',
-        'activity-by-repository',
-        'activity-by-author',
-    ]
+    assert [f.key for f in figures] == list(tests.fixtures.reports.RANGE_FIGURE_KEYS)
     top, repos, authors = (f.data[0] for f in figures)
     assert top['y'] == [row['login'] for row in tests.fixtures.stats.ORG_TOP_CONTRIBUTORS]
     assert top['x'] == [row['commits'] for row in tests.fixtures.stats.ORG_TOP_CONTRIBUTORS]
@@ -350,7 +348,7 @@ def test_range_figures_without_activity_series_are_empty(
 ) -> None:
     flow_only = dataclasses.replace(
         org_total_result,
-        series=[s for s in org_total_result.series if s.metric.startswith(('prs', 'issues'))],
+        series=[s for s in org_total_result.series if s.metric.startswith(FLOW_PREFIXES)],
     )
     assert wambatic.reports.figures.build_range_figures(flow_only) == []
 
@@ -439,7 +437,7 @@ def test_the_calendar_needs_a_day_result_and_activity_series(
         wambatic.reports.figures.build_calendar(org_result)
     flow_only = dataclasses.replace(
         org_day_result,
-        series=[s for s in org_day_result.series if s.metric.startswith(('prs', 'issues'))],
+        series=[s for s in org_day_result.series if s.metric.startswith(FLOW_PREFIXES)],
     )
     assert wambatic.reports.figures.build_calendar(flow_only) is None
 
@@ -462,7 +460,7 @@ def test_the_delivery_figures_come_in_the_specs_order_and_belong_to_delivery(
 ) -> None:
     figures = wambatic.reports.figures.build_figures(delivery_result)
     assert [f.key for f in figures] == DELIVERY_ORDER
-    assert {f.group for f in figures} == {'delivery'}
+    assert {f.group for f in figures} == tests.fixtures.stats.GROUP_DELIVERY
     assert all(f.description.endswith('.') for f in figures)
 
 
@@ -530,7 +528,7 @@ def test_a_result_without_delivery_series_has_no_delivery_figure(
     )
 
 
-POPULARITY_ORDER = [
+POPULARITY_ORDER = [  # auditme: accept[non-alphabetical-literal] the order the figures come in
     'popularity-stars-added',
     'popularity-stars-total',
     'popularity-forks-added',
@@ -543,7 +541,7 @@ def test_the_popularity_figures_come_in_the_specs_order_and_belong_to_popularity
 ) -> None:
     figures = wambatic.reports.figures.build_figures(popularity_result)
     assert [f.key for f in figures] == POPULARITY_ORDER
-    assert {f.group for f in figures} == {'popularity'}
+    assert {f.group for f in figures} == tests.fixtures.stats.GROUP_POPULARITY
     assert all(f.description.endswith('.') for f in figures)
 
 

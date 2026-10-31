@@ -295,7 +295,7 @@ def delivery_result(stats_fetcher: wambatic.fetch.base.Fetcher) -> wambatic.stat
     request = wambatic.stats.base.StatsRequest(
         since=tests.fixtures.stats.SINCE,
         until=tests.fixtures.stats.UNTIL,
-        groups=frozenset({'delivery'}),
+        groups=tests.fixtures.stats.GROUP_DELIVERY,
     )
     return run_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
 
@@ -308,7 +308,7 @@ def popularity_result(
     request = wambatic.stats.base.StatsRequest(
         since=tests.fixtures.stats.SINCE,
         until=tests.fixtures.stats.UNTIL,
-        groups=frozenset({'popularity'}),
+        groups=tests.fixtures.stats.GROUP_POPULARITY,
     )
     return run_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
 
@@ -350,7 +350,7 @@ def popularity_total(
         granularity=wambatic.stats.base.Granularity.TOTAL,
         since=tests.fixtures.stats.SINCE,
         until=tests.fixtures.stats.UNTIL,
-        groups=frozenset({'popularity'}),
+        groups=tests.fixtures.stats.GROUP_POPULARITY,
     )
     return run_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
 
@@ -371,7 +371,7 @@ def make_report(
     subject: wambatic.fetch.base.Subject,
     initial: wambatic.stats.base.Granularity = wambatic.stats.base.Granularity.MONTH,
     by_author: bool = False,
-    groups: frozenset[str] = frozenset({'activity', 'flow'}),
+    groups: frozenset[str] = tests.fixtures.stats.GROUPS_ACTIVITY_FLOW,
     clock: datetime.datetime = tests.fixtures.stats.NOW,
 ) -> wambatic.reports.html.HtmlReport:
     """The five results an HTML report is built from, over the stats fixture's range."""
@@ -408,7 +408,7 @@ def delivery_report(
     return make_report(
         stats_fetcher,
         tests.fixtures.stats.ORG,
-        groups=frozenset({'activity', 'delivery', 'flow'}),
+        groups=tests.fixtures.stats.GROUPS_ACTIVITY_FLOW_DELIVERY,
     )
 
 
@@ -420,7 +420,7 @@ def popularity_report(
     return make_report(
         stats_fetcher,
         tests.fixtures.stats.ORG,
-        groups=frozenset({'activity', 'popularity'}),
+        groups=tests.fixtures.stats.GROUPS_ACTIVITY_POPULARITY,
     )
 
 

@@ -4,6 +4,8 @@ import aiohttp
 
 import tests.fixtures.fetch.server
 
+GET_X = ('GET', '/x')  # auditme: accept[non-alphabetical-literal] (method, path) pair
+
 
 def get_all(server: tests.fixtures.fetch.server.ReplayServer, count: int) -> list[int]:
     async def one(session: aiohttp.ClientSession) -> int:
@@ -31,9 +33,7 @@ def serve(
 
 
 def test_a_delayed_response_holds_requests_in_flight() -> None:
-    routes = {
-        ('GET', '/x'): [tests.fixtures.fetch.server.Canned(200, {}, delay=0.1) for _ in range(3)]
-    }
+    routes = {GET_X: [tests.fixtures.fetch.server.Canned(200, {}, delay=0.1) for _ in range(3)]}
     statuses, server = serve(routes, 3)
     assert statuses == [200, 200, 200]
     assert server.max_in_flight == 3
@@ -41,14 +41,14 @@ def test_a_delayed_response_holds_requests_in_flight() -> None:
 
 
 def test_undelayed_requests_are_not_held_together_for_long() -> None:
-    routes = {('GET', '/x'): [tests.fixtures.fetch.server.Canned(200, {}) for _ in range(3)]}
+    routes = {GET_X: [tests.fixtures.fetch.server.Canned(200, {}) for _ in range(3)]}
     statuses, server = serve(routes, 3)
     assert statuses == [200, 200, 200]
     assert server.in_flight == 0
 
 
 def test_the_default_responder_answers_when_no_canned_response_is_left() -> None:
-    routes = {('GET', '/x'): [tests.fixtures.fetch.server.Canned(201)]}
+    routes = {GET_X: [tests.fixtures.fetch.server.Canned(201)]}
     statuses, server = serve(
         routes,
         2,

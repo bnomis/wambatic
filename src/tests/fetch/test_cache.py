@@ -9,6 +9,7 @@ import hypothesis
 import hypothesis.strategies
 import pytest
 
+import tests.fixtures.constants
 import tests.fixtures.stats
 import wambatic.fetch.base
 import wambatic.fetch.cache
@@ -19,6 +20,10 @@ import wambatic.version
 T0 = datetime.datetime(2026, 10, 1, 9, 0, tzinfo=datetime.UTC)
 HELLO = 'octocat/Hello-World'
 SPOON = 'octocat/Spoon-Knife'
+FIRST_OID = ('c1',)
+HOTFIX_LABELS = ('Hotfix', 'bug')
+SPOON_IDS = ('s1',)
+UNICODE_LABELS = ('ünïcode ✓',)
 CURRENT_SCHEMA_VERSION = wambatic.fetch.cache.SCHEMA_VERSION
 NEXT_SCHEMA_VERSION = CURRENT_SCHEMA_VERSION + 1
 
@@ -366,7 +371,7 @@ def test_complete_listing_marks_absent_repos_missing_and_keeps_their_commits(
     }
     assert not by_name[HELLO].missing
     assert by_name[SPOON].missing
-    assert [c.oid for c in cache.read_commits(SPOON, None, None)] == ['s1']
+    assert [c.oid for c in cache.read_commits(SPOON, None, None)] == list(SPOON_IDS)
     cache.upsert_repos('octocat', [repo(), repo(SPOON)], complete=True)
     assert not cache.read_repos(wambatic.fetch.base.Subject('repo', 'octocat', 'Spoon-Knife'))[
         0
@@ -432,7 +437,7 @@ def test_replace_removes_commits_not_in_the_new_list(cache: wambatic.fetch.cache
     cache.write_commits(SPOON, [commit('s1', 1, SPOON)], state(SPOON), replace=False)
     cache.write_commits(HELLO, [commit('c2', 2), commit('c3', 3)], state(), replace=True)
     assert [c.oid for c in cache.read_commits(HELLO, None, None)] == ['c2', 'c3']
-    assert [c.oid for c in cache.read_commits(SPOON, None, None)] == ['s1']
+    assert [c.oid for c in cache.read_commits(SPOON, None, None)] == list(SPOON_IDS)
 
 
 def test_commits_of_another_repo_are_refused(cache: wambatic.fetch.cache.Cache) -> None:
@@ -455,7 +460,7 @@ def test_a_failure_mid_write_leaves_rows_and_state_unchanged(
     for replace in (False, True):
         with pytest.raises(wambatic.fetch.errors.CacheError, match='disk full'):
             cache.write_commits(HELLO, [commit('c2', 2)], state(head='b' * 40), replace=replace)
-        assert [c.oid for c in cache.read_commits(HELLO, None, None)] == ['c1']
+        assert [c.oid for c in cache.read_commits(HELLO, None, None)] == list(FIRST_OID)
         assert cache.sync_state(HELLO, 'commits') == old
 
 
@@ -470,7 +475,7 @@ def test_read_commits_bounds_are_half_open_and_ordered(cache: wambatic.fetch.cac
 
     assert oids(None, None) == ['c1', 'c2a', 'c2b', 'c3']
     assert oids(2, 3) == ['c2a', 'c2b']
-    assert oids(None, 2) == ['c1']
+    assert oids(None, 2) == list(FIRST_OID)
     assert oids(3, None) == ['c3']
     assert oids(4, None) == []
 
@@ -695,17 +700,15 @@ def test_pull_requests_round_trip_with_labels_and_a_first_commit(
     cache: wambatic.fetch.cache.Cache,
 ) -> None:
     pulls = [
-        pull_request(
-            1, 2, labels=('Hotfix', 'bug'), first_commit_at=T0 - datetime.timedelta(days=1)
-        ),
-        pull_request(2, 3, labels=('ünïcode ✓',)),
+        pull_request(1, 2, labels=HOTFIX_LABELS, first_commit_at=T0 - datetime.timedelta(days=1)),
+        pull_request(2, 3, labels=UNICODE_LABELS),
         pull_request(3, 4, labels=(), first_commit_at=None),
     ]
     cache.write_pull_requests(HELLO, pulls, state(resource='pull_requests'), replace=False)
     read = cache.read_pull_requests(HELLO, None)
     assert read == pulls
-    assert read[0].labels == ('Hotfix', 'bug')
-    assert read[1].labels == ('ünïcode ✓',)
+    assert read[0].labels == HOTFIX_LABELS
+    assert read[1].labels == UNICODE_LABELS
     assert read[2].labels == ()
     assert read[2].first_commit_at is None
 
@@ -733,7 +736,7 @@ def test_write_releases_replaces_the_repos_rows_and_leaves_another_repo_alone(
     cache.write_releases(SPOON, [release('s1', repo_name=SPOON)], state(SPOON, resource='releases'))
     cache.write_releases(HELLO, [release('v3', 2)], state(resource='releases'))
     assert [r.tag_name for r in cache.read_releases(HELLO)] == ['v3']
-    assert [r.tag_name for r in cache.read_releases(SPOON)] == ['s1']
+    assert [r.tag_name for r in cache.read_releases(SPOON)] == list(SPOON_IDS)
 
 
 def test_workflow_runs_round_trip_with_none_fields(cache: wambatic.fetch.cache.Cache) -> None:
@@ -994,7 +997,7 @@ def test_a_star_or_fork_or_state_for_another_repo_raises_and_writes_nothing(
             cache.write_forks(HELLO, [fork(1)], state(SPOON, resource='forks'), replace=replace)
     assert table_rows(cache_path, 'star_events') == []
     assert table_rows(cache_path, 'forks') == []
-    for resource in ('star_events', 'forks'):
+    for resource in sorted(tests.fixtures.stats.RESOURCES_POPULARITY):
         assert cache.sync_state(HELLO, resource) is None
         assert cache.sync_state(SPOON, resource) is None
 

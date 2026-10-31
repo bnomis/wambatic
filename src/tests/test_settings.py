@@ -8,6 +8,7 @@ import hypothesis
 import hypothesis.strategies
 import pytest
 
+import tests.fixtures.constants
 import tests.fixtures.settings
 import wambatic.settings
 
@@ -30,11 +31,11 @@ def test_fetch_defaults() -> None:
 
 def test_stats_defaults() -> None:
     stats = wambatic.settings.Settings().stats
-    assert stats.bot_logins == ('dependabot[bot]', 'renovate[bot]')
+    assert stats.bot_logins == tests.fixtures.constants.BOT_LOGINS
     assert stats.deploy_workflow is None
     assert stats.exclude_merge_commits is True
     assert stats.failure_window == datetime.timedelta(days=7)
-    assert stats.hotfix_labels == ('hotfix',)
+    assert stats.hotfix_labels == tests.fixtures.constants.HOTFIX_LABELS
     assert stats.timezone == 'UTC'
 
 
@@ -167,7 +168,7 @@ def test_malformed_duration_raises(text: str) -> None:
 
 
 @pytest.mark.parametrize(
-    ('text', 'expected'),
+    tests.fixtures.constants.DURATION_CASE_FIELDS,
     [
         ('0s', datetime.timedelta(0)),
         ('90s', datetime.timedelta(seconds=90)),

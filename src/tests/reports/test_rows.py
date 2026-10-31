@@ -105,13 +105,7 @@ def test_the_breakdown_rows_are_ordered_by_commits_then_name(
 ) -> None:
     rows = wambatic.reports.rows.breakdown_rows(org_result, 'author')
     assert rows is not None
-    assert [row.name for row in rows] == [
-        'Octocat',
-        'hubot',
-        'dependabot[bot]',
-        'monalisa',
-        'unattributed',
-    ]
+    assert [row.name for row in rows] == list(tests.fixtures.stats.AUTHORS_BY_COMMITS)
     repos = wambatic.reports.rows.breakdown_rows(org_result, 'repo')
     assert repos is not None
     assert [(row.name, row.commits) for row in repos] == [
@@ -177,7 +171,9 @@ def test_the_top_contributors_come_in_the_tables_order_and_can_be_limited(
     org_result: wambatic.stats.base.StatsResult,
 ) -> None:
     rows = wambatic.reports.rows.top_contributors(org_result)
-    assert [dataclasses.asdict(row) for row in rows] == tests.fixtures.stats.ORG_TOP_CONTRIBUTORS
+    assert [dataclasses.asdict(row) for row in rows] == list(
+        tests.fixtures.stats.ORG_TOP_CONTRIBUTORS
+    )
     assert wambatic.reports.rows.top_contributors(org_result, 2) == rows[:2]
     assert wambatic.reports.rows.contributor_count(org_result) == 3
 
@@ -204,7 +200,7 @@ def test_the_provenance_lines_start_with_the_computed_time(
 
 
 def delivery_expected(
-    metrics: tuple[str, ...], *sources: dict[str, dict[str, float]]
+    metrics: tuple[str, ...], *sources: tests.fixtures.stats.MonthFigures
 ) -> dict[str, dict[str, float | None]]:
     """The hand-worked values by month for `metrics`, `None` where no source has one."""
     merged = {metric: values for source in sources for metric, values in source.items()}
@@ -321,11 +317,7 @@ def test_a_result_without_delivery_or_proxy_series_has_neither_table(
 
 
 def test_the_trend_metrics_hold_the_three_delivery_counts_before_the_popularity_ones() -> None:
-    assert wambatic.reports.rows.TREND_METRICS[-7:-4] == (
-        'workflow_runs',
-        'release_count',
-        'deployments',
-    )
+    assert wambatic.reports.rows.TREND_METRICS[-7:-4] == tests.fixtures.stats.DELIVERY_COUNTS
 
 
 # Popularity
@@ -352,7 +344,7 @@ def test_a_single_popularity_bucket_has_no_footer(
         granularity=wambatic.stats.base.Granularity.TOTAL,
         since=tests.fixtures.stats.SINCE,
         until=tests.fixtures.stats.UNTIL,
-        groups=frozenset({'popularity'}),
+        groups=tests.fixtures.stats.GROUP_POPULARITY,
     )
     result = tests.conftest.run_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
     table = wambatic.reports.rows.popularity_table(result)
@@ -381,7 +373,7 @@ def test_popularity_now_of_one_repository_has_no_total(
     request = wambatic.stats.base.StatsRequest(
         since=tests.fixtures.stats.SINCE,
         until=tests.fixtures.stats.UNTIL,
-        groups=frozenset({'popularity'}),
+        groups=tests.fixtures.stats.GROUP_POPULARITY,
     )
     subject = wambatic.fetch.base.Subject('repo', 'octo-org', 'alpha')
     result = tests.conftest.run_stats(stats_fetcher, subject, request)
@@ -396,7 +388,7 @@ def test_languages_rows_cut_at_the_limit_and_count_what_is_left(
 ) -> None:
     everything = wambatic.reports.rows.languages_rows(popularity_result)
     assert everything is not None
-    assert [row.language for row in everything.rows] == ['Python', 'Go', 'Shell', 'Other']
+    assert [row.language for row in everything.rows] == list(tests.fixtures.stats.LANGUAGES_BY_SIZE)
     assert everything.more == 0
     cut = wambatic.reports.rows.languages_rows(popularity_result, 3)
     assert cut is not None
@@ -414,9 +406,4 @@ def test_there_are_no_popularity_rows_without_the_group(
 
 
 def test_the_trend_metrics_end_with_the_four_popularity_series() -> None:
-    assert wambatic.reports.rows.TREND_METRICS[-4:] == (
-        'stars_added',
-        'stars_total',
-        'forks_added',
-        'forks_total',
-    )
+    assert wambatic.reports.rows.TREND_METRICS[-4:] == tests.fixtures.stats.POPULARITY_METRICS

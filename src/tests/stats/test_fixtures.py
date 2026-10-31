@@ -208,7 +208,7 @@ def test_each_repo_has_a_sync_state_for_every_flow_resource_at_its_sync_time(
         tests.fixtures.stats.GAMMA: tests.fixtures.stats.GAMMA_SYNCED_AT,
     }
     for name, synced_at in times.items():
-        for resource in ('commits', 'issues', 'pull_requests'):
+        for resource in tests.fixtures.stats.RESOURCES_ACTIVITY_FLOW:
             state = stats_cache.sync_state(name, resource)
             assert state is not None
             assert state.synced_at == synced_at
@@ -300,7 +300,7 @@ def test_every_delivery_series_has_a_value_somewhere_and_a_percentile_or_ratio_h
     }
     for name, by_label in expected.items():
         assert by_label, name
-        if name not in ('workflow_runs', 'release_count', 'deployments'):
+        if name not in tests.fixtures.stats.DELIVERY_COUNTS:
             assert len(by_label) < len(tests.fixtures.stats.LABELS), name
 
 
@@ -382,7 +382,7 @@ def test_the_popularity_months_have_the_expected_runs_of_totals() -> None:
         tests.fixtures.stats.USER_POPULARITY_BY_MONTH_UTC,
     ):
         assert tuple(months) == tests.fixtures.stats.LABELS
-        for kind in ('stars', 'forks'):
+        for kind in tests.fixtures.stats.POPULARITY_PREFIXES:
             totals = [values[f'{kind}_total'] for values in months.values()]
             added = [values[f'{kind}_added'] for values in months.values()]
             assert totals == sorted(totals)

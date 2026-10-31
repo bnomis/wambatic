@@ -11,6 +11,8 @@ import loguru
 import pytest
 
 import tests.conftest
+import tests.fixtures.constants
+import tests.fixtures.fetch.constants
 import tests.fixtures.fetch.recorded
 import tests.fixtures.fetch.responses
 import tests.fixtures.fetch.server
@@ -24,7 +26,35 @@ import wambatic.settings
 HELLO = 'octocat/Hello-World'
 SPOON = 'octocat/Spoon-Knife'
 OWNER = wambatic.fetch.base.Subject('user', 'octocat')
-COMMITS = frozenset({'commits'})
+OIDS_H1_H2 = ('h1', 'h2')
+OIDS_H1_H2_H3 = ('h1', 'h2', 'h3')
+OIDS_S1_S2 = ('s1', 's2')
+TAGS_V1_V2_V3 = ('v1', 'v2', 'v3')
+STAR_IDS = ('U_1', 'U_2', 'U_3', 'U_4', 'U_5')
+SECOND_CURSOR = '2'
+LISTING = ('listing',)
+LISTING_COMPARE_NODES = (  # auditme: accept[non-alphabetical-literal] request order is checked
+    'listing',
+    'compare',
+    'nodes',
+)
+LISTING_FORKS = (  # auditme: accept[non-alphabetical-literal] request order is checked
+    'listing',
+    'forks',
+)
+LISTING_HISTORY = (  # auditme: accept[non-alphabetical-literal] request order is checked
+    'listing',
+    'history',
+)
+LISTING_RELEASES = ('listing', 'releases')
+LISTING_STARGAZERS = ('listing', 'stargazers')
+LISTING_STARGAZERS_X3 = ('listing', 'stargazers', 'stargazers', 'stargazers')
+RUNS = ('runs',)
+RUNS_RUN = (  # auditme: accept[non-alphabetical-literal] request order is checked
+    'runs',
+    'run',
+)
+RUNS_X3 = ('runs', 'runs', 'runs')
 T0 = datetime.datetime(2026, 10, 1, 9, 0, tzinfo=datetime.UTC)
 REST_PATH = '/repos/octocat/Hello-World'
 
@@ -54,7 +84,7 @@ def spoon(count: int = 2, **changes: object) -> tests.fixtures.fetch.upstream.Fa
 @dataclasses.dataclass
 class Run:
     report: wambatic.fetch.base.SyncReport
-    kinds: list[str]
+    kinds: tuple[str, ...]
     max_in_flight: int
     fetcher: wambatic.fetch.base.Fetcher
 
@@ -68,7 +98,7 @@ def sync_once(
     upstream: tests.fixtures.fetch.upstream.Upstream,
     subject: wambatic.fetch.base.Subject = OWNER,
     *,
-    resources: frozenset[str] = COMMITS,
+    resources: frozenset[str] = tests.fixtures.stats.RESOURCES_ACTIVITY,
     full_refresh: bool = False,
     **kwargs: object,
 ) -> Run:
@@ -82,8 +112,8 @@ def sync_once(
     return asyncio.run(scenario())
 
 
-def stored(cache: wambatic.fetch.cache.Cache, name: str = HELLO) -> list[str]:
-    return [commit.oid for commit in cache.read_commits(name, None, None)]
+def stored(cache: wambatic.fetch.cache.Cache, name: str = HELLO) -> tuple[str, ...]:
+    return tuple(commit.oid for commit in cache.read_commits(name, None, None))
 
 
 def listed(
@@ -138,14 +168,14 @@ def test_a_client_with_other_settings_is_refused(tmp_path: pathlib.Path) -> None
 def test_the_cache_is_not_closed_by_leaving_the_fetcher(
     make_fetcher: tests.conftest.MakeFetcher,
 ) -> None:
-    async def scenario() -> list[str]:
+    async def scenario() -> tuple[str, ...]:
         async with tests.fixtures.fetch.server.ReplayServer({}) as server:
             fetcher = make_fetcher(server)
             async with fetcher:
                 pass
             return stored(fetcher.cache)
 
-    assert asyncio.run(scenario()) == []
+    assert asyncio.run(scenario()) == ()
 
 
 def test_cache_calls_run_off_the_event_loop_thread(
@@ -238,7 +268,7 @@ def test_a_two_page_listing_is_read_fully_and_stored(
     upstream = tests.fixtures.fetch.upstream.Upstream([hello(), spoon()])
     upstream.owner_page_size = 1
     run = sync_once(make_fetcher, upstream)
-    assert run.kinds[:2] == ['listing', 'listing']
+    assert run.kinds[:2] == ('listing', 'listing')
     assert run.report.repos_listed == 2
     rows = run.cache.read_repos(OWNER)
     assert [row.name_with_owner for row in rows] == [HELLO, SPOON]
@@ -260,7 +290,7 @@ def test_forks_and_archived_repos_are_dropped_by_default(
     run = sync_once(make_fetcher, upstream)
     assert run.report.repos_listed == 1
     assert [row.name_with_owner for row in run.cache.read_repos(OWNER)] == [HELLO]
-    assert stored(run.cache, 'octocat/Forked') == []
+    assert stored(run.cache, 'octocat/Forked') == ()
 
 
 def test_forks_and_archived_repos_are_kept_when_the_settings_say_so(
@@ -319,7 +349,7 @@ def test_a_repo_that_leaves_the_listing_is_missing_but_keeps_its_commits(
 
     assert second.report.repos_listed == 1
     assert asyncio.run(names()) == [HELLO]
-    assert stored(first.cache, SPOON) == ['s1', 's2']
+    assert stored(first.cache, SPOON) == OIDS_S1_S2
     spoon_row = first.cache.read_repos(
         wambatic.fetch.base.Subject('repo', 'octocat', 'Spoon-Knife')
     )
@@ -337,7 +367,7 @@ def test_repos_and_commits_make_no_request(make_fetcher: tests.conftest.MakeFetc
             commits = [c.oid async for c in fetcher.commits(repos[0], None, None)]
             return len(server.received), [r.name_with_owner for r in repos], commits
 
-    assert asyncio.run(scenario()) == (0, [HELLO], ['h1', 'h2', 'h3'])
+    assert asyncio.run(scenario()) == (0, [HELLO], list(OIDS_H1_H2_H3))
 
 
 @pytest.mark.parametrize(
@@ -409,7 +439,7 @@ def test_an_owner_that_does_not_exist_raises_not_found(
     make_fetcher: tests.conftest.MakeFetcher,
 ) -> None:
     routes = {
-        ('POST', '/graphql'): [
+        tests.fixtures.fetch.constants.GRAPHQL_ROUTE: [
             tests.fixtures.fetch.server.Canned(
                 200, tests.fixtures.fetch.responses.GRAPHQL_NOT_FOUND
             )
@@ -419,7 +449,10 @@ def test_an_owner_that_does_not_exist_raises_not_found(
     async def scenario() -> None:
         async with tests.fixtures.fetch.server.ReplayServer(routes) as server:
             async with make_fetcher(server) as fetcher:
-                await fetcher.sync(wambatic.fetch.base.Subject('user', 'nobody'), COMMITS)
+                await fetcher.sync(
+                    wambatic.fetch.base.Subject('user', 'nobody'),
+                    tests.fixtures.stats.RESOURCES_ACTIVITY,
+                )
 
     with pytest.raises(wambatic.fetch.errors.NotFoundError):
         asyncio.run(scenario())
@@ -437,11 +470,11 @@ def test_a_repo_subject_syncs_its_repo_and_keeps_forks(
             fetcher = make_fetcher(server, cache=run.cache)
             return [r.name_with_owner for r in await fetcher.repos(subject)]
 
-    assert run.kinds == ['repository', 'history']
+    assert run.kinds == ('repository', 'history')
     assert run.report.repos_listed == 1
     assert asyncio.run(repos()) == [HELLO]
-    assert stored(run.cache) == ['h1', 'h2', 'h3']
-    assert stored(run.cache, SPOON) == []
+    assert stored(run.cache) == OIDS_H1_H2_H3
+    assert stored(run.cache, SPOON) == ()
 
 
 def test_a_repo_subject_sync_does_not_mark_the_owners_other_repos_missing(
@@ -479,7 +512,7 @@ def test_a_multi_page_history_is_stored_in_full(make_fetcher: tests.conftest.Mak
     upstream = tests.fixtures.fetch.upstream.Upstream([repo])
     upstream.history_page_size = 2
     run = sync_once(make_fetcher, upstream)
-    assert run.kinds == ['listing', 'history', 'history', 'history']
+    assert run.kinds == ('listing', 'history', 'history', 'history')
     commits = run.cache.read_commits(HELLO, None, None)
     assert [c.oid for c in commits] == ['h1', 'h2', 'h3', 'h4', 'h5']
     assert [c.author_login for c in commits] == ['octocat', None, 'octocat', 'octocat', 'octocat']
@@ -527,7 +560,7 @@ def store_synced(
 def provenance_of(
     make_fetcher: tests.conftest.MakeFetcher,
     cache: wambatic.fetch.cache.Cache,
-    resources: frozenset[str] = COMMITS,
+    resources: frozenset[str] = tests.fixtures.stats.RESOURCES_ACTIVITY,
     subject: wambatic.fetch.base.Subject = OWNER,
 ) -> tuple[dict[str, str], int]:
     async def scenario() -> tuple[dict[str, str], int]:
@@ -560,7 +593,11 @@ def test_provenance_is_never_for_a_listed_repo_that_was_not_synced(
     try:
         store_synced(cache, HELLO, 5)
         store_synced(cache, SPOON, None)
-        result, _ = provenance_of(make_fetcher, cache, COMMITS | {'releases'})
+        result, _ = provenance_of(
+            make_fetcher,
+            cache,
+            tests.fixtures.stats.RESOURCES_ACTIVITY | tests.fixtures.fetch.constants.RELEASES,
+        )
     finally:
         cache.close()
     assert result['fetched_at:commits'] == 'never'
@@ -643,7 +680,7 @@ def test_an_error_on_page_two_leaves_no_rows_and_no_state(
         [responses.history_node('h2', at(2), 'octocat', 1, 0)], True, 'c1'
     )
     routes = {
-        ('POST', '/graphql'): [
+        tests.fixtures.fetch.constants.GRAPHQL_ROUTE: [
             tests.fixtures.fetch.server.Canned(200, responses.owner_page([node], False, 'x')),
             tests.fixtures.fetch.server.Canned(200, page_one),
             *[tests.fixtures.fetch.server.Canned(500, responses.SERVER_ERROR)] * 3,
@@ -656,11 +693,11 @@ def test_an_error_on_page_two_leaves_no_rows_and_no_state(
             fetcher = make_fetcher(server)
             cache_holder.append(fetcher.cache)
             async with fetcher:
-                await fetcher.sync(OWNER, COMMITS)
+                await fetcher.sync(OWNER, tests.fixtures.stats.RESOURCES_ACTIVITY)
 
     with pytest.raises(wambatic.fetch.errors.FetchError, match='HTTP 5'):
         asyncio.run(scenario())
-    assert stored(cache_holder[0]) == []
+    assert stored(cache_holder[0]) == ()
     assert cache_holder[0].sync_state(HELLO, 'commits') is None
 
 
@@ -672,10 +709,10 @@ def test_an_empty_repository_stores_a_state_and_no_commits(
     )
     run = sync_once(make_fetcher, upstream)
     state = run.cache.sync_state(HELLO, 'commits')
-    assert run.kinds == ['listing']
+    assert run.kinds == LISTING
     assert state is not None
     assert state.head_oid is None
-    assert stored(run.cache) == []
+    assert stored(run.cache) == ()
     assert run.cache.read_repos(OWNER)[0].default_branch is None
 
 
@@ -686,7 +723,7 @@ def test_an_empty_repository_is_skipped_next_time(make_fetcher: tests.conftest.M
     first = sync_once(make_fetcher, upstream)
     second = sync_once(make_fetcher, upstream, cache=first.cache)
     assert second.report.repos_skipped == 1
-    assert second.kinds == ['listing']
+    assert second.kinds == LISTING
 
 
 def test_an_empty_repository_that_gets_a_commit_is_read_in_full(
@@ -698,8 +735,8 @@ def test_an_empty_repository_that_gets_a_commit_is_read_in_full(
     first = sync_once(make_fetcher, upstream)
     upstream.repos[HELLO].push(*history('h', 2))
     second = sync_once(make_fetcher, upstream, cache=first.cache)
-    assert second.kinds == ['listing', 'history']
-    assert stored(first.cache) == ['h1', 'h2']
+    assert second.kinds == LISTING_HISTORY
+    assert stored(first.cache) == OIDS_H1_H2
 
 
 # Incremental commits by compare
@@ -711,7 +748,7 @@ def test_a_second_run_with_nothing_new_sends_only_the_listing(
     upstream = tests.fixtures.fetch.upstream.Upstream([hello()])
     first = sync_once(make_fetcher, upstream)
     second = sync_once(make_fetcher, upstream, cache=first.cache)
-    assert second.kinds == ['listing']
+    assert second.kinds == LISTING
     assert second.report == wambatic.fetch.base.SyncReport(1, 1, {'commits': 0}, ())
 
 
@@ -723,10 +760,10 @@ def test_a_changed_listing_with_the_same_head_sends_no_request_and_advances_the_
     upstream.repos[HELLO].pushed_at += datetime.timedelta(hours=1)
     second = sync_once(make_fetcher, upstream, cache=first.cache)
     third = sync_once(make_fetcher, upstream, cache=first.cache)
-    assert second.kinds == ['listing']
+    assert second.kinds == LISTING
     assert second.report.repos_skipped == 0
     assert second.report.rows_written == {'commits': 0}
-    assert stored(first.cache) == ['h1', 'h2', 'h3']
+    assert stored(first.cache) == OIDS_H1_H2_H3
     assert third.report.repos_skipped == 1
 
 
@@ -744,7 +781,7 @@ def test_new_commits_are_found_by_compare_including_merged_in_older_ones(
         tests.fixtures.fetch.upstream.FakeCommit('merge', at(10), 'octocat', 0, 0, parents=2),
     )
     second = sync_once(make_fetcher, upstream, cache=first.cache)
-    assert second.kinds == ['listing', 'compare', 'nodes']
+    assert second.kinds == LISTING_COMPARE_NODES
     assert second.report.rows_written == {'commits': 2}
     assert second.report.full_refetches == ()
     commits = {c.oid: c for c in first.cache.read_commits(HELLO, None, None)}
@@ -776,7 +813,7 @@ def test_a_compare_spanning_two_pages_is_read_fully(
     first = sync_once(make_fetcher, upstream)
     upstream.repos[HELLO].push(*history('n', 150, 10))
     second = sync_once(make_fetcher, upstream, cache=first.cache)
-    assert second.kinds == ['listing', 'compare', 'compare', 'nodes', 'nodes']
+    assert second.kinds == ('listing', 'compare', 'compare', 'nodes', 'nodes')
     assert second.report.rows_written == {'commits': 150}
     assert len(stored(first.cache)) == 153
 
@@ -788,7 +825,7 @@ def test_a_compare_of_exactly_one_page_stops_without_a_second_request(
     first = sync_once(make_fetcher, upstream)
     upstream.repos[HELLO].push(*history('n', 100, 10))
     second = sync_once(make_fetcher, upstream, cache=first.cache)
-    assert second.kinds == ['listing', 'compare', 'nodes']
+    assert second.kinds == LISTING_COMPARE_NODES
     assert len(stored(first.cache)) == 103
 
 
@@ -815,7 +852,7 @@ def test_an_identical_compare_advances_only_the_state(
     assert asyncio.run(scenario()) == 0
     new = run.cache.sync_state(HELLO, 'commits')
     assert new is not None and new.head_oid == 'moved'
-    assert stored(run.cache) == ['h1', 'h2', 'h3']
+    assert stored(run.cache) == OIDS_H1_H2_H3
 
 
 @pytest.mark.parametrize('case', ['diverged', 'behind', 'not found'])
@@ -841,7 +878,7 @@ def test_a_stored_head_that_is_not_an_ancestor_asks_for_a_refetch_and_writes_not
 
     before = run.cache.sync_state(HELLO, 'commits')
     assert asyncio.run(scenario()) is None
-    assert stored(run.cache) == ['h1', 'h2', 'h3']
+    assert stored(run.cache) == OIDS_H1_H2_H3
     assert run.cache.sync_state(HELLO, 'commits') == before
 
 
@@ -896,7 +933,7 @@ def test_line_counts_are_asked_for_by_oid_and_never_by_the_legacy_node_id(
             assert 'nodes(ids' not in str(sent['query'])
             return commits
 
-    assert [c.oid for c in asyncio.run(scenario())] == ['h1', 'h2']
+    assert tuple(c.oid for c in asyncio.run(scenario())) == OIDS_H1_H2
 
 
 def test_a_commit_with_no_line_counts_stores_nothing_and_names_its_oid(
@@ -909,7 +946,7 @@ def test_a_commit_with_no_line_counts_stores_nothing_and_names_its_oid(
     upstream.dropped_counts = {'n11'}
     with pytest.raises(wambatic.fetch.errors.GraphQLError, match='n11'):
         sync_once(make_fetcher, upstream, cache=first.cache)
-    assert stored(first.cache) == ['h1', 'h2', 'h3']
+    assert stored(first.cache) == OIDS_H1_H2_H3
     assert first.cache.sync_state(HELLO, 'commits') == before
 
 
@@ -929,9 +966,9 @@ def test_a_force_push_re_reads_the_history_and_drops_the_old_commits(
     ]
     upstream.repos[HELLO].push()
     second = sync_once(make_fetcher, upstream, cache=first.cache)
-    assert second.kinds == ['listing', 'compare', 'history']
+    assert second.kinds == ('listing', 'compare', 'history')
     assert second.report.full_refetches == (HELLO,)
-    assert stored(first.cache) == ['h1', 'x2', 'x3']
+    assert stored(first.cache) == ('h1', 'x2', 'x3')
     state = first.cache.sync_state(HELLO, 'commits')
     assert state is not None and state.head_oid == 'x3'
 
@@ -970,7 +1007,7 @@ def test_full_refresh_re_reads_a_repo_whose_head_is_unchanged(
 
     monkeypatch.setattr(wambatic.fetch.base.Fetcher, 'update_commits', counting)
     second = sync_once(make_fetcher, upstream, cache=first.cache, full_refresh=True)
-    assert second.kinds == ['listing', 'history']
+    assert second.kinds == LISTING_HISTORY
     assert second.report.repos_skipped == 0
     assert second.report.full_refetches == (HELLO,)
     assert calls == []
@@ -1036,7 +1073,7 @@ def test_a_second_run_fetches_only_the_listing(make_fetcher: tests.conftest.Make
     upstream = tests.fixtures.fetch.upstream.Upstream([hello(), spoon()])
     first = sync_once(make_fetcher, upstream)
     second = sync_once(make_fetcher, upstream, cache=first.cache)
-    assert second.kinds == ['listing']
+    assert second.kinds == LISTING
     assert second.report == wambatic.fetch.base.SyncReport(2, 2, {'commits': 0}, ())
 
 
@@ -1053,18 +1090,18 @@ def test_an_interrupted_run_resumes_with_only_the_repo_that_failed(
             fetcher = make_fetcher(server, one_at_a_time)
             caches.append(fetcher.cache)
             async with fetcher:
-                await fetcher.sync(OWNER, COMMITS)
+                await fetcher.sync(OWNER, tests.fixtures.stats.RESOURCES_ACTIVITY)
 
     with pytest.raises(wambatic.fetch.errors.FetchError, match='HTTP 5'):
         asyncio.run(failing())
     cache = caches[0]
-    assert stored(cache) == ['h1', 'h2', 'h3']
+    assert stored(cache) == OIDS_H1_H2_H3
     assert cache.sync_state(SPOON, 'commits') is None
     upstream.failing_history = set()
     second = sync_once(make_fetcher, upstream, cache=cache, settings=one_at_a_time)
-    assert second.kinds == ['listing', 'history']
+    assert second.kinds == LISTING_HISTORY
     assert second.report == wambatic.fetch.base.SyncReport(2, 1, {'commits': 2}, (SPOON,))
-    assert stored(cache, SPOON) == ['s1', 's2']
+    assert stored(cache, SPOON) == OIDS_S1_S2
 
 
 def test_no_more_than_workers_repos_are_synced_at_once(
@@ -1108,7 +1145,9 @@ def test_progress_ends_equal_to_the_report(make_fetcher: tests.conftest.MakeFetc
     async def scenario() -> wambatic.fetch.base.SyncReport:
         async with tests.fixtures.fetch.server.ReplayServer({}, default=upstream.respond) as server:
             async with make_fetcher(server, cache=first.cache) as fetcher:
-                return await fetcher.sync(OWNER, COMMITS, progress=progress)
+                return await fetcher.sync(
+                    OWNER, tests.fixtures.stats.RESOURCES_ACTIVITY, progress=progress
+                )
 
     report = asyncio.run(scenario())
     assert report.repos_skipped == 1
@@ -1142,7 +1181,9 @@ def test_progress_is_readable_while_the_sync_runs(
             fetcher = make_fetcher(server, settings=dataclasses.replace(fetch_settings, workers=1))
             async with fetcher:
                 watcher = asyncio.create_task(watch(done))
-                await fetcher.sync(OWNER, COMMITS, progress=progress)
+                await fetcher.sync(
+                    OWNER, tests.fixtures.stats.RESOURCES_ACTIVITY, progress=progress
+                )
                 done.set()
                 await watcher
 
@@ -1286,7 +1327,7 @@ CLOCK = tests.fixtures.fetch.responses.NOW
 @dataclasses.dataclass
 class FlowRun:
     written: int
-    kinds: list[str]
+    kinds: tuple[str, ...]
     cache: wambatic.fetch.cache.Cache
 
 
@@ -1343,7 +1384,7 @@ def test_a_first_sync_reads_every_page_and_stores_the_first_pages_date(
     upstream = flow_upstream()
     upstream.flow_page_size = 2
     run = sync_flow(make_fetcher, upstream, 'pull_requests')
-    assert run.kinds == ['pull_requests', 'pull_requests']
+    assert run.kinds == ('pull_requests', 'pull_requests')
     assert run.written == 3
     assert numbers(run, 'pull_requests') == [1, 2, 3]
     state = run.cache.sync_state(HELLO, 'pull_requests')
@@ -1391,7 +1432,7 @@ def test_a_changed_pull_request_is_updated_and_unchanged_ones_are_untouched(
     changed.merged_at = changed.closed_at = SERVER_DATE - datetime.timedelta(minutes=10)
     changed.updated_at = SERVER_DATE - datetime.timedelta(minutes=10)
     second = sync_flow(make_fetcher, upstream, 'pull_requests', cache=first.cache)
-    assert second.kinds == ['pull_requests']
+    assert second.kinds == ('pull_requests',)
     assert second.written == 1
     after = {pull.number: pull for pull in second.cache.read_pull_requests(HELLO, None)}
     assert after[2].merged_at == changed.merged_at
@@ -1422,7 +1463,7 @@ def test_a_failing_second_page_leaves_the_old_rows_and_state(
     before = first.cache.read_pull_requests(HELLO, None)
     upstream.repos[HELLO].pulls.append(tests.fixtures.fetch.upstream.FakePull(9, at(9)))
     upstream.flow_page_size = 2
-    upstream.failing_flow_cursors = {'2'}
+    upstream.failing_flow_cursors = {SECOND_CURSOR}
     upstream.now = SERVER_DATE + datetime.timedelta(hours=3)
     with pytest.raises(wambatic.fetch.errors.FetchError, match='HTTP 5'):
         sync_flow(make_fetcher, upstream, 'pull_requests', full_refresh=True, cache=first.cache)
@@ -1442,7 +1483,7 @@ def test_the_full_refresh_interval_removes_a_deleted_issue(
     age_full_sync(first.cache, 'issues', 31)
     upstream.flow_page_size = 1
     full = sync_flow(make_fetcher, upstream, 'issues', cache=first.cache)
-    assert full.kinds == ['issues', 'issues']
+    assert full.kinds == ('issues', 'issues')
     assert numbers(full, 'issues') == [1, 3]
     state = full.cache.sync_state(HELLO, 'issues')
     assert state is not None
@@ -1484,7 +1525,7 @@ def test_a_state_with_no_watermark_is_read_in_full(
         first.cache.connection.execute('UPDATE sync_state SET watermark = NULL')
     upstream.flow_page_size = 1
     again = sync_flow(make_fetcher, upstream, 'issues', cache=first.cache)
-    assert again.kinds == ['issues'] * 3
+    assert again.kinds == ('issues',) * 3
     assert again.written == 3
 
 
@@ -1531,7 +1572,7 @@ def test_the_read_methods_return_the_cached_rows_from_since(
 
 # Syncing pull requests and issues for a subject
 
-FLOW = frozenset({'commits', 'issues', 'pull_requests'})
+FLOW = tests.fixtures.stats.RESOURCES_ACTIVITY_FLOW
 HOUR = datetime.timedelta(hours=1)
 
 
@@ -1604,7 +1645,7 @@ def test_a_second_sync_with_nothing_newer_sends_only_the_listing_query(
     upstream = two_repo_upstream()
     first = sync_once(make_fetcher, upstream, resources=FLOW)
     second = sync_once(make_fetcher, upstream, resources=FLOW, cache=first.cache)
-    assert second.kinds == ['listing']
+    assert second.kinds == LISTING
     assert second.report == wambatic.fetch.base.SyncReport(
         2, 2, {'commits': 0, 'issues': 0, 'pull_requests': 0}, ()
     )
@@ -1741,7 +1782,7 @@ RUNS_FROM = SERVER_DATE - datetime.timedelta(days=60)
 @dataclasses.dataclass
 class DeliveryRun:
     written: int
-    kinds: list[str]
+    kinds: tuple[str, ...]
     received: list[tests.fixtures.fetch.server.Received]
     cache: wambatic.fetch.cache.Cache
     rest_remaining: int | None
@@ -1797,8 +1838,8 @@ def sync_delivery(
     return asyncio.run(scenario())
 
 
-def tags(cache: wambatic.fetch.cache.Cache) -> list[str]:
-    return [release.tag_name for release in cache.read_releases(HELLO)]
+def tags(cache: wambatic.fetch.cache.Cache) -> tuple[str, ...]:
+    return tuple(release.tag_name for release in cache.read_releases(HELLO))
 
 
 def run_ids(cache: wambatic.fetch.cache.Cache) -> list[int]:
@@ -1814,7 +1855,7 @@ def test_a_first_release_sync_stores_the_published_releases_and_not_the_draft(
     )
     run = sync_delivery(make_fetcher, upstream, 'sync_releases')
     assert run.written == 3
-    assert tags(run.cache) == ['v1', 'v2', 'v3']
+    assert tags(run.cache) == TAGS_V1_V2_V3
     state = run.cache.sync_state(HELLO, 'releases')
     assert state is not None
     assert state.probe == wambatic.fetch.base.release_probe(listed(upstream))
@@ -1825,12 +1866,14 @@ def test_a_second_sync_with_the_same_probe_makes_no_releases_request(
     make_fetcher: tests.conftest.MakeFetcher,
 ) -> None:
     upstream = delivery_upstream()
-    first = sync_once(make_fetcher, upstream, resources=frozenset({'releases'}))
-    assert first.kinds == ['listing', 'releases']
-    second = sync_once(make_fetcher, upstream, resources=frozenset({'releases'}), cache=first.cache)
-    assert second.kinds == ['listing']
+    first = sync_once(make_fetcher, upstream, resources=tests.fixtures.fetch.constants.RELEASES)
+    assert first.kinds == LISTING_RELEASES
+    second = sync_once(
+        make_fetcher, upstream, resources=tests.fixtures.fetch.constants.RELEASES, cache=first.cache
+    )
+    assert second.kinds == LISTING
     assert second.report.repos_skipped == 1
-    assert tags(second.cache) == ['v1', 'v2', 'v3']
+    assert tags(second.cache) == TAGS_V1_V2_V3
 
 
 def test_a_changed_release_count_reads_every_page_and_a_deleted_release_leaves(
@@ -1839,14 +1882,16 @@ def test_a_changed_release_count_reads_every_page_and_a_deleted_release_leaves(
     upstream = delivery_upstream()
     upstream.release_page_size = 2
     first = sync_delivery(make_fetcher, upstream, 'sync_releases')
-    assert first.kinds == ['releases', 'releases']
+    assert first.kinds == ('releases', 'releases')
     del upstream.repos[HELLO].releases[0]
     upstream.repos[HELLO].releases.append(
         tests.fixtures.fetch.upstream.FakeRelease('v4', at(4), published_at=at(4))
     )
-    second = sync_once(make_fetcher, upstream, resources=frozenset({'releases'}), cache=first.cache)
-    assert second.kinds == ['listing', 'releases', 'releases']
-    assert tags(second.cache) == ['v2', 'v3', 'v4']
+    second = sync_once(
+        make_fetcher, upstream, resources=tests.fixtures.fetch.constants.RELEASES, cache=first.cache
+    )
+    assert second.kinds == ('listing', 'releases', 'releases')
+    assert tags(second.cache) == ('v2', 'v3', 'v4')
 
 
 def test_publishing_the_newest_draft_is_picked_up_by_its_changed_update_time(
@@ -1855,24 +1900,28 @@ def test_publishing_the_newest_draft_is_picked_up_by_its_changed_update_time(
     upstream = delivery_upstream(releases=0)
     draft = tests.fixtures.fetch.upstream.FakeRelease('v1', at(1), is_draft=True)
     upstream.repos[HELLO].releases.append(draft)
-    first = sync_once(make_fetcher, upstream, resources=frozenset({'releases'}))
-    assert tags(first.cache) == []
+    first = sync_once(make_fetcher, upstream, resources=tests.fixtures.fetch.constants.RELEASES)
+    assert tags(first.cache) == ()
     draft.is_draft = False
     draft.published_at = at(5)
     draft.updated_at = at(5)
-    second = sync_once(make_fetcher, upstream, resources=frozenset({'releases'}), cache=first.cache)
-    assert second.kinds == ['listing', 'releases']
-    assert tags(second.cache) == ['v1']
+    second = sync_once(
+        make_fetcher, upstream, resources=tests.fixtures.fetch.constants.RELEASES, cache=first.cache
+    )
+    assert second.kinds == LISTING_RELEASES
+    assert tags(second.cache) == ('v1',)
 
 
 def test_a_passed_full_refresh_interval_reads_releases_again_with_an_equal_probe(
     make_fetcher: tests.conftest.MakeFetcher,
 ) -> None:
     upstream = delivery_upstream()
-    first = sync_once(make_fetcher, upstream, resources=frozenset({'releases'}))
+    first = sync_once(make_fetcher, upstream, resources=tests.fixtures.fetch.constants.RELEASES)
     age_full_sync(first.cache, 'releases', 31)
-    second = sync_once(make_fetcher, upstream, resources=frozenset({'releases'}), cache=first.cache)
-    assert second.kinds == ['listing', 'releases']
+    second = sync_once(
+        make_fetcher, upstream, resources=tests.fixtures.fetch.constants.RELEASES, cache=first.cache
+    )
+    assert second.kinds == LISTING_RELEASES
     state = second.cache.sync_state(HELLO, 'releases')
     assert state is not None
     assert state.full_synced_at == CLOCK
@@ -1888,10 +1937,10 @@ def test_an_interrupted_release_read_leaves_the_old_rows_and_state(
         tests.fixtures.fetch.upstream.FakeRelease('v4', at(4), published_at=at(4))
     )
     upstream.release_page_size = 2
-    upstream.failing_release_cursors = {'2'}
+    upstream.failing_release_cursors = {SECOND_CURSOR}
     with pytest.raises(wambatic.fetch.errors.FetchError, match='HTTP 5'):
         sync_delivery(make_fetcher, upstream, 'sync_releases', cache=first.cache)
-    assert tags(first.cache) == ['v1', 'v2', 'v3']
+    assert tags(first.cache) == TAGS_V1_V2_V3
     assert first.cache.sync_state(HELLO, 'releases') == state
 
 
@@ -1906,7 +1955,7 @@ def test_fetcher_releases_reads_the_cache_oldest_first(
             fetcher = make_fetcher(server, cache=first.cache)
             return [release.tag_name async for release in fetcher.releases(listed(upstream))]
 
-    assert asyncio.run(scenario()) == ['v1', 'v2', 'v3']
+    assert tuple(asyncio.run(scenario())) == TAGS_V1_V2_V3
 
 
 def test_a_first_run_sync_reads_every_page_stores_every_run_and_sends_no_created_filter(
@@ -1914,7 +1963,7 @@ def test_a_first_run_sync_reads_every_page_stores_every_run_and_sends_no_created
 ) -> None:
     upstream = delivery_upstream(runs=205)
     run = sync_delivery(make_fetcher, upstream, 'sync_workflow_runs')
-    assert run.kinds == ['runs', 'runs', 'runs']
+    assert run.kinds == RUNS_X3
     assert run.written == 205
     assert run_ids(run.cache) == list(range(1, 206))
     assert all('created' not in item.query for item in run.received)
@@ -1932,7 +1981,7 @@ def test_an_unchanged_second_run_sync_is_one_conditional_request_answered_304(
     first = sync_delivery(make_fetcher, upstream, 'sync_workflow_runs')
     before = first.cache.read_workflow_runs(HELLO, None)
     second = sync_delivery(make_fetcher, upstream, 'sync_workflow_runs', cache=first.cache)
-    assert second.kinds == ['runs']
+    assert second.kinds == RUNS
     assert second.received[0].headers['If-None-Match'].startswith('"')
     assert second.rest_remaining is None
     assert first.rest_remaining is not None
@@ -1951,7 +2000,7 @@ def test_a_new_run_on_the_first_page_stops_paging_at_the_cutoff(
         tests.fixtures.fetch.upstream.FakeRun(500, SERVER_DATE - datetime.timedelta(minutes=10))
     )
     second = sync_delivery(make_fetcher, upstream, 'sync_workflow_runs', cache=first.cache)
-    assert second.kinds == ['runs']
+    assert second.kinds == RUNS
     assert second.written == 1
     assert 500 in run_ids(second.cache)
     assert len(run_ids(second.cache)) == 206
@@ -1990,7 +2039,7 @@ def test_an_unfinished_run_not_on_the_pages_read_is_read_again_by_id_and_complet
     finished = upstream.repos[HELLO].runs[0]
     finished.status, finished.conclusion = 'completed', 'failure'
     second = sync_delivery(make_fetcher, upstream, 'sync_workflow_runs', cache=first.cache)
-    assert second.kinds == ['runs', 'run']
+    assert second.kinds == RUNS_RUN
     assert second.received[1].path.endswith('/actions/runs/1')
     assert 'If-None-Match' not in second.received[1].headers
     assert second.cache.unfinished_runs(HELLO) == []
@@ -2005,7 +2054,7 @@ def test_an_unfinished_run_that_github_no_longer_has_is_removed(
     first = sync_delivery(make_fetcher, upstream, 'sync_workflow_runs')
     del upstream.repos[HELLO].runs[0]
     second = sync_delivery(make_fetcher, upstream, 'sync_workflow_runs', cache=first.cache)
-    assert second.kinds == ['runs', 'run']
+    assert second.kinds == RUNS_RUN
     assert run_ids(second.cache) == [2]
 
 
@@ -2015,7 +2064,7 @@ def test_no_actions_data_is_an_empty_list_with_no_watermark_from_the_local_clock
     upstream = delivery_upstream()
     upstream.repos[HELLO].has_actions = False
     run = sync_delivery(make_fetcher, upstream, 'sync_workflow_runs')
-    assert (run.written, run.kinds) == (0, ['runs'])
+    assert (run.written, run.kinds) == (0, RUNS)
     state = run.cache.sync_state(HELLO, 'workflow_runs')
     assert state is not None
     assert state.watermark is None
@@ -2044,12 +2093,12 @@ def test_full_refresh_reads_every_page_and_drops_a_run_github_no_longer_lists(
     first = sync_delivery(make_fetcher, upstream, 'sync_workflow_runs')
     del upstream.repos[HELLO].runs[0]
     incremental = sync_delivery(make_fetcher, upstream, 'sync_workflow_runs', cache=first.cache)
-    assert incremental.kinds == ['runs']
+    assert incremental.kinds == RUNS
     assert 1 in run_ids(incremental.cache)
     forced = sync_delivery(
         make_fetcher, upstream, 'sync_workflow_runs', full_refresh=True, cache=first.cache
     )
-    assert forced.kinds == ['runs', 'runs', 'runs']
+    assert forced.kinds == RUNS_X3
     assert run_ids(forced.cache) == list(range(2, 206))
 
 
@@ -2061,7 +2110,7 @@ def test_the_full_refresh_interval_reads_every_page_of_runs(
     del upstream.repos[HELLO].runs[0]
     age_full_sync(first.cache, 'workflow_runs', 31)
     second = sync_delivery(make_fetcher, upstream, 'sync_workflow_runs', cache=first.cache)
-    assert second.kinds == ['runs', 'runs', 'runs']
+    assert second.kinds == RUNS_X3
     assert 1 not in run_ids(second.cache)
     state = second.cache.sync_state(HELLO, 'workflow_runs')
     assert state is not None
@@ -2099,9 +2148,9 @@ def test_sync_of_releases_and_runs_reports_rows_for_both_and_never_skips_a_repo(
     upstream = delivery_upstream()
     first = sync_once(make_fetcher, upstream, resources=DELIVERY)
     assert first.report.rows_written == {'releases': 3, 'workflow_runs': 5}
-    assert first.kinds == ['listing', 'releases', 'runs']
+    assert first.kinds == ('listing', 'releases', 'runs')
     second = sync_once(make_fetcher, upstream, resources=DELIVERY, cache=first.cache)
-    assert second.kinds == ['listing', 'runs']
+    assert second.kinds == ('listing', 'runs')
     assert second.report.repos_skipped == 0
     assert second.report.rows_written['releases'] == 0
 
@@ -2169,8 +2218,8 @@ def popularity_upstream(**repo_changes: int) -> tests.fixtures.fetch.upstream.Up
     return upstream
 
 
-def star_ids(cache: wambatic.fetch.cache.Cache) -> list[str]:
-    return sorted(star.user_id for star in cache.read_star_events(HELLO))
+def star_ids(cache: wambatic.fetch.cache.Cache) -> tuple[str, ...]:
+    return tuple(sorted(star.user_id for star in cache.read_star_events(HELLO)))
 
 
 def test_a_first_star_sync_reads_every_page_and_stores_every_star(
@@ -2179,9 +2228,9 @@ def test_a_first_star_sync_reads_every_page_and_stores_every_star(
     upstream = popularity_upstream()
     upstream.star_page_size = 2
     run = sync_once(make_fetcher, upstream, resources=STARS)
-    assert run.kinds == ['listing', 'stargazers', 'stargazers', 'stargazers']
+    assert run.kinds == LISTING_STARGAZERS_X3
     assert run.report.rows_written == {'star_events': 5}
-    assert star_ids(run.cache) == ['U_1', 'U_2', 'U_3', 'U_4', 'U_5']
+    assert star_ids(run.cache) == STAR_IDS
     state = run.cache.sync_state(HELLO, 'star_events')
     assert state is not None
     assert state.probe == '5'
@@ -2194,7 +2243,7 @@ def test_an_unchanged_star_count_makes_no_stargazers_request(
     upstream = popularity_upstream()
     first = sync_once(make_fetcher, upstream, resources=STARS)
     second = sync_once(make_fetcher, upstream, resources=STARS, cache=first.cache)
-    assert second.kinds == ['listing']
+    assert second.kinds == LISTING
     assert second.report.repos_skipped == 1
     assert star_ids(second.cache) == star_ids(first.cache)
 
@@ -2211,9 +2260,9 @@ def test_a_higher_star_count_reads_the_first_page_and_stops_at_the_cutoff(
         )
     )
     second = sync_once(make_fetcher, upstream, resources=STARS, cache=first.cache)
-    assert second.kinds == ['listing', 'stargazers']
+    assert second.kinds == LISTING_STARGAZERS
     assert second.report.rows_written == {'star_events': 1}
-    assert star_ids(second.cache) == ['U_1', 'U_2', 'U_3', 'U_4', 'U_5', 'U_new']
+    assert star_ids(second.cache) == ('U_1', 'U_2', 'U_3', 'U_4', 'U_5', 'U_new')
     state = second.cache.sync_state(HELLO, 'star_events')
     assert state is not None
     assert state.probe == '6'
@@ -2228,8 +2277,8 @@ def test_a_lower_star_count_reads_every_page_and_a_removed_star_leaves_the_cache
     first = sync_once(make_fetcher, upstream, resources=STARS)
     del upstream.repos[HELLO].stars[2]
     second = sync_once(make_fetcher, upstream, resources=STARS, cache=first.cache)
-    assert second.kinds == ['listing', 'stargazers', 'stargazers']
-    assert star_ids(second.cache) == ['U_1', 'U_2', 'U_4', 'U_5']
+    assert second.kinds == ('listing', 'stargazers', 'stargazers')
+    assert star_ids(second.cache) == ('U_1', 'U_2', 'U_4', 'U_5')
 
 
 def test_a_removed_and_an_added_star_leave_the_count_alone_until_the_full_read(
@@ -2245,11 +2294,11 @@ def test_a_removed_and_an_added_star_leave_the_count_alone_until_the_full_read(
         )
     )
     second = sync_once(make_fetcher, upstream, resources=STARS, cache=first.cache)
-    assert second.kinds == ['listing']
+    assert second.kinds == LISTING
     age_full_sync(first.cache, 'star_events', 31)
     third = sync_once(make_fetcher, upstream, resources=STARS, cache=first.cache)
-    assert third.kinds == ['listing', 'stargazers']
-    assert star_ids(third.cache) == ['U_1', 'U_2', 'U_3', 'U_4', 'U_new']
+    assert third.kinds == LISTING_STARGAZERS
+    assert star_ids(third.cache) == ('U_1', 'U_2', 'U_3', 'U_4', 'U_new')
 
 
 def test_a_passed_full_refresh_interval_reads_every_page_of_stars_with_an_equal_count(
@@ -2260,7 +2309,7 @@ def test_a_passed_full_refresh_interval_reads_every_page_of_stars_with_an_equal_
     first = sync_once(make_fetcher, upstream, resources=STARS)
     age_full_sync(first.cache, 'star_events', 31)
     second = sync_once(make_fetcher, upstream, resources=STARS, cache=first.cache)
-    assert second.kinds == ['listing', 'stargazers', 'stargazers', 'stargazers']
+    assert second.kinds == LISTING_STARGAZERS_X3
     state = second.cache.sync_state(HELLO, 'star_events')
     assert state is not None
     assert state.full_synced_at == CLOCK
@@ -2274,19 +2323,19 @@ def test_full_refresh_reads_every_page_of_stars_of_an_unchanged_repo(
     second = sync_once(
         make_fetcher, upstream, resources=STARS, cache=first.cache, full_refresh=True
     )
-    assert second.kinds == ['listing', 'stargazers']
+    assert second.kinds == LISTING_STARGAZERS
 
 
-@pytest.mark.parametrize('hidden', ['empty', 'forbidden'])
+@pytest.mark.parametrize('hidden', typing.get_args(tests.fixtures.fetch.upstream.HiddenStars))
 def test_stargazers_the_token_cannot_see_are_recorded_as_hidden_not_as_no_stars(
-    make_fetcher: tests.conftest.MakeFetcher, hidden: typing.Literal['empty', 'forbidden']
+    make_fetcher: tests.conftest.MakeFetcher, hidden: tests.fixtures.fetch.upstream.HiddenStars
 ) -> None:
     upstream = popularity_upstream()
     upstream.repos[HELLO].hidden_stars = hidden
     run = sync_once(make_fetcher, upstream, resources=STARS)
-    assert run.kinds == ['listing', 'stargazers']
+    assert run.kinds == LISTING_STARGAZERS
     assert run.report.rows_written == {'star_events': 0}
-    assert star_ids(run.cache) == []
+    assert star_ids(run.cache) == ()
     state = run.cache.sync_state(HELLO, 'star_events')
     assert state is not None
     assert state.probe == wambatic.fetch.base.STARS_HIDDEN
@@ -2301,10 +2350,10 @@ def test_hidden_stargazers_are_read_again_at_every_sync_and_stored_once_visible(
     upstream.repos[HELLO].hidden_stars = 'empty'
     first = sync_once(make_fetcher, upstream, resources=STARS)
     again = sync_once(make_fetcher, upstream, resources=STARS, cache=first.cache)
-    assert again.kinds == ['listing', 'stargazers']
+    assert again.kinds == LISTING_STARGAZERS
     upstream.repos[HELLO].hidden_stars = None
     visible = sync_once(make_fetcher, upstream, resources=STARS, cache=first.cache)
-    assert star_ids(visible.cache) == ['U_1', 'U_2', 'U_3', 'U_4', 'U_5']
+    assert star_ids(visible.cache) == STAR_IDS
     state = visible.cache.sync_state(HELLO, 'star_events')
     assert state is not None
     assert state.probe == '5'
@@ -2330,10 +2379,10 @@ def test_an_interrupted_star_read_leaves_the_old_rows_and_state(
     state = first.cache.sync_state(HELLO, 'star_events')
     del upstream.repos[HELLO].stars[0]
     upstream.star_page_size = 2
-    upstream.failing_star_cursors = {'2'}
+    upstream.failing_star_cursors = {SECOND_CURSOR}
     with pytest.raises(wambatic.fetch.errors.FetchError, match='HTTP 5'):
         sync_once(make_fetcher, upstream, resources=STARS, cache=first.cache)
-    assert star_ids(first.cache) == ['U_1', 'U_2', 'U_3', 'U_4', 'U_5']
+    assert star_ids(first.cache) == STAR_IDS
     assert first.cache.sync_state(HELLO, 'star_events') == state
 
 
@@ -2393,7 +2442,7 @@ def test_a_first_fork_sync_reads_every_page_and_stores_every_fork(
 ) -> None:
     upstream = popularity_upstream(forks=101)
     run = sync_once(make_fetcher, upstream, resources=FORKS)
-    assert run.kinds == ['listing', 'forks', 'forks']
+    assert run.kinds == ('listing', 'forks', 'forks')
     assert run.report.rows_written == {'forks': 101}
     assert fork_ids(run.cache) == list(range(101, 202))
     state = run.cache.sync_state(HELLO, 'forks')
@@ -2429,7 +2478,7 @@ def test_an_unchanged_fork_count_makes_no_fork_request(
     upstream = popularity_upstream(forks=3)
     first = sync_once(make_fetcher, upstream, resources=FORKS)
     second = sync_once(make_fetcher, upstream, resources=FORKS, cache=first.cache)
-    assert second.kinds == ['listing']
+    assert second.kinds == LISTING
     assert second.report.repos_skipped == 1
 
 
@@ -2442,7 +2491,7 @@ def test_a_higher_fork_count_stops_at_the_cutoff(
         tests.fixtures.fetch.upstream.FakeFork(999, SERVER_DATE - datetime.timedelta(minutes=10))
     )
     second = sync_once(make_fetcher, upstream, resources=FORKS, cache=first.cache)
-    assert second.kinds == ['listing', 'forks']
+    assert second.kinds == LISTING_FORKS
     assert second.report.rows_written == {'forks': 1}
     assert fork_ids(second.cache) == [101, 102, 103, 999]
 
@@ -2454,7 +2503,7 @@ def test_a_lower_fork_count_reads_every_page_and_a_deleted_fork_leaves(
     first = sync_once(make_fetcher, upstream, resources=FORKS)
     del upstream.repos[HELLO].forks[1]
     second = sync_once(make_fetcher, upstream, resources=FORKS, cache=first.cache)
-    assert second.kinds == ['listing', 'forks']
+    assert second.kinds == LISTING_FORKS
     assert fork_ids(second.cache) == [101, 103]
 
 
@@ -2465,7 +2514,7 @@ def test_a_fork_of_a_fork_changes_the_count_and_costs_one_read_that_finds_nothin
     first = sync_once(make_fetcher, upstream, resources=FORKS)
     upstream.repos[HELLO].forks_of_forks = 1
     second = sync_once(make_fetcher, upstream, resources=FORKS, cache=first.cache)
-    assert second.kinds == ['listing', 'forks']
+    assert second.kinds == LISTING_FORKS
     assert second.report.rows_written == {'forks': 0}
     assert fork_ids(second.cache) == [101, 102]
 
@@ -2478,7 +2527,7 @@ def test_full_refresh_reads_every_page_of_forks_of_an_unchanged_repo(
     second = sync_once(
         make_fetcher, upstream, resources=FORKS, cache=first.cache, full_refresh=True
     )
-    assert second.kinds == ['listing', 'forks']
+    assert second.kinds == LISTING_FORKS
 
 
 def test_a_missing_fork_list_writes_no_forks_and_does_not_raise(
@@ -2560,10 +2609,10 @@ def test_stars_and_forks_of_an_unchanged_repo_cost_only_the_listing(
     make_fetcher: tests.conftest.MakeFetcher,
 ) -> None:
     upstream = popularity_upstream(stars=3, forks=3)
-    both = frozenset({'star_events', 'forks'})
+    both = tests.fixtures.stats.RESOURCES_POPULARITY
     first = sync_once(make_fetcher, upstream, resources=both)
-    assert first.kinds == ['listing', 'forks', 'stargazers']
+    assert first.kinds == ('listing', 'forks', 'stargazers')
     second = sync_once(make_fetcher, upstream, resources=both, cache=first.cache)
-    assert second.kinds == ['listing']
+    assert second.kinds == LISTING
     assert second.report.repos_skipped == 1
     assert second.report.rows_written == {'forks': 0, 'star_events': 0}

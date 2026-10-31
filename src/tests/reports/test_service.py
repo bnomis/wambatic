@@ -20,7 +20,8 @@ import wambatic.reports.service
 import wambatic.settings
 import wambatic.stats.base
 
-COMMITS = frozenset({'commits'})
+COMMITS = tests.fixtures.stats.RESOURCES_ACTIVITY
+COMMITS_AND_ISSUES = frozenset({'commits', 'issues'})
 LOGINS = hypothesis.strategies.from_regex(r'[A-Za-z0-9-]{1,39}', fullmatch=True)
 REPO_NAMES = hypothesis.strategies.from_regex(r'[A-Za-z0-9._-]{1,100}', fullmatch=True)
 NOW = datetime.datetime(2027, 3, 1, 12, 0, tzinfo=datetime.UTC)
@@ -37,7 +38,7 @@ def fetch_settings(max_age: str) -> wambatic.settings.FetchSettings:
 
 
 @pytest.mark.parametrize(
-    ('text', 'expected'),
+    'text,expected',
     [
         ('user:octocat', wambatic.fetch.base.Subject('user', 'octocat')),
         ('org:octo-org', wambatic.fetch.base.Subject('org', 'octo-org')),
@@ -199,19 +200,19 @@ def test_the_sync_log_line_names_the_rows_written_for_each_resource() -> None:
 @pytest.mark.parametrize(
     ('provenance', 'resources', 'max_age', 'full_refresh', 'no_fetch', 'expected'),
     [
-        ({'fetched_at:commits': FRESH}, {'commits'}, '1d', False, True, False),
-        ({'fetched_at:commits': STALE}, {'commits'}, '1d', True, True, False),
+        ({'fetched_at:commits': FRESH}, COMMITS, '1d', False, True, False),
+        ({'fetched_at:commits': STALE}, COMMITS, '1d', True, True, False),
         ({}, set(), '0s', False, False, False),
         ({}, set(), '0s', True, False, False),
-        ({'fetched_at:commits': FRESH}, {'commits'}, '1d', True, False, True),
-        ({'fetched_at:commits': FRESH}, {'commits'}, '0s', False, False, True),
-        ({'fetched_at:commits': FRESH}, {'commits'}, '1d', False, False, False),
-        ({'fetched_at:commits': STALE}, {'commits'}, '1d', False, False, True),
-        ({'fetched_at:commits': 'never'}, {'commits'}, '1d', False, False, True),
-        ({}, {'commits'}, '1d', False, False, True),
+        ({'fetched_at:commits': FRESH}, COMMITS, '1d', True, False, True),
+        ({'fetched_at:commits': FRESH}, COMMITS, '0s', False, False, True),
+        ({'fetched_at:commits': FRESH}, COMMITS, '1d', False, False, False),
+        ({'fetched_at:commits': STALE}, COMMITS, '1d', False, False, True),
+        ({'fetched_at:commits': 'never'}, COMMITS, '1d', False, False, True),
+        ({}, COMMITS, '1d', False, False, True),
         (
             {'fetched_at:commits': FRESH, 'fetched_at:issues': STALE},
-            {'commits', 'issues'},
+            COMMITS_AND_ISSUES,
             '1d',
             False,
             False,
@@ -219,7 +220,7 @@ def test_the_sync_log_line_names_the_rows_written_for_each_resource() -> None:
         ),
         (
             {'fetched_at:commits': FRESH, 'fetched_at:issues': FRESH},
-            {'commits', 'issues'},
+            COMMITS_AND_ISSUES,
             '1d',
             False,
             False,

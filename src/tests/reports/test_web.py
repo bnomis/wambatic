@@ -33,12 +33,12 @@ import wambatic.reports.web
 import wambatic.settings
 import wambatic.stats.errors
 
-KEY = ('org:octo-org', frozenset({'commits'}))
-OTHER = ('org:other', frozenset({'commits'}))
+KEY = ('org:octo-org', tests.fixtures.stats.RESOURCES_ACTIVITY)
+OTHER = ('org:other', tests.fixtures.stats.RESOURCES_ACTIVITY)
 
 
 @pytest.mark.parametrize(
-    ('error', 'status'),
+    'error,status',
     [
         (wambatic.reports.errors.UsageError('x'), 400),
         (wambatic.settings.SettingsError('x'), 400),

@@ -9,19 +9,28 @@ import loguru
 import pytest
 
 import tests.conftest
+import tests.fixtures.fetch.constants
 import tests.fixtures.fetch.recorded
 import tests.fixtures.fetch.responses
 import tests.fixtures.fetch.server
+import tests.fixtures.thaw
 import wambatic.fetch.client
 import wambatic.fetch.errors
 import wambatic.fetch.queries
 import wambatic.fetch.ratelimit
 import wambatic.settings
 
-GRAPHQL = ('POST', '/graphql')
-REPO = ('GET', '/repos/octocat/Hello-World')
-STATS = ('GET', '/repos/octocat/Hello-World/stats/code_frequency')
-VARIABLES = {'login': 'octocat', 'cursor': None}
+GRAPHQL = tests.fixtures.fetch.constants.GRAPHQL_ROUTE
+REPO = (  # auditme: accept[non-alphabetical-literal] (method, path) pair
+    'GET',
+    '/repos/octocat/Hello-World',
+)
+STATS = (  # auditme: accept[non-alphabetical-literal] (method, path) pair
+    'GET',
+    '/repos/octocat/Hello-World/stats/code_frequency',
+)
+ROUTES = ('graphql', 'rest')
+VARIABLES = {'cursor': None, 'login': 'octocat'}
 
 
 def graphql_ok() -> tests.fixtures.fetch.server.Canned:
@@ -321,8 +330,12 @@ def test_graphql_returns_data_and_tracks_limit(make_client: tests.conftest.MakeC
                 return data, client.graphql_limit, server.received[0].json
 
     data, limit, sent = asyncio.run(scenario())
-    assert data == tests.fixtures.fetch.recorded.OWNER_REPOSITORIES_OK['data']
-    recorded = tests.fixtures.fetch.recorded.OWNER_REPOSITORIES_OK['data']['rateLimit']
+    assert data == tests.fixtures.thaw.thaw(
+        tests.fixtures.fetch.recorded.OWNER_REPOSITORIES_OK['data']
+    )
+    recorded = tests.fixtures.thaw.thaw(
+        tests.fixtures.fetch.recorded.OWNER_REPOSITORIES_OK['data']['rateLimit']
+    )
     assert isinstance(recorded, dict)
     assert limit == wambatic.fetch.ratelimit.RateLimitState(
         recorded['remaining'], datetime.datetime.fromisoformat(recorded['resetAt'])
@@ -396,7 +409,11 @@ def test_graphql_dated_returns_the_data_and_the_servers_date_in_utc(
     data, date, plain = asyncio.run(scenario())
     assert date == datetime.datetime(2026, 10, 29, 12, 0, tzinfo=datetime.UTC)
     assert date.utcoffset() == datetime.timedelta(0)
-    assert data == plain == tests.fixtures.fetch.recorded.OWNER_REPOSITORIES_OK['data']
+    assert (
+        data
+        == plain
+        == tests.fixtures.thaw.thaw(tests.fixtures.fetch.recorded.OWNER_REPOSITORIES_OK['data'])
+    )
 
 
 def test_graphql_dated_with_an_unparseable_date_is_malformed(
@@ -593,7 +610,7 @@ def primary_graphql() -> tests.fixtures.fetch.server.Canned:
     )
 
 
-@pytest.mark.parametrize('route', ['rest', 'graphql'])
+@pytest.mark.parametrize('route', ROUTES)
 def test_primary_limit_fail(
     make_client: tests.conftest.MakeClient, sleeps: tests.conftest.Sleeps, route: str
 ) -> None:
@@ -607,7 +624,7 @@ def test_primary_limit_fail(
     assert sleeps == []
 
 
-@pytest.mark.parametrize('route', ['rest', 'graphql'])
+@pytest.mark.parametrize('route', ROUTES)
 def test_primary_limit_wait(
     make_client: tests.conftest.MakeClient, sleeps: tests.conftest.Sleeps, route: str
 ) -> None:

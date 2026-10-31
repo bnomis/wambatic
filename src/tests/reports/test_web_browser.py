@@ -21,7 +21,7 @@ pytestmark = pytest.mark.browser
 
 SMALL_ORG_REPOS = 6
 HISTORY_DELAY = 0.3
-STATES = [
+STATES = [  # auditme: accept[non-alphabetical-literal] the order the states are shown in
     'Waiting for another sync to finish',
     'Listing repositories',
     'Syncing repositories',

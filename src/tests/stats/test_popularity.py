@@ -16,7 +16,7 @@ ORG = {tests.fixtures.stats.ALPHA, tests.fixtures.stats.BETA}
 ORG_STARS = [s for s in tests.fixtures.stats.STAR_EVENTS if s.repo in ORG]
 ORG_FORKS = [f for f in tests.fixtures.stats.FORKS if f.repo in ORG]
 ORG_REPOS = [r for r in tests.fixtures.stats.REPOS if r.name_with_owner in ORG]
-METRICS = ['stars_added', 'stars_total', 'forks_added', 'forks_total']
+METRICS = list(tests.fixtures.stats.POPULARITY_METRICS)
 
 
 def run(
@@ -40,7 +40,9 @@ def run(
     )
 
 
-def check(series: list[wambatic.stats.base.Series], expected: dict[str, dict[str, float]]) -> None:
+def check(
+    series: list[wambatic.stats.base.Series], expected: tests.fixtures.stats.MonthFigures
+) -> None:
     for metric in METRICS:
         assert tests.fixtures.stats.pick(series, metric) == {
             label: values[metric] for label, values in expected.items()
@@ -78,7 +80,9 @@ def test_the_total_bucket_gives_the_counts_over_the_range_and_the_totals_at_unti
     for (tz,) in ((datetime.UTC,), (BERLIN,)):
         series, _ = run(granularity=wambatic.stats.base.Granularity.TOTAL, tz=tz)
         for metric in METRICS:
-            assert list(tests.fixtures.stats.pick(series, metric)) == ['total']
+            assert list(tests.fixtures.stats.pick(series, metric)) == list(
+                tests.fixtures.stats.TOTAL_LABELS
+            )
             assert (
                 tests.fixtures.stats.pick(series, metric)['total']
                 == tests.fixtures.stats.ORG_POPULARITY_TOTAL[metric]
@@ -95,7 +99,7 @@ def test_events_after_until_count_in_nothing_and_events_before_since_only_in_the
 
 def test_the_tables_match_the_hand_written_values() -> None:
     _, tables = run()
-    assert tables['popularity'] == tests.fixtures.stats.ORG_POPULARITY_TABLE
+    assert tables['popularity'] == list(tests.fixtures.stats.ORG_POPULARITY_TABLE)
     languages = tables['languages']
     assert [(row['language'], row['bytes']) for row in languages] == [
         (row['language'], row['bytes']) for row in tests.fixtures.stats.ORG_LANGUAGES_TABLE
@@ -111,7 +115,7 @@ def test_a_user_with_no_language_has_an_empty_languages_table() -> None:
     ]
     _, tables = run([], [], gamma)
     assert tables['languages'] == []
-    assert tables['popularity'] == tests.fixtures.stats.USER_POPULARITY_TABLE
+    assert tables['popularity'] == list(tests.fixtures.stats.USER_POPULARITY_TABLE)
 
 
 def test_other_is_left_out_when_the_listed_languages_cover_the_size_and_is_last_when_biggest() -> (

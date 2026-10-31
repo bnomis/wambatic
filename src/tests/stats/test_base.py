@@ -3,13 +3,14 @@ import datetime
 
 import pytest
 
+import tests.fixtures.stats
 import wambatic.settings
 import wambatic.stats.base
 import wambatic.stats.errors
 
 
 def test_groups_are_the_four_metric_groups() -> None:
-    assert wambatic.stats.base.GROUPS == {'activity', 'delivery', 'flow', 'popularity'}
+    assert wambatic.stats.base.GROUPS == tests.fixtures.stats.GROUPS_ALL
 
 
 def test_granularity_has_the_five_values() -> None:
@@ -25,7 +26,7 @@ def test_granularity_has_the_five_values() -> None:
 def test_a_default_request_is_monthly_activity_and_flow_in_utc() -> None:
     request = wambatic.stats.base.StatsRequest()
     assert request.granularity is wambatic.stats.base.Granularity.MONTH
-    assert request.groups == {'activity', 'flow'}
+    assert request.groups == tests.fixtures.stats.GROUPS_ACTIVITY_FLOW
     assert request.since is None
     assert request.until is None
     assert request.by_author is False

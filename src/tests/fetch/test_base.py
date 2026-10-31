@@ -1,3 +1,4 @@
+import collections.abc
 import dataclasses
 import datetime
 import typing
@@ -6,6 +7,7 @@ import pytest
 
 import tests.fixtures.fetch.recorded
 import tests.fixtures.fetch.responses
+import tests.fixtures.thaw
 import wambatic.fetch.base
 import wambatic.fetch.errors
 
@@ -285,7 +287,9 @@ def test_an_author_without_a_login_is_malformed() -> None:
 
 
 def test_the_recorded_pull_request_and_issue_pages_parse() -> None:
-    recorded: dict[str, typing.Any] = tests.fixtures.fetch.recorded.PULL_REQUESTS_OK
+    recorded: collections.abc.Mapping[str, typing.Any] = tests.fixtures.thaw.thaw(
+        tests.fixtures.fetch.recorded.PULL_REQUESTS_OK
+    )
     pulls = recorded['data']['repository']['pullRequests']['nodes']
     parsed = [wambatic.fetch.base.parse_pull_request(HELLO, node) for node in pulls]
     assert parsed
@@ -296,14 +300,17 @@ def test_the_recorded_pull_request_and_issue_pages_parse() -> None:
     assert bots
     assert not any(login.endswith('[bot]') for login in bots)
     assert {f'{login}[bot]' for login in bots} <= {pull.author_login for pull in parsed}
-    issues = tests.fixtures.fetch.recorded.ISSUES_OK['data']['repository']['issues']['nodes']  # type: ignore[index]
+    recorded_issues = tests.fixtures.thaw.thaw(tests.fixtures.fetch.recorded.ISSUES_OK)
+    issues = recorded_issues['data']['repository']['issues']['nodes']
     assert [wambatic.fetch.base.parse_issue(HELLO, node).number for node in issues] == [
         node['number'] for node in issues
     ]
 
 
 def test_an_automatic_reviewer_is_a_bot_without_the_suffix_and_not_a_first_review() -> None:
-    recorded: dict[str, typing.Any] = tests.fixtures.fetch.recorded.BOT_REVIEWS_OK
+    recorded: collections.abc.Mapping[str, typing.Any] = tests.fixtures.thaw.thaw(
+        tests.fixtures.fetch.recorded.BOT_REVIEWS_OK
+    )
     reviews = recorded['data']['repository']['pullRequest']['reviews']
     # The recording is of a live pull request, so people may review it after the bot does.
     bots = [node for node in reviews['nodes'] if node['author']['__typename'] == 'Bot']
@@ -359,7 +366,8 @@ def test_a_release_without_a_tag_is_malformed() -> None:
 
 
 def test_the_recorded_release_page_parses_and_keeps_a_prerelease() -> None:
-    nodes = tests.fixtures.fetch.recorded.RELEASES_OK['data']['repository']['releases']['nodes']  # type: ignore[index]
+    recorded = tests.fixtures.thaw.thaw(tests.fixtures.fetch.recorded.RELEASES_OK)
+    nodes = recorded['data']['repository']['releases']['nodes']
     parsed = [wambatic.fetch.base.parse_release(HELLO, node) for node in nodes]
     assert [release.tag_name for release in parsed if release] == [
         node['tagName'] for node in nodes if not node['isDraft']
@@ -433,14 +441,14 @@ def test_a_malformed_run_raises(field: str) -> None:
 
 
 def test_the_recorded_run_pages_parse_with_the_short_workflow_path() -> None:
-    runs = tests.fixtures.fetch.recorded.WORKFLOW_RUNS_OK['workflow_runs']
+    runs = tests.fixtures.thaw.thaw(tests.fixtures.fetch.recorded.WORKFLOW_RUNS_OK['workflow_runs'])
     assert isinstance(runs, list)
     parsed = [wambatic.fetch.base.parse_workflow_run(HELLO, node) for node in runs]
     assert [run.id for run in parsed] == [node['id'] for node in runs]
     assert all(run.workflow_path.startswith('.github/workflows/') for run in parsed)
     assert all(run.name and run.status and run.run_started_at for run in parsed)
     single = wambatic.fetch.base.parse_workflow_run(
-        HELLO, tests.fixtures.fetch.recorded.WORKFLOW_RUN_OK
+        HELLO, dict(tests.fixtures.fetch.recorded.WORKFLOW_RUN_OK)
     )
     assert single == parsed[0]
 
@@ -578,9 +586,8 @@ def test_a_malformed_fork_raises(node: object) -> None:
 
 
 def test_the_recorded_popularity_responses_parse() -> None:
-    listing = tests.fixtures.fetch.recorded.OWNER_REPOSITORIES_OK['data']['repositoryOwner'][
-        'repositories'
-    ]['nodes']  # type: ignore[index]
+    recorded = tests.fixtures.thaw.thaw(tests.fixtures.fetch.recorded.OWNER_REPOSITORIES_OK)
+    listing = recorded['data']['repositoryOwner']['repositories']['nodes']
     repos = {node['nameWithOwner']: wambatic.fetch.base.parse_repo(node) for node in listing}
     hello, spoon = repos['octocat/Hello-World'], repos['octocat/Spoon-Knife']
     assert (hello.languages, hello.languages_size) == ((), 0)
@@ -589,7 +596,8 @@ def test_the_recorded_popularity_responses_parse() -> None:
     assert spoon.stargazer_count > 0
     assert spoon.fork_count > 0
     assert spoon.watcher_count > 0
-    stars = tests.fixtures.fetch.recorded.STARGAZERS_OK['data']['repository']['stargazers']['edges']  # type: ignore[index]
+    recorded_stars = tests.fixtures.thaw.thaw(tests.fixtures.fetch.recorded.STARGAZERS_OK)
+    stars = recorded_stars['data']['repository']['stargazers']['edges']
     parsed = [wambatic.fetch.base.parse_star_edge(HELLO, edge) for edge in stars]
     assert [star.user_id for star in parsed] == [edge['node']['id'] for edge in stars]
     assert [star.starred_at for star in parsed] == sorted(
@@ -597,7 +605,7 @@ def test_the_recorded_popularity_responses_parse() -> None:
     )
     forks = [
         wambatic.fetch.base.parse_fork(HELLO, fork)
-        for fork in tests.fixtures.fetch.recorded.FORKS_OK
+        for fork in tests.fixtures.thaw.thaw(tests.fixtures.fetch.recorded.FORKS_OK)
     ]
     assert [fork.created_at for fork in forks] == sorted(
         (fork.created_at for fork in forks), reverse=True

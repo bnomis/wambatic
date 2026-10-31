@@ -21,7 +21,7 @@ ORG_PULLS = [p for p in tests.fixtures.stats.PULL_REQUESTS if p.repo in ORG]
 SETTINGS = wambatic.settings.StatsSettings()
 DEPLOY_YML = dataclasses.replace(SETTINGS, deploy_workflow='deploy.yml')
 DEPLOY_NAME = dataclasses.replace(SETTINGS, deploy_workflow='Deploy')
-ACTIONS_AND_RELEASES = [
+ACTIONS_AND_RELEASES = [  # auditme: accept[non-alphabetical-literal] the order of the series
     'workflow_runs',
     'workflow_success_rate',
     'workflow_duration_p50',
@@ -29,14 +29,7 @@ ACTIONS_AND_RELEASES = [
     'release_count',
     'release_interval_p50',
 ]
-PROXIES = [
-    'deployments',
-    'lead_time_p50',
-    'lead_time_p90',
-    'change_failure_rate',
-    'time_to_restore_p50',
-    'time_to_restore_p90',
-]
+PROXIES = list(tests.fixtures.stats.DELIVERY_PROXIES)
 
 
 def run(
@@ -64,7 +57,7 @@ def run(
 
 def check(
     series: list[wambatic.stats.base.Series],
-    expected: dict[str, dict[str, float]],
+    expected: tests.fixtures.stats.MonthFigures,
     metrics: list[str],
 ) -> None:
     for metric in metrics:
@@ -103,7 +96,7 @@ def test_series_come_in_the_listed_order_with_the_listed_units() -> None:
     series, _ = run(settings=DEPLOY_YML)
     assert [(s.metric, s.unit) for s in series] == list(wambatic.stats.delivery.DELIVERY_METRICS)
     assert all(s.by is None and s.by_kind is None for s in series)
-    assert {s.unit for s in series} == {'count', 'ratio', 'minutes', 'days', 'hours'}
+    assert {s.unit for s in series} == tests.fixtures.stats.DELIVERY_UNITS
 
 
 def test_counts_are_zero_in_an_empty_bucket_and_percentiles_and_ratios_have_no_point() -> None:
@@ -512,7 +505,7 @@ def test_the_user_fixture_has_no_hotfix_rows_matching_the_hand_written_ones() ->
             metric
         )
     assert tests.fixtures.stats.pick(series, 'release_interval_p50') == {}
-    assert rows == tests.fixtures.stats.UNAVAILABLE_NO_HOTFIX
+    assert rows == list(tests.fixtures.stats.UNAVAILABLE_NO_HOTFIX)
 
 
 def test_with_no_releases_and_no_deploy_workflow_no_proxy_is_emitted_and_the_reasons_say_why() -> (

@@ -14,7 +14,7 @@ import wambatic.reports.base
 import wambatic.settings
 import wambatic.stats.base
 
-TOP_LEVEL_KEYS = [
+TOP_LEVEL_KEYS = [  # auditme: accept[non-alphabetical-literal] the order of the keys in the JSON
     'format_version',
     'subject',
     'request',
@@ -24,8 +24,22 @@ TOP_LEVEL_KEYS = [
     'tables',
     'provenance',
 ]
-REQUEST_KEYS = ['granularity', 'groups', 'since', 'until', 'by_author', 'tz', 'settings']
-SERIES_KEYS = ['metric', 'unit', 'by', 'by_kind', 'points']
+REQUEST_KEYS = [  # auditme: accept[non-alphabetical-literal] the order of the keys in the JSON
+    'granularity',
+    'groups',
+    'since',
+    'until',
+    'by_author',
+    'tz',
+    'settings',
+]
+SERIES_KEYS = [  # auditme: accept[non-alphabetical-literal] the order of the keys in the JSON
+    'metric',
+    'unit',
+    'by',
+    'by_kind',
+    'points',
+]
 POINT_KEYS = ['label', 'start', 'value']
 
 
@@ -133,7 +147,7 @@ def test_delivery_values_are_integers_for_counts_and_days_and_floats_for_the_res
 ) -> None:
     data: dict[str, typing.Any] = wambatic.reports.base.result_to_dict(delivery_result)
     units = {series['metric']: series['unit'] for series in data['series']}
-    assert {'count', 'ratio', 'minutes', 'days', 'hours'} <= set(units.values())
+    assert tests.fixtures.stats.DELIVERY_UNITS <= set(units.values())
     for series in data['series']:
         expected = int if series['unit'] in ('count', 'days') else float
         for point in series['points']:
@@ -160,7 +174,7 @@ def test_the_failure_window_is_written_as_seconds_and_parses_back(
     assert wambatic.settings.parse_duration(settings['failure_window']) == datetime.timedelta(
         days=7
     )
-    assert settings['bot_logins'] == ['dependabot[bot]', 'renovate[bot]']
+    assert settings['bot_logins'] == list(wambatic.settings.StatsSettings().bot_logins)
     assert settings['deploy_workflow'] is None
 
 
@@ -214,16 +228,12 @@ def test_the_popularity_series_are_integers_and_the_tables_are_given_as_they_are
     popularity_result: wambatic.stats.base.StatsResult,
 ) -> None:
     data: dict[str, typing.Any] = wambatic.reports.base.result_to_dict(popularity_result)
-    for metric in ('stars_added', 'stars_total', 'forks_added', 'forks_total'):
+    for metric in tests.fixtures.stats.POPULARITY_METRICS:
         points = series_points(data, metric)
         assert all(type(point['value']) is int for point in points), metric
     assert [point['value'] for point in series_points(data, 'stars_total')] == [5, 5, 6, 8]
-    assert data['tables']['popularity'] == tests.fixtures.stats.ORG_POPULARITY_TABLE
-    assert [row['language'] for row in data['tables']['languages']] == [
-        'Python',
-        'Go',
-        'Shell',
-        'Other',
-    ]
+    assert data['tables']['popularity'] == list(tests.fixtures.stats.ORG_POPULARITY_TABLE)
+    languages = [row['language'] for row in data['tables']['languages']]
+    assert languages == list(tests.fixtures.stats.LANGUAGES_BY_SIZE)
     assert json.loads(render(popularity_result))['tables'] == data['tables']
     assert data['request']['groups'] == ['popularity']

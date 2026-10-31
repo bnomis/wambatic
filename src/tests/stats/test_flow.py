@@ -16,7 +16,7 @@ BERLIN = zoneinfo.ZoneInfo('Europe/Berlin')
 ORG_PULLS = [p for p in tests.fixtures.stats.PULL_REQUESTS if p.repo != tests.fixtures.stats.GAMMA]
 ORG_ISSUES = [i for i in tests.fixtures.stats.ISSUES if i.repo != tests.fixtures.stats.GAMMA]
 UNITS = {
-    'count': {'prs_opened', 'prs_merged', 'issues_opened', 'issues_closed'},
+    'count': tests.fixtures.stats.FLOW_COUNTS,
     'hours': {
         'time_to_first_review_p50',
         'time_to_first_review_p90',

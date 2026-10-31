@@ -6,9 +6,11 @@ import typing
 import playwright.sync_api
 import pytest
 
+import tests.fixtures.reports
 import tests.reports.conftest
 import wambatic.reports.figures
 import wambatic.reports.html
+import wambatic.settings
 import wambatic.stats.base
 
 pytestmark = pytest.mark.browser
@@ -34,7 +36,7 @@ def open_report(
     contexts: list[playwright.sync_api.BrowserContext] = []
 
     def open_page(
-        theme: typing.Literal['auto', 'dark', 'light'] = 'auto',
+        theme: wambatic.settings.Theme = 'auto',
         scheme: typing.Literal['dark', 'light'] = 'light',
         report: wambatic.reports.html.HtmlReport = org_report,
     ) -> Opened:
@@ -125,7 +127,7 @@ def test_each_granularity_shows_its_own_buckets_and_tables(
 ) -> None:
     opened = open_report()
     page = opened.page
-    assert visible_tables(page) == {'month'}
+    assert visible_tables(page) == tests.fixtures.reports.MONTH_ONLY
     for granularity in wambatic.reports.html.PERIODS:
         figures = wambatic.reports.figures.build_figures(org_report.periods[granularity])
         expected = len(figures[0].data[0]['x'])  # type: ignore[arg-type]

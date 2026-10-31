@@ -22,10 +22,10 @@ import wambatic.stats.flow
 Request = wambatic.stats.base.StatsRequest
 BERLIN = zoneinfo.ZoneInfo('Europe/Berlin')
 ALPHA_SUBJECT = wambatic.fetch.base.Subject('repo', 'octo-org', 'alpha')
-ACTIVITY = frozenset({'activity'})
-FLOW = frozenset({'flow'})
-TOTALS = ('commits', 'contributors', 'active_days', 'lines_added', 'lines_deleted', 'lines_net')
-BREAKDOWN = ('commits', 'lines_added', 'lines_deleted', 'lines_net')
+ACTIVITY = tests.fixtures.stats.GROUP_ACTIVITY
+FLOW = tests.fixtures.stats.GROUP_FLOW
+TOTALS = tests.fixtures.stats.ACTIVITY_TOTALS
+BREAKDOWN = tests.fixtures.stats.ACTIVITY_BREAKDOWN
 
 
 def clock() -> datetime.datetime:
@@ -81,15 +81,17 @@ def untouched(
 
 def test_resources_for_maps_each_group() -> None:
     resources_for = wambatic.stats.engine.resources_for
-    assert resources_for(frozenset({'activity'})) == {'commits'}
-    assert resources_for(frozenset({'flow'})) == {'issues', 'pull_requests'}
-    assert resources_for(frozenset({'delivery'})) == {'pull_requests', 'releases', 'workflow_runs'}
-    assert resources_for(frozenset({'popularity'})) == {'forks', 'star_events'}
-    assert resources_for(frozenset({'activity', 'flow'})) == {
-        'commits',
-        'issues',
-        'pull_requests',
-    }
+    assert resources_for(ACTIVITY) == tests.fixtures.stats.RESOURCES_ACTIVITY
+    assert resources_for(FLOW) == tests.fixtures.stats.RESOURCES_FLOW
+    assert resources_for(tests.fixtures.stats.GROUP_DELIVERY) == (
+        tests.fixtures.stats.RESOURCES_DELIVERY
+    )
+    assert resources_for(tests.fixtures.stats.GROUP_POPULARITY) == (
+        tests.fixtures.stats.RESOURCES_POPULARITY
+    )
+    assert resources_for(tests.fixtures.stats.GROUPS_ACTIVITY_FLOW) == (
+        tests.fixtures.stats.RESOURCES_ACTIVITY_FLOW
+    )
     assert resources_for(frozenset()) == frozenset()
 
 
@@ -116,7 +118,7 @@ def test_an_org_by_month_matches_the_hand_written_values_with_repo_series_only(
                 label: values[position] for label, values in months.items()
             }
     assert not [s for s in result.series if s.by_kind == 'author']
-    assert result.tables['top_contributors'] == tests.fixtures.stats.ORG_TOP_CONTRIBUTORS
+    assert result.tables['top_contributors'] == list(tests.fixtures.stats.ORG_TOP_CONTRIBUTORS)
     assert (result.since, result.until) == (tests.fixtures.stats.SINCE, tests.fixtures.stats.UNTIL)
     assert result.subject == tests.fixtures.stats.ORG
 
@@ -206,7 +208,7 @@ def test_an_open_start_begins_at_the_earliest_commits_bucket(
     assert week.since == datetime.date(2026, 10, 5)  # a1 is in the week of Monday 5 October
     total = compute(stats_fetcher, since=None, granularity=wambatic.stats.base.Granularity.TOTAL)
     assert total.since == datetime.date(2026, 10, 5)
-    assert list(pick(total, 'commits')) == ['total']
+    assert tuple(pick(total, 'commits')) == tests.fixtures.stats.TOTAL_LABELS
 
 
 def test_a_commit_after_today_is_left_out_when_the_end_is_open(
@@ -234,15 +236,17 @@ def test_the_default_request_returns_flow_beside_activity_and_lists_nothing_unav
     assert pick(result, 'prs_opened')
     assert result.tables['unavailable'] == []
     assert not {'popularity', 'languages'} & result.tables.keys()
-    assert not [s for s in result.series if s.metric.startswith(('stars', 'forks'))]
+    assert not [
+        s for s in result.series if s.metric.startswith(tests.fixtures.stats.POPULARITY_PREFIXES)
+    ]
 
 
 def test_every_requested_group_is_in_the_series_and_none_is_unavailable(
     stats_fetcher: wambatic.fetch.base.Fetcher,
 ) -> None:
-    result = compute(stats_fetcher, groups=frozenset({'activity', 'flow', 'delivery'}))
+    result = compute(stats_fetcher, groups=tests.fixtures.stats.GROUPS_ACTIVITY_FLOW_DELIVERY)
     rows = {row['metric'] for row in result.tables['unavailable']}
-    assert not {'delivery', 'flow', 'activity'} & rows
+    assert not tests.fixtures.stats.GROUPS_ACTIVITY_FLOW_DELIVERY & rows
     assert pick(result, 'commits')
     assert pick(result, 'prs_opened')
     assert pick(result, 'workflow_runs')
@@ -251,7 +255,7 @@ def test_every_requested_group_is_in_the_series_and_none_is_unavailable(
 def test_the_org_flow_series_equal_the_hand_written_values_in_utc(
     stats_fetcher: wambatic.fetch.base.Fetcher,
 ) -> None:
-    result = compute(stats_fetcher, groups=frozenset({'activity', 'flow'}))
+    result = compute(stats_fetcher, groups=tests.fixtures.stats.GROUPS_ACTIVITY_FLOW)
     for metric, expected in tests.fixtures.stats.ORG_FLOW_BY_MONTH_UTC.items():
         assert pick(result, metric) == pytest.approx(expected), metric
 
@@ -293,7 +297,7 @@ def test_a_range_with_pull_requests_but_no_commits_gives_zero_activity_and_the_f
 ) -> None:
     result = compute(
         stats_fetcher,
-        groups=frozenset({'activity', 'flow'}),
+        groups=tests.fixtures.stats.GROUPS_ACTIVITY_FLOW,
         since=datetime.date(2026, 11, 1),
         until=datetime.date(2026, 11, 30),
     )
@@ -310,7 +314,7 @@ def test_a_range_with_neither_commits_nor_flow_events_is_empty(
     with pytest.raises(wambatic.stats.errors.EmptySubjectError, match='activity or flow.*range'):
         compute(
             stats_fetcher,
-            groups=frozenset({'activity', 'flow'}),
+            groups=tests.fixtures.stats.GROUPS_ACTIVITY_FLOW,
             since=datetime.date(2025, 1, 1),
             until=datetime.date(2025, 2, 1),
         )
@@ -338,8 +342,8 @@ def test_a_pull_request_updated_in_range_but_with_every_event_outside_it_is_not_
 def test_the_provenance_carries_a_fetched_at_for_each_flow_resource(
     stats_fetcher: wambatic.fetch.base.Fetcher,
 ) -> None:
-    result = compute(stats_fetcher, groups=frozenset({'activity', 'flow'}))
-    for resource in ('commits', 'issues', 'pull_requests'):
+    result = compute(stats_fetcher, groups=tests.fixtures.stats.GROUPS_ACTIVITY_FLOW)
+    for resource in tests.fixtures.stats.RESOURCES_ACTIVITY_FLOW:
         assert (
             result.provenance[f'fetched_at:{resource}']
             == tests.fixtures.stats.ALPHA_SYNCED_AT.isoformat()
@@ -350,7 +354,9 @@ def test_the_provenance_carries_a_fetched_at_for_each_flow_resource(
 def test_the_series_come_in_the_order_activity_flow_breakdowns(
     stats_fetcher: wambatic.fetch.base.Fetcher,
 ) -> None:
-    result = compute(stats_fetcher, groups=frozenset({'activity', 'flow'}), by_author=True)
+    result = compute(
+        stats_fetcher, groups=tests.fixtures.stats.GROUPS_ACTIVITY_FLOW, by_author=True
+    )
     names = [(s.metric, s.by_kind) for s in result.series]
     totals = [name for name, kind in names if kind is None]
     assert totals == list(TOTALS) + [name for name, _ in wambatic.stats.flow.FLOW_METRICS]
@@ -369,15 +375,7 @@ def test_a_flow_only_result_has_no_activity_series_or_tables_beyond_unavailable(
 
 # Delivery
 
-DELIVERY = frozenset({'delivery'})
-DELIVERY_PROXIES = (
-    'deployments',
-    'lead_time_p50',
-    'lead_time_p90',
-    'change_failure_rate',
-    'time_to_restore_p50',
-    'time_to_restore_p90',
-)
+DELIVERY = tests.fixtures.stats.GROUP_DELIVERY
 FLOW_NAMES = [name for name, _ in wambatic.stats.flow.FLOW_METRICS]
 DELIVERY_NAMES = [name for name, _ in wambatic.stats.delivery.DELIVERY_METRICS]
 
@@ -444,7 +442,7 @@ def test_the_user_subject_delivery_counts_every_item_of_the_users_repos_whoever_
     result = compute(stats_fetcher, tests.fixtures.stats.USER, groups=DELIVERY, **kwargs)
     for metric, value in tests.fixtures.stats.USER_DELIVERY_TOTAL_UTC.items():
         assert pick(result, metric) == pytest.approx({'total': value}), metric
-    assert result.tables['unavailable'] == tests.fixtures.stats.UNAVAILABLE_NO_HOTFIX
+    assert result.tables['unavailable'] == list(tests.fixtures.stats.UNAVAILABLE_NO_HOTFIX)
     other = tests.fixtures.stats.pull(
         tests.fixtures.stats.GAMMA, 3, 'monalisa', '2026-10-11T09:00', merged='2026-10-12T09:00'
     )  # lead time 27 h to g1.0 on 10-12T12:00, by someone but the user
@@ -461,7 +459,7 @@ def test_all_three_groups_are_ordered_activity_flow_delivery_then_the_breakdowns
     stats_fetcher: wambatic.fetch.base.Fetcher,
 ) -> None:
     result = compute(
-        stats_fetcher, groups=frozenset({'activity', 'flow', 'delivery'}), by_author=True
+        stats_fetcher, groups=tests.fixtures.stats.GROUPS_ACTIVITY_FLOW_DELIVERY, by_author=True
     )
     names = [s.metric for s in result.series]
     totals = [s.metric for s in result.series if s.by is None]
@@ -663,21 +661,20 @@ def test_the_total_lines_added_are_the_non_merge_additions_in_range(
 
 # Popularity
 
-POPULARITY = frozenset({'popularity'})
-POPULARITY_METRICS = ('stars_added', 'stars_total', 'forks_added', 'forks_total')
+POPULARITY = tests.fixtures.stats.GROUP_POPULARITY
 
 
 def test_an_org_by_month_matches_the_hand_written_popularity(
     stats_fetcher: wambatic.fetch.base.Fetcher,
 ) -> None:
     result = compute(stats_fetcher, groups=POPULARITY)
-    for metric in POPULARITY_METRICS:
+    for metric in tests.fixtures.stats.POPULARITY_METRICS:
         assert pick(result, metric) == {
             label: values[metric]
             for label, values in tests.fixtures.stats.ORG_POPULARITY_BY_MONTH_UTC.items()
         }
-    assert [s.metric for s in result.series] == list(POPULARITY_METRICS)
-    assert result.tables['popularity'] == tests.fixtures.stats.ORG_POPULARITY_TABLE
+    assert [s.metric for s in result.series] == list(tests.fixtures.stats.POPULARITY_METRICS)
+    assert result.tables['popularity'] == list(tests.fixtures.stats.ORG_POPULARITY_TABLE)
     assert [row['language'] for row in result.tables['languages']] == [
         row['language'] for row in tests.fixtures.stats.ORG_LANGUAGES_TABLE
     ]
@@ -689,7 +686,7 @@ def test_popularity_by_month_in_berlin_moves_the_midnight_star(
     stats_fetcher: wambatic.fetch.base.Fetcher,
 ) -> None:
     result = compute(stats_fetcher, groups=POPULARITY, tz=BERLIN)
-    for metric in POPULARITY_METRICS:
+    for metric in tests.fixtures.stats.POPULARITY_METRICS:
         assert pick(result, metric) == {
             label: values[metric]
             for label, values in tests.fixtures.stats.ORG_POPULARITY_BY_MONTH_BERLIN.items()
@@ -699,15 +696,15 @@ def test_popularity_by_month_in_berlin_moves_the_midnight_star(
 def test_every_group_is_ordered_activity_flow_delivery_popularity_then_breakdowns(
     stats_fetcher: wambatic.fetch.base.Fetcher,
 ) -> None:
-    result = compute(
-        stats_fetcher, groups=frozenset({'activity', 'flow', 'delivery', 'popularity'})
-    )
+    result = compute(stats_fetcher, groups=ALL_GROUPS)
     names = [s.metric for s in result.series if s.by is None]
     assert names[: len(TOTALS)] == list(TOTALS)
     flow_end = len(TOTALS) + len(wambatic.stats.flow.FLOW_METRICS)
     assert names[len(TOTALS) : flow_end] == [n for n, _ in wambatic.stats.flow.FLOW_METRICS]
-    assert names[-len(POPULARITY_METRICS) :] == list(POPULARITY_METRICS)
-    assert 'workflow_runs' in names[flow_end : -len(POPULARITY_METRICS)]
+    assert names[-len(tests.fixtures.stats.POPULARITY_METRICS) :] == list(
+        tests.fixtures.stats.POPULARITY_METRICS
+    )
+    assert 'workflow_runs' in names[flow_end : -len(tests.fixtures.stats.POPULARITY_METRICS)]
     assert [s.by_kind for s in result.series if s.by is not None][0] == 'repo'
     assert result.series[-1].by is not None
 
@@ -716,12 +713,12 @@ def test_a_user_subject_counts_every_star_and_fork_of_the_users_repositories(
     stats_fetcher: wambatic.fetch.base.Fetcher,
 ) -> None:
     result = compute(stats_fetcher, tests.fixtures.stats.USER, groups=POPULARITY)
-    for metric in POPULARITY_METRICS:
+    for metric in tests.fixtures.stats.POPULARITY_METRICS:
         assert pick(result, metric) == {
             label: values[metric]
             for label, values in tests.fixtures.stats.USER_POPULARITY_BY_MONTH_UTC.items()
         }
-    assert result.tables['popularity'] == tests.fixtures.stats.USER_POPULARITY_TABLE
+    assert result.tables['popularity'] == list(tests.fixtures.stats.USER_POPULARITY_TABLE)
     assert result.tables['languages'] == []
 
 
@@ -731,7 +728,9 @@ def test_the_range_starts_at_the_earliest_star_or_fork_of_a_requested_group(
     only = compute(stats_fetcher, groups=POPULARITY, since=None)
     assert only.since == datetime.date(2026, 7, 1)  # fork 1001, before the first star b1
     assert pick(only, 'stars_added')['2026-08'] == 1
-    both = compute(stats_fetcher, groups=frozenset({'activity', 'popularity'}), since=None)
+    both = compute(
+        stats_fetcher, groups=tests.fixtures.stats.GROUPS_ACTIVITY_POPULARITY, since=None
+    )
     assert both.since == datetime.date(2026, 7, 1)
     activity_only = compute(stats_fetcher, groups=ACTIVITY, since=None)
     assert activity_only.since == datetime.date(2026, 10, 1)  # a1, the first commit
@@ -779,7 +778,7 @@ def test_a_repository_with_hidden_stargazers_is_left_out_of_the_star_series_and_
 def test_a_request_with_activity_has_no_unavailable_row_for_the_popularity_metrics(
     stats_fetcher: wambatic.fetch.base.Fetcher,
 ) -> None:
-    result = compute(stats_fetcher, groups=frozenset({'activity', 'popularity'}))
+    result = compute(stats_fetcher, groups=tests.fixtures.stats.GROUPS_ACTIVITY_POPULARITY)
     rows = {row['metric'] for row in result.tables['unavailable']}
     assert not {'stars', 'forks', 'watchers', 'languages'} & rows
 
@@ -823,7 +822,7 @@ class CountingFetcher:
         return counted
 
 
-ALL_GROUPS = frozenset({'activity', 'delivery', 'flow', 'popularity'})
+ALL_GROUPS = tests.fixtures.stats.GROUPS_ALL
 
 
 def run_all_of(

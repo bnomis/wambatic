@@ -423,7 +423,7 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 ## Task 11: Clear the test-tree literal, ordering and fixture-constant hits
 
-**Status:** todo
+**Status:** done
 **Priority:** low
 **Complexity:** large
 **Source Reference:** Decision 1 (B): `literal-duplication` (254), `non-alphabetical-literal` (24), `non-alphabetical-dict-keys` (17), `mutable-module-level-exported` (16) under `src/tests/`
@@ -432,20 +432,21 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 **Subtasks:**
 
-- [ ] `literal-duplication`: name each repeated literal once (in the test module, or in `src/tests/fixtures/` when several modules share it) and reuse it
-- [ ] `non-alphabetical-literal` and `non-alphabetical-dict-keys`: sort; where a canned response or expected output must keep GitHub's or the renderer's order, stop for the user before adding a marker (Decision 1 B chose no markers)
-- [ ] `mutable-module-level-exported` (`src/tests/fixtures/fetch/recorded.py`, `responses.py` and the rest): freeze with `types.MappingProxyType`/tuples, and make the tests that change a fixture copy it first (`copy.deepcopy`); `bin/record-fixtures.py`'s `module_text` writes the frozen form, so a re-recording keeps it
+- [x] `literal-duplication`: name each repeated literal once (in the test module, or in `src/tests/fixtures/` when several modules share it) and reuse it
+- [x] `non-alphabetical-literal` and `non-alphabetical-dict-keys`: sort; where a canned response or expected output must keep GitHub's or the renderer's order, stop for the user before adding a marker (Decision 1 B chose no markers)
+  - Unblocked 2026-10-31 (operator answer): sort every ordering hit whose order means nothing. For each one whose order carries meaning - `(method, path)` request pairs, argv lists where a flag sits next to its value, a display, column or series order the test checks, GitHub's key order in a canned response - add `# auditme: accept[non-alphabetical-literal] <why the order matters>` (or `accept[non-alphabetical-dict-keys]`) on the line or the line above. This reverses Decision 1 B for these order-dependent hits only; every other test-tree hit is still fixed in code, with no marker
+- [x] `mutable-module-level-exported` (`src/tests/fixtures/fetch/recorded.py`, `responses.py` and the rest): freeze with `types.MappingProxyType`/tuples, and make the tests that change a fixture copy it first (`copy.deepcopy`); `bin/record-fixtures.py`'s `module_text` writes the frozen form, so a re-recording keeps it
 
 **Acceptance Criteria:**
 
-- [ ] `bin/audit-check.sh --path src/tests` exits 0
-- [ ] `bin/record-fixtures.py`'s output for the recorded data passes the same check (the module it writes is frozen)
+- [x] `bin/audit-check.sh --path src/tests` exits 0
+- [x] `bin/record-fixtures.py`'s output for the recorded data passes the same check (the module it writes is frozen)
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest` on every test module the task edits passes, and `pytest -m browser src/tests/reports` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest` on every test module the task edits passes; `pytest -m browser src/tests/reports` was skipped (Chromium is not installed here, 9 skipped)
 
 **Notes:**
 

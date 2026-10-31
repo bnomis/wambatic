@@ -16,8 +16,8 @@ import wambatic.stats.errors
 
 BERLIN = zoneinfo.ZoneInfo('Europe/Berlin')
 SETTINGS = wambatic.settings.StatsSettings()
-TOTALS = ('commits', 'contributors', 'active_days', 'lines_added', 'lines_deleted', 'lines_net')
-BREAKDOWN = ('commits', 'lines_added', 'lines_deleted', 'lines_net')
+TOTALS = tests.fixtures.stats.ACTIVITY_TOTALS
+BREAKDOWN = tests.fixtures.stats.ACTIVITY_BREAKDOWN
 
 
 def run(
@@ -53,7 +53,7 @@ def pick(
 
 
 @pytest.mark.parametrize(
-    ('tz', 'expected'),
+    'tz,expected',
     [
         (datetime.UTC, tests.fixtures.stats.ORG_BY_MONTH_UTC),
         (BERLIN, tests.fixtures.stats.ORG_BY_MONTH_BERLIN),
@@ -68,7 +68,7 @@ def test_the_fixture_by_month_matches_the_hand_written_values(
 
 
 @pytest.mark.parametrize(
-    ('tz', 'expected'),
+    'tz,expected',
     [
         (datetime.UTC, tests.fixtures.stats.ORG_TOTAL_UTC),
         (BERLIN, tests.fixtures.stats.ORG_TOTAL_BERLIN),
@@ -204,7 +204,7 @@ def test_the_unattributed_commit_and_a_bot_have_series() -> None:
 def test_the_top_contributors_match_the_hand_written_rows() -> None:
     for tz in (datetime.UTC, BERLIN):
         _, tables = run(tz=tz)
-        assert tables['top_contributors'] == tests.fixtures.stats.ORG_TOP_CONTRIBUTORS
+        assert tables['top_contributors'] == list(tests.fixtures.stats.ORG_TOP_CONTRIBUTORS)
 
 
 def test_top_contributors_leave_out_the_bot_and_keep_unattributed() -> None:

@@ -4,6 +4,7 @@ import pathlib
 
 import pytest
 
+import tests.fixtures.stats
 import wambatic.fetch.base
 import wambatic.fetch.cache
 import wambatic.fetch.client
@@ -42,7 +43,7 @@ def test_line_totals_match_code_frequency(tmp_path: pathlib.Path) -> None:
             async with wambatic.fetch.base.Fetcher(
                 TOKEN, cache, wambatic.settings.FetchSettings()
             ) as fetcher:
-                await fetcher.sync(subject, frozenset({'commits'}))
+                await fetcher.sync(subject, tests.fixtures.stats.RESOURCES_ACTIVITY)
                 response = await fetcher.client.rest_get(
                     '/repos/octocat/Hello-World/stats/code_frequency'
                 )
@@ -66,7 +67,7 @@ def test_line_totals_match_code_frequency(tmp_path: pathlib.Path) -> None:
 
 @pytest.mark.live
 @pytest.mark.skipif(not TOKEN, reason='GITHUB_TOKEN is not set')
-@pytest.mark.parametrize('resource', ['star_events', 'forks'])
+@pytest.mark.parametrize('resource', sorted(tests.fixtures.stats.RESOURCES_POPULARITY))
 def test_stars_and_forks_are_cached(tmp_path: pathlib.Path, resource: str) -> None:
     """Some rows are stored. They are not compared with the listed counts: the REST fork list of
     octocat/Hello-World holds more forks than its `forkCount`, so the counts are only the probes."""

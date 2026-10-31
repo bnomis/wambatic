@@ -38,3 +38,14 @@ directory, not in agents (see `.agents/claude/rules/rule-scope.md`).
 ## Tests
 
 `src/tests/fetch/test_fetcher.py` is deliberately separate from `test_base.py`: it holds the `Fetcher` sync tests and is too long to merge into the module-level tests of `fetch/base.py` (audit review 1, F16).
+
+## Checks
+
+- On commit (pre-commit): ruff with the rules in `pyproject.toml`, ruff format, mypy.
+- On push (pre-push): `bin/audit-check.sh`, the whole-tree audit script; any unaccepted hit refuses the push.
+- In CI: all of the above, plus the tests, in the `check`, `browser`, `live` and `audit` jobs.
+- `--no-verify` is never used; fix the hit or record the accepted exception.
+
+Install both hook types: `pre-commit install --hook-type pre-commit --hook-type pre-push`.
+
+`.gitmodules` keeps `.agents` on the HTTPS URL because Claude Code cloud sessions fill it from there and have no SSH key. An SSH-only checkout sets `git config submodule..agents.url git@github.com:bnomis/agents.git` locally. The CI `audit` job reads the private repository with a read-only deploy key held as the Actions secret `AGENTS_DEPLOY_KEY`.

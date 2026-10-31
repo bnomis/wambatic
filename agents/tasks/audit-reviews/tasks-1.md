@@ -575,27 +575,28 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 **Subtasks:**
 
 - [x] `.pre-commit-config.yaml`: add a local hook `audit` with `entry: bin/audit-check.sh`, `language: system`, `pass_filenames: false`, `always_run: true`, `stages: [pre-push]`; set `default_install_hook_types: [pre-commit, pre-push]`; run `pre-commit install --hook-type pre-commit --hook-type pre-push`
-- [ ] Stop the task as `blocked` until the operator has added a read-only deploy key: generate a key pair (`ssh-keygen -t ed25519 -N '' -f agents_deploy_key`), add the public half to `bnomis/agents` as a read-only deploy key, and store the private half in `bnomis/wambatic` as the Actions secret `AGENTS_DEPLOY_KEY`. Check: `gh secret list -R bnomis/wambatic` lists `AGENTS_DEPLOY_KEY`. Write these steps in the task's blocked note so the operator can follow them
-- [ ] `.github/workflows/ci.yml`: add an `audit` job that checks out with `submodules: false` (actions/checkout pinned as the other jobs are), loads `${{ secrets.AGENTS_DEPLOY_KEY }}` into an ssh-agent (webfactory/ssh-agent pinned by commit hash, or `ssh-add` from a temporary file deleted at the end of the step), fills the submodule with `git -c url."git@github.com:".insteadOf=https://github.com/ submodule update --init .agents`, then runs `uv sync --locked` and `bin/audit-check.sh`
-- [ ] Keep `.gitmodules` on `https://github.com/bnomis/agents`: Claude Code cloud sessions fill the submodule from that URL in `.claude/hooks/session-start.sh` and have no SSH key, so switching it would break them. Say in AGENTS.md that an SSH-only checkout sets `git config submodule..agents.url git@github.com:bnomis/agents.git` locally
-- [ ] AGENTS.md: a Checks section naming what runs on commit (ruff with the rules of Task 1, ruff format, mypy), on push (`bin/audit-check.sh`) and in CI (all of them), and that `--no-verify` is never used
+- [x] Stop the task as `blocked` until the operator has added a read-only deploy key: generate a key pair (`ssh-keygen -t ed25519 -N '' -f agents_deploy_key`), add the public half to `bnomis/agents` as a read-only deploy key, and store the private half in `bnomis/wambatic` as the Actions secret `AGENTS_DEPLOY_KEY`. Check: `gh secret list -R bnomis/wambatic` lists `AGENTS_DEPLOY_KEY`. Write these steps in the task's blocked note so the operator can follow them
+  - Unblocked 2026-10-31 (operator answer): the operator added the read-only deploy key `wambatic CI` to `bnomis/agents` and the Actions secret `AGENTS_DEPLOY_KEY` to `bnomis/wambatic` through the GitHub web UI. The agent's token cannot list either (HTTP 403), so do not re-check with `gh secret list`; the CI `audit` job passing on the branch's pull request is the check
+- [x] `.github/workflows/ci.yml`: add an `audit` job that checks out with `submodules: false` (actions/checkout pinned as the other jobs are), loads `${{ secrets.AGENTS_DEPLOY_KEY }}` into an ssh-agent (webfactory/ssh-agent pinned by commit hash, or `ssh-add` from a temporary file deleted at the end of the step), fills the submodule with `git -c url."git@github.com:".insteadOf=https://github.com/ submodule update --init .agents`, then runs `uv sync --locked` and `bin/audit-check.sh`
+- [x] Keep `.gitmodules` on `https://github.com/bnomis/agents`: Claude Code cloud sessions fill the submodule from that URL in `.claude/hooks/session-start.sh` and have no SSH key, so switching it would break them. Say in AGENTS.md that an SSH-only checkout sets `git config submodule..agents.url git@github.com:bnomis/agents.git` locally
+- [x] AGENTS.md: a Checks section naming what runs on commit (ruff with the rules of Task 1, ruff format, mypy), on push (`bin/audit-check.sh`) and in CI (all of them), and that `--no-verify` is never used
 - [ ] Run the audit (`/auditme`) as review-2 on the finished branch and confirm the script reports no unaccepted hit; any Phase B finding goes to the user, not into this list
-- [ ] `agents/audit-reviews/summary.md`: move review-1's resolved findings to Recently resolved (audit skill step 8b)
-- [ ] Set the `**Status:**` of the stats spec (1.6) and the reports spec (1.9) back to `implemented`
+- [x] `agents/audit-reviews/summary.md`: move review-1's resolved findings to Recently resolved (audit skill step 8b)
+- [x] Set the `**Status:**` of the stats spec (1.6) and the reports spec (1.9) back to `implemented`
 
 **Acceptance Criteria:**
 
-- [ ] A push with a deliberately added unaccepted hit (a `typing.Callable` in a scratch commit) is refused by the pre-push hook, then the scratch commit is dropped
+- [x] A push with a deliberately added unaccepted hit (a `typing.Callable` in a scratch commit) is refused by the pre-push hook, then the scratch commit is dropped
 - [ ] The CI `audit` job passes on the branch's pull request
-- [ ] `bin/audit-check.sh` exits 0
+- [x] `bin/audit-check.sh` exits 0
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] `pre-commit run --all-files` passes
-- [ ] `pre-commit run --hook-stage pre-push --all-files` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] `pre-commit run --all-files` passes
+- [x] `pre-commit run --hook-stage pre-push --all-files` passes
 - [ ] `bin/audit-check.sh` exits 0
-- [ ] `pytest -m 'not slow and not live and not browser'` passes: the list changes every source package, so every test module imports a changed module (this is the importer set, not a routine full run)
+- [x] `pytest -m 'not slow and not live and not browser'` passes: the list changes every source package, so every test module imports a changed module (this is the importer set, not a routine full run)
 - [ ] `pytest -m browser` passes
 
 **Notes:**

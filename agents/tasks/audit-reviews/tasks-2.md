@@ -28,7 +28,7 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 ## Task 1: Make every Raises section match what reaches the caller
 
-**Status:** todo
+**Status:** in-progress
 **Priority:** high
 **Complexity:** medium
 **Source Reference:** G2 (A4, `raises-section-drift`); `TODO.md` item "The auditme checker's 2026-10-31 rules report hits here"
@@ -44,8 +44,8 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 **Acceptance Criteria:**
 
-- [ ] `bin/audit-check.sh --rule raises-section-drift` exits 0
-- [ ] `bin/audit-check.sh` exits 0, so `git push` passes the pre-push hook
+- [x] `bin/audit-check.sh --rule raises-section-drift` exits 0
+- [x] `bin/audit-check.sh` exits 0, so `git push` passes the pre-push hook
 
 **Definition of Done:**
 
@@ -58,6 +58,9 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 - Key files: `src/wambatic/fetch/client.py`, `fetch/cache.py`, `fetch/base.py`, `stats/engine.py`, `stats/buckets.py`, `reports/service.py`, `reports/web.py`
 - Docstrings only: if a hit needs a behaviour change to be true, stop for the user
+
+---
+- Operator session, 2026-10-31: the 16 script hits are fixed. Two were false (`stats/buckets.py` `bucket_range` and `stats/engine.py` `aggregate`: `bucket_start` cannot raise for TOTAL there) and carry scoped `accept[raises-section-drift]` markers; the checker does not see the TOTAL guard, which is a refinement to raise in the auditme skill's `requests.md`. Still open: the A4 rows the script does not check (callees in another package, and `owner_kind`, `list_repos`, `provenance`, `line_counts`, `read_records`, `compute`, `results_or_job`, `serve`).
 
 ---
 

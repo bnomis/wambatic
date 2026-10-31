@@ -252,6 +252,9 @@ async def sync_and_compute(
 
     Raises:
         EmptySubjectError: the subject has nothing to report.
+        InvalidRequestError: the requests differ in more than granularity.
+        UnknownGroupError: a group is outside `GROUPS`.
+        InvalidRangeError: `since` is after `until`, or the range resolves backwards.
     """
     subject = await sync_target(
         settings,

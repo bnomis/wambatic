@@ -86,6 +86,7 @@ def bucket_for(
     return wambatic.stats.base.Bucket(start, label(start, granularity))
 
 
+# auditme: accept[raises-section-drift] TOTAL returns before bucket_start can raise
 def bucket_range(
     since: datetime.date, until: datetime.date, granularity: wambatic.stats.base.Granularity
 ) -> list[wambatic.stats.base.Bucket]:

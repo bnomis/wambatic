@@ -248,6 +248,8 @@ def parse_query(
 
     Raises:
         UsageError: a query parameter is invalid.
+        SettingsError: `settings.stats.timezone` is not a known time zone.
+        UnknownGroupError: a group is outside `GROUPS`.
     """
     text = (blank_to_none(raw.target) or '').strip()
     if not text:

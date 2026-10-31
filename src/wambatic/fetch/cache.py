@@ -554,6 +554,7 @@ class Cache:
 
         Raises:
             InvalidRequestError: a record or the state belongs to another repo.
+            CacheError: the cache file cannot be read or written.
         """
         if any(record.repo != repo for record in records) or state.repo != repo:
             raise wambatic.fetch.errors.InvalidRequestError(

@@ -232,6 +232,7 @@ async def read_records(
     )
 
 
+# auditme: accept[raises-section-drift] bucket_start is only called for non-TOTAL
 def aggregate(
     subject: wambatic.fetch.base.Subject,
     records: CachedRecords,
@@ -369,6 +370,10 @@ async def compute_all(
 
     Raises:
         InvalidRequestError: `requests` is empty, or two requests differ in more than granularity.
+        UnknownGroupError: a group is outside `GROUPS`.
+        InvalidRangeError: `since` is after `until`, or the range resolves backwards.
+        EmptySubjectError: no group is requested, the cache holds no repositories, or no
+            records of any requested group are in the range.
     """
     if not requests:
         raise wambatic.stats.errors.InvalidRequestError('compute_all needs at least one request')

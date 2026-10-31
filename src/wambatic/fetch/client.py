@@ -171,6 +171,9 @@ class GitHubClient:
         Raises:
             GraphQLError: GitHub reports errors.
             NotFoundError: the queried object does not exist.
+            AuthError: GitHub rejects the token.
+            RateLimitError: the rate limit is exhausted.
+            FetchError: another failure, or retries run out.
         """
         response = await self.request(
             'graphql', 'POST', '/graphql', json={'query': query, 'variables': dict(variables)}
@@ -197,6 +200,10 @@ class GitHubClient:
 
         Raises:
             StatsPendingError: GitHub is still computing the statistics.
+            AuthError: GitHub rejects the token.
+            NotFoundError: GitHub answers 404.
+            RateLimitError: the rate limit is exhausted.
+            FetchError: another failure, or retries run out.
         """
         headers = {'If-None-Match': etag} if etag else None
         pending = 0

@@ -28,7 +28,7 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 ## Task 1: Make every Raises section match what reaches the caller
 
-**Status:** in-progress
+**Status:** done
 **Priority:** high
 **Complexity:** medium
 **Source Reference:** G2 (A4, `raises-section-drift`); `TODO.md` item "The auditme checker's 2026-10-31 rules report hits here"
@@ -37,10 +37,10 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 **Subtasks:**
 
-- [ ] For each hit of `bin/audit-check.sh --rule raises-section-drift` and each A4 row of review-2 (`fetch/client.py` `graphql_dated`, `rest_get`; `fetch/cache.py` `write_rows`; `fetch/base.py` `owner_kind`, `list_repos`, `provenance`, `line_counts`; `reports/service.py` `sync_and_compute`; `stats/engine.py` `read_records`, `compute`, `compute_all`; `reports/web.py` `parse_query`, `results_or_job`, `serve`; `stats/buckets.py` and `stats/engine.py:235` as the script names them), make the `Raises:` section list exactly the domain errors that reach the caller: add each one a same-package callee raises and the function does not catch; drop each one its own `except` always catches
-- [ ] Where a callee in another package raises (for example `CacheError` reaching `stats/engine.py` through the fetcher), list it as A4 asks (the script follows same-package callees only)
-- [ ] Where the rule is wrong for a site, add `# auditme: accept[raises-section-drift] <reason>` on the `def` line and stop for the user to raise the pattern in the auditme skill's `requests.md` (that is a change to the agents repository, not this one)
-- [ ] Re-check the `TODO.md` item's other hit: `stats/delivery.py` `UNITS` is `types.MappingProxyType` since tasks-1 Task 7, so `bin/audit-check.sh --rule mutable-module-level-exported` reports nothing; note that in the item's closing line in Task 11
+- [x] For each hit of `bin/audit-check.sh --rule raises-section-drift` and each A4 row of review-2 (`fetch/client.py` `graphql_dated`, `rest_get`; `fetch/cache.py` `write_rows`; `fetch/base.py` `owner_kind`, `list_repos`, `provenance`, `line_counts`; `reports/service.py` `sync_and_compute`; `stats/engine.py` `read_records`, `compute`, `compute_all`; `reports/web.py` `parse_query`, `results_or_job`, `serve`; `stats/buckets.py` and `stats/engine.py:235` as the script names them), make the `Raises:` section list exactly the domain errors that reach the caller: add each one a same-package callee raises and the function does not catch; drop each one its own `except` always catches
+- [x] Where a callee in another package raises (for example `CacheError` reaching `stats/engine.py` through the fetcher), list it as A4 asks (the script follows same-package callees only)
+- [x] Where the rule is wrong for a site, add `# auditme: accept[raises-section-drift] <reason>` on the `def` line and stop for the user to raise the pattern in the auditme skill's `requests.md` (that is a change to the agents repository, not this one)
+- [x] Re-check the `TODO.md` item's other hit: `stats/delivery.py` `UNITS` is `types.MappingProxyType` since tasks-1 Task 7, so `bin/audit-check.sh --rule mutable-module-level-exported` reports nothing; note that in the item's closing line in Task 11
 
 **Acceptance Criteria:**
 
@@ -49,10 +49,10 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pre-commit run --hook-stage pre-push --all-files` passes
-- [ ] `pytest src/tests/test_package.py` passes (docstrings only; no behaviour changes)
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pre-commit run --hook-stage pre-push --all-files` passes
+- [x] `pytest src/tests/test_package.py` passes (docstrings only; no behaviour changes)
 
 **Notes:**
 
@@ -60,7 +60,7 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 - Docstrings only: if a hit needs a behaviour change to be true, stop for the user
 
 ---
-- Operator session, 2026-10-31: the 16 script hits are fixed. Two were false (`stats/buckets.py` `bucket_range` and `stats/engine.py` `aggregate`: `bucket_start` cannot raise for TOTAL there) and carry scoped `accept[raises-section-drift]` markers; the checker does not see the TOTAL guard, which is a refinement to raise in the auditme skill's `requests.md`. Still open: the A4 rows the script does not check (callees in another package, and `owner_kind`, `list_repos`, `provenance`, `line_counts`, `read_records`, `compute`, `results_or_job`, `serve`).
+- Operator session, 2026-10-31: the 16 script hits are fixed. Two were false (`stats/buckets.py` `bucket_range` and `stats/engine.py` `aggregate`: `bucket_start` cannot raise for TOTAL there) and carry scoped `accept[raises-section-drift]` markers; the checker does not see the TOTAL guard, which is a refinement to raise in the auditme skill's `requests.md`. Second session, 2026-10-31: the A4 rows the script does not check are fixed too (`owner_kind`, `list_repos`, `provenance`, `line_counts`, `read_records`, `compute`, `compute_all`, `results_or_job`, `serve`, `sync_and_compute`). The `TODO.md` item's `UNITS` hit is for Task 11 to note.
 
 ---
 

@@ -181,6 +181,7 @@ async def read_records(
         InvalidRequestError: `by_author` is set for a user.
         InvalidRangeError: `since` is after `until`.
         EmptySubjectError: no group is requested, or the cache holds no repositories.
+        CacheError: the cache cannot be read.
     """
     resources = resources_for(request.groups)
     if request.by_author and subject.kind == 'user':
@@ -352,6 +353,7 @@ async def compute(
         InvalidRequestError: `by_author` is set for a user.
         InvalidRangeError: `since` is after `until`.
         EmptySubjectError: there is nothing to report.
+        CacheError: the cache cannot be read.
     """
     records = await read_records(subject, fetcher, request)
     now = (clock or (lambda: datetime.datetime.now(datetime.UTC)))()
@@ -374,6 +376,7 @@ async def compute_all(
         InvalidRangeError: `since` is after `until`, or the range resolves backwards.
         EmptySubjectError: no group is requested, the cache holds no repositories, or no
             records of any requested group are in the range.
+        CacheError: the cache cannot be read.
     """
     if not requests:
         raise wambatic.stats.errors.InvalidRequestError('compute_all needs at least one request')

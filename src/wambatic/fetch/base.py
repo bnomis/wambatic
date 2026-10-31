@@ -597,7 +597,11 @@ class Fetcher:
         request, nothing cached.
 
         Raises:
-            NotFoundError: the login is neither a user nor an organisation.
+            NotFoundError: the login is neither a user nor an organisation, or GitHub answers 404.
+            StatsPendingError: GitHub is still computing the statistics.
+            AuthError: GitHub rejects the token.
+            RateLimitError: the rate limit is exhausted.
+            FetchError: another failure, or retries run out.
         """
         response = await self.client.rest_get(f'/users/{login}')
         body = response.data
@@ -635,6 +639,10 @@ class Fetcher:
 
         Raises:
             NotFoundError: the subject does not exist.
+            GraphQLError: GitHub reports errors, or a response is malformed.
+            AuthError: GitHub rejects the token.
+            RateLimitError: the rate limit is exhausted.
+            FetchError: another failure, or retries run out.
         """
         if subject.kind == 'repo':
             data = await self.client.graphql(
@@ -729,6 +737,7 @@ class Fetcher:
 
         Raises:
             InvalidRequestError: `resources` names an unknown resource.
+            CacheError: the cache cannot be read.
         """
         unknown = sorted(resources - RESOURCES)
         if unknown:
@@ -828,7 +837,11 @@ class Fetcher:
 
 
         Raises:
-            GraphQLError: GitHub reports errors for the query.
+            GraphQLError: GitHub reports errors for the query, or a response is malformed.
+            NotFoundError: the queried object does not exist.
+            AuthError: GitHub rejects the token.
+            RateLimitError: the rate limit is exhausted.
+            FetchError: another failure, or retries run out.
         """
         counts: dict[str, tuple[int, int]] = {}
         owner, name = split_name(repo.name_with_owner)

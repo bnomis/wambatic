@@ -255,6 +255,11 @@ async def sync_and_compute(
         InvalidRequestError: the requests differ in more than granularity.
         UnknownGroupError: a group is outside `GROUPS`.
         InvalidRangeError: `since` is after `until`, or the range resolves backwards.
+        UsageError: `by_author` is set and a bare NAME resolves to a user.
+        AuthError: no token is found, or GitHub rejects it.
+        NotFoundError: the subject does not exist.
+        CacheError: the cache cannot be read or written.
+        FetchError: another sync failure (rate limit, retries run out).
     """
     subject = await sync_target(
         settings,

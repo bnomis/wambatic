@@ -388,6 +388,11 @@ def make_app(
 
         Raises:
             JobError: the finished job for the request failed.
+            EmptySubjectError: there is nothing to report.
+            UnknownGroupError: a group is outside `GROUPS`.
+            InvalidRequestError: the request is invalid for the subject.
+            InvalidRangeError: `since` is after `until`.
+            CacheError: the cache cannot be read.
         """
         job = jobs.get(query.job) if query.job is not None else None
         if job is not None and job.key == query.key:
@@ -574,6 +579,8 @@ def serve(
     Raises:
         UsageError: the bind address is refused.
         ServeError: the address cannot be listened on.
+        CacheError: the cache cannot be opened or closed.
+        CacheVersionError: the cache was written by another version and the check is not ignored.
     """
     report = settings.report
     warn_on_bind(report.web_host, report.allow_remote)

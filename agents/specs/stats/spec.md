@@ -4,7 +4,7 @@
 **Status:** implemented
 **Date:** 2026-10-31
 
-Turns the raw records from [Fetch and cache](../fetch-and-cache/spec.md) into statistics for a user, repository or organisation, optionally bucketed by year, month, week or day. It does no network or rendering of its own: `compute` reads the cache through the fetcher, and the aggregation functions it calls are pure. [Reports](../reports/spec.md) consumes its output.
+Turns the raw records from [Fetch](../fetch/spec.md) and [Cache](../cache/spec.md) into statistics for a user, repository or organisation, optionally bucketed by year, month, week or day. It does no network or rendering of its own: `compute` reads the cache through the fetcher, and the aggregation functions it calls are pure. [Reports](../reports/spec.md) consumes its output.
 
 **Prerequisite:** the `wambatic.fetch` package exists and `Fetcher` reads the records of each group's resources from the cache (check: `python -c 'import wambatic.fetch'`). The `activity` group needs `repos()` and `commits()` (implementation step 3); `flow` needs `pull_requests()` and `issues()` (step 6); `delivery` needs `releases()`, `workflow_runs()` (step 8) and `pull_requests()`; `popularity` needs `star_events()`, `forks()` and the `Repo` popularity fields (step 10).
 
@@ -266,5 +266,5 @@ Every result records what produced it, so a saved report can be traced and a mis
 
 ## External dependencies
 
-- `wambatic.fetch` (see [Fetch and cache](../fetch-and-cache/spec.md)) and `wambatic.settings`.
+- `wambatic.fetch` (see [Fetch](../fetch/spec.md) and [Cache](../cache/spec.md)) and `wambatic.settings`.
 - Stdlib only: `bisect`, `datetime`, `zoneinfo`, `statistics`, `dataclasses`. No dependency is added.

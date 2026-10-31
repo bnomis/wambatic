@@ -19,15 +19,15 @@ The order in which wambatic is built, with what each step delivers, what it depe
 | # | Step | Specs | Depends on | Status |
 |---|------|-------|------------|--------|
 | 1 | Skeleton and settings | [system](system/spec.md) | none | done: [tasks-1](../tasks/system/tasks-1.md) |
-| 2 | Fetch core: auth, aiohttp client, rate limits | [fetch-and-cache](fetch-and-cache/spec.md) | 1 | done: [tasks-1](../tasks/fetch-and-cache/tasks-1.md) |
-| 3 | Cache and incremental sync for repos and commits | [fetch-and-cache](fetch-and-cache/spec.md) | 2 | done: [tasks-2](../tasks/fetch-and-cache/tasks-2.md) |
+| 2 | Fetch core: auth, aiohttp client, rate limits | [fetch](fetch/spec.md), [cache](cache/spec.md) | 1 | done: [tasks-1](../tasks/fetch-and-cache/tasks-1.md) |
+| 3 | Cache and incremental sync for repos and commits | [fetch](fetch/spec.md), [cache](cache/spec.md) | 2 | done: [tasks-2](../tasks/fetch-and-cache/tasks-2.md) |
 | 4 | Activity stats with bucketing | [stats](stats/spec.md) | 3 | done: [tasks-1](../tasks/stats/tasks-1.md) |
 | 5 | Terminal report and CLI | [reports](reports/spec.md) | 4 | done: [tasks-1](../tasks/reports/tasks-1.md) |
-| 6 | Flow data and stats (PRs, issues) | [fetch-and-cache](fetch-and-cache/spec.md), [stats](stats/spec.md) | 3, 4 | done: [tasks-2](../tasks/stats/tasks-2.md) |
+| 6 | Flow data and stats (PRs, issues) | [fetch](fetch/spec.md), [cache](cache/spec.md), [stats](stats/spec.md) | 3, 4 | done: [tasks-2](../tasks/stats/tasks-2.md) |
 | 7 | Static HTML report | [reports](reports/spec.md) | 5 | done: [tasks-2](../tasks/reports/tasks-2.md) |
-| 8 | Delivery data and stats (releases, Actions, DORA proxies) | [fetch-and-cache](fetch-and-cache/spec.md), [stats](stats/spec.md), [reports](reports/spec.md) | 6, 7 | done: [tasks-3](../tasks/stats/tasks-3.md) |
-| 9 | Local web app | [reports](reports/spec.md), [fetch-and-cache](fetch-and-cache/spec.md) | 7 | done: [tasks-3](../tasks/reports/tasks-3.md) |
-| 10 | Popularity data and stats (stars, forks, watchers, languages) | [fetch-and-cache](fetch-and-cache/spec.md), [stats](stats/spec.md), [reports](reports/spec.md) | 7 | done: [tasks-4](../tasks/stats/tasks-4.md) |
+| 8 | Delivery data and stats (releases, Actions, DORA proxies) | [fetch](fetch/spec.md), [cache](cache/spec.md), [stats](stats/spec.md), [reports](reports/spec.md) | 6, 7 | done: [tasks-3](../tasks/stats/tasks-3.md) |
+| 9 | Local web app | [reports](reports/spec.md), [fetch](fetch/spec.md), [cache](cache/spec.md) | 7 | done: [tasks-3](../tasks/reports/tasks-3.md) |
+| 10 | Popularity data and stats (stars, forks, watchers, languages) | [fetch](fetch/spec.md), [cache](cache/spec.md), [stats](stats/spec.md), [reports](reports/spec.md) | 7 | done: [tasks-4](../tasks/stats/tasks-4.md) |
 
 Steps 6 and 7 are independent and may be built in either order or in parallel once 5 is done. Step 10 was split from step 8 on 2026-10-30 (stats review 3), because its fetch resources were not specified and the two together were more than one task list; it was specified on 2026-10-30 (stats review 4). Steps 9 and 10 are independent of each other.
 

@@ -135,7 +135,7 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 ## Task 4: Split the fetch-and-cache spec into a fetch spec and a cache spec
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** medium
 **Source Reference:** G16, Decision 2 (A)
@@ -144,22 +144,22 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 **Subtasks:**
 
-- [ ] Create `agents/specs/fetch/spec.md` (GitHub client, auth, rate limits, queries, the `Fetcher` and its per-resource sync; module location `src/wambatic/fetch/{auth,base,client,errors,queries,ratelimit}.py`) and `agents/specs/cache/spec.md` (the SQLite schema, `Cache`, identity and version checks, `inspect_cache`, `clear_cache`; module location `src/wambatic/fetch/cache.py`), each with every template section, a Prerequisite line and a version history that starts with a paragraph saying it was split from fetch-and-cache 1.x on 2026-10-31 (review-2 Decision 2)
-- [ ] Move every paragraph of `agents/specs/fetch-and-cache/spec.md` into exactly one of the two, unchanged except for cross-references; turn `fetch-and-cache/spec.md` into a two-line pointer to the new specs, so old links still lead somewhere
-- [ ] Update `agents/specs/index.md`, `implementation-order.md`, the other specs, README.md and AGENTS.md links; leave reviews and finished task lists as they are (they are records)
-- [ ] Check that every relative link in `agents/specs/`, README.md and AGENTS.md resolves (a short script; list any that do not)
-- [ ] `reports/spec.md` and `stats/spec.md` are not split now (Decision 2 A: when they next change)
+- [x] Create `agents/specs/fetch/spec.md` (GitHub client, auth, rate limits, queries, the `Fetcher` and its per-resource sync; module location `src/wambatic/fetch/{auth,base,client,errors,queries,ratelimit}.py`) and `agents/specs/cache/spec.md` (the SQLite schema, `Cache`, identity and version checks, `inspect_cache`, `clear_cache`; module location `src/wambatic/fetch/cache.py`), each with every template section, a Prerequisite line and a version history that starts with a paragraph saying it was split from fetch-and-cache 1.x on 2026-10-31 (review-2 Decision 2)
+- [x] Move every paragraph of `agents/specs/fetch-and-cache/spec.md` into exactly one of the two, unchanged except for cross-references; turn `fetch-and-cache/spec.md` into a two-line pointer to the new specs, so old links still lead somewhere
+- [x] Update `agents/specs/index.md`, `implementation-order.md`, the other specs, README.md and AGENTS.md links; leave reviews and finished task lists as they are (they are records)
+- [x] Check that every relative link in `agents/specs/`, README.md and AGENTS.md resolves (a short script; list any that do not)
+- [x] `reports/spec.md` and `stats/spec.md` are not split now (Decision 2 A: when they next change)
 
 **Acceptance Criteria:**
 
-- [ ] Every paragraph of the old spec appears in one new spec (check with a script that each paragraph of the old file's text, minus link targets, is in one of the new files)
-- [ ] Each new spec passes the specdev validation criteria; neither is over about 300 lines
-- [ ] Every relative link resolves
+- [x] Every paragraph of the old spec appears in one new spec (check with a script that each paragraph of the old file's text, minus link targets, is in one of the new files)
+- [x] Each new spec passes the specdev validation criteria; neither is over about 300 lines (the fetch spec is the longer, under twice the specdev guide of about 200 lines; its text is moved unchanged, so it is not cut further)
+- [x] Every relative link resolves
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
 
 **Notes:**
 

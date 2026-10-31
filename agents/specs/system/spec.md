@@ -12,7 +12,8 @@ wambatic reports statistics from github.com for a user, a repository or an organ
 
 | Component | Package | Spec |
 |-----------|---------|------|
-| Fetch and cache | `src/wambatic/fetch/` | [fetch-and-cache](../fetch-and-cache/spec.md) |
+| Fetch | `src/wambatic/fetch/` | [fetch](../fetch/spec.md) |
+| Cache | `src/wambatic/fetch/cache.py` | [cache](../cache/spec.md) |
 | Stats | `src/wambatic/stats/` | [stats](../stats/spec.md) |
 | Reports and CLI | `src/wambatic/reports/`, `src/wambatic/cli.py` | [reports](../reports/spec.md) |
 | Settings | `src/wambatic/settings.py` | this spec |

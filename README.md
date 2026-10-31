@@ -324,7 +324,7 @@ Each failure prints one line to stderr that says what to do, such as setting `GI
 
 ## More
 
-The design is in [the system spec](agents/specs/system/spec.md), [fetch and cache](agents/specs/fetch-and-cache/spec.md), [stats](agents/specs/stats/spec.md) and [reports](agents/specs/reports/spec.md); the order of work is in [the implementation order](agents/specs/implementation-order.md). Contributors: the project layout, tools and checks are in [AGENTS.md](AGENTS.md), and the shared rules are in the `.agents` submodule.
+The design is in [the system spec](agents/specs/system/spec.md), [fetch](agents/specs/fetch/spec.md), [cache](agents/specs/cache/spec.md), [stats](agents/specs/stats/spec.md) and [reports](agents/specs/reports/spec.md); the order of work is in [the implementation order](agents/specs/implementation-order.md). Contributors: the project layout, tools and checks are in [AGENTS.md](AGENTS.md), and the shared rules are in the `.agents` submodule.
 
 ## Updating the shared rules
 

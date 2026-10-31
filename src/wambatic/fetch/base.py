@@ -28,9 +28,12 @@ STARS_HIDDEN = 'hidden'
 BOT_SUFFIX = '[bot]'
 
 
+SubjectKind = typing.Literal['org', 'repo', 'user']
+
+
 @dataclasses.dataclass(frozen=True, slots=True)
 class Subject:
-    kind: typing.Literal['user', 'repo', 'org']
+    kind: SubjectKind
     login: str
     name: str | None = None
 

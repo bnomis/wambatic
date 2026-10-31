@@ -6,7 +6,6 @@ import contextlib
 import datetime
 import os
 import re
-import typing
 import zoneinfo
 
 import loguru
@@ -24,7 +23,7 @@ import wambatic.stats.errors
 LOGIN = re.compile(r'[A-Za-z0-9-]{1,39}')
 REPO_NAME = re.compile(r'[A-Za-z0-9._-]{1,100}')
 DATE = re.compile(r'[0-9]{4}-[0-9]{2}-[0-9]{2}')
-PREFIXES: dict[str, typing.Literal['org', 'repo', 'user']] = {
+PREFIXES: dict[str, wambatic.fetch.base.SubjectKind] = {
     'org': 'org',
     'repo': 'repo',
     'user': 'user',
@@ -40,7 +39,7 @@ def parse_target(text: str) -> wambatic.fetch.base.Subject | str:
         f'the target must be one of {TARGET_FORMS} (a NAME is 1 to 39 letters, digits and "-"; '
         'a repo NAME is 1 to 100 letters, digits, ".", "_" and "-")'
     )
-    kind: typing.Literal['org', 'repo', 'user'] | None = None
+    kind: wambatic.fetch.base.SubjectKind | None = None
     rest = text
     prefix, colon, after = text.partition(':')
     if colon:
@@ -143,6 +142,7 @@ def make_request(
     )
 
 
+# auditme: accept[passthrough-shim] the one seam tests swap for a fetcher on a replay server
 def make_fetcher(
     token: str, cache: wambatic.fetch.cache.Cache, settings: wambatic.settings.FetchSettings
 ) -> wambatic.fetch.base.Fetcher:
@@ -272,6 +272,7 @@ async def sync_and_compute(
     except wambatic.stats.errors.EmptySubjectError as e:
         if no_fetch:
             raise wambatic.stats.errors.EmptySubjectError(
+                # auditme: accept[except-interpolation] the original message is the payload
                 f'{e}; the cache may only need a sync, so try again without --no-fetch'
             ) from None
         raise

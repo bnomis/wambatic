@@ -25,6 +25,8 @@ DELIVERY_METRICS = (
     ('time_to_restore_p50', 'hours'),
     ('time_to_restore_p90', 'hours'),
 )
+# auditme: accept[non-alphabetical-literal] the order the metrics are listed in
+COUNT_METRICS = ('workflow_runs', 'release_count', 'deployments')
 DEPLOYMENT_METRICS = frozenset({'deployments', 'lead_time_p50', 'lead_time_p90'})
 FAILURE_METRICS = frozenset({'change_failure_rate'})
 RESTORE_METRICS = frozenset({'time_to_restore_p50', 'time_to_restore_p90'})
@@ -130,7 +132,7 @@ def aggregate(
     runs, releases, pull_requests = list(runs), list(releases), list(pull_requests)
     place = wambatic.stats.buckets.placer(buckets, tz, since, until)
     size = len(buckets)
-    counts = {name: [0] * size for name in ('workflow_runs', 'release_count', 'deployments')}
+    counts = {name: [0] * size for name in COUNT_METRICS}
     outcomes, successes, failures = ([0] * size for _ in range(3))
     values: dict[str, list[list[float]]] = {
         name: [[] for _ in buckets]

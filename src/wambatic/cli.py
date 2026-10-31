@@ -31,7 +31,6 @@ import wambatic.stats.engine
 import wambatic.stats.errors
 
 Granularities = typing.Literal['day', 'month', 'total', 'week', 'year']
-Formats = typing.Literal['html', 'json', 'terminal']
 
 
 @cappa.command(name='report', help='Print a report of a user, an organisation or a repository.')
@@ -41,7 +40,7 @@ class Report:
         str, cappa.Arg(help='user:NAME, org:NAME, repo:OWNER/NAME, OWNER/NAME or a bare NAME')
     ]
     format: typing.Annotated[
-        Formats | None,
+        wambatic.settings.Format | None,
         cappa.Arg(long=True, help='Output format: terminal, html or json (default: report.format)'),
     ] = None
     out: typing.Annotated[
@@ -396,6 +395,7 @@ def main(argv: list[str] | None = None) -> int:
             os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
         return 1
     except Exception as e:
+        # auditme: accept[except-interpolation] redact_error strips what must not be logged
         loguru.logger.exception(f'Unexpected error: {wambatic.reports.service.redact_error(e)}')
         return 1
     return 0

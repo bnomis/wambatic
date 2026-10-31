@@ -349,7 +349,7 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 ## Task 9: Clear the script hits in src/wambatic and bin
 
-**Status:** todo
+**Status:** done
 **Priority:** low
 **Complexity:** medium
 **Source Reference:** M1 (review-1 Mechanical findings, every hit outside `src/tests/`)
@@ -358,27 +358,27 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 **Subtasks:**
 
-- [ ] `typing-deprecated-alias` (6): `collections.abc` forms
-- [ ] `reexport-in-non-init` (3): full paths at each use
-- [ ] `literal-duplication` (16 in `src/wambatic`, 2 in `bin`): name each repeated literal once and reuse it
-- [ ] `non-alphabetical-literal` (22 + 4) and `non-alphabetical-dict-keys` (5): sort where order means nothing; where it does (display order, column order, argv), add `# auditme: accept[<rule>] <why the order matters>`
-- [ ] `passthrough-shim` (4): inline the shim, or accept with a scoped marker where it names a domain concept (`fetch/cache.py:214` `from_text`)
-- [ ] `except-interpolation` (6): keep messages categorical, or accept with a scoped marker where the exception text is the payload
-- [ ] `silent-broad-except` (`reports/web.py:146`, `:402`): `# auditme: accept[silent-broad-except] logged by error_response()`
-- [ ] `subprocess-without-memoisation` (`fetch/auth.py:13`): `# auditme: accept[subprocess-without-memoisation] runs once per sync; a cached token would outlive gh auth changes in the long-running server`
-- [ ] `duplicated-word` (`stats/buckets.py:73`): reword
-- [ ] Any hit of a rule not listed here: stop for the user
+- [x] `typing-deprecated-alias` (6): `collections.abc` forms
+- [x] `reexport-in-non-init` (3): full paths at each use
+- [x] `literal-duplication` (16 in `src/wambatic`, 2 in `bin`): name each repeated literal once and reuse it
+- [x] `non-alphabetical-literal` (22 + 4) and `non-alphabetical-dict-keys` (5): sort where order means nothing; where it does (display order, column order, argv), add `# auditme: accept[<rule>] <why the order matters>`
+- [x] `passthrough-shim` (4): inline the shim, or accept with a scoped marker where it names a domain concept (`fetch/cache.py:214` `from_text`)
+- [x] `except-interpolation` (6): keep messages categorical, or accept with a scoped marker where the exception text is the payload
+- [x] `silent-broad-except` (`reports/web.py:146`, `:402`): `# auditme: accept[silent-broad-except] logged by error_response()`
+- [x] `subprocess-without-memoisation` (`fetch/auth.py:13`): `# auditme: accept[subprocess-without-memoisation] runs once per sync; a cached token would outlive gh auth changes in the long-running server`
+- [x] `duplicated-word` (`stats/buckets.py:73`): reword
+- [x] Any hit of a rule not listed here: stop for the user
 
 **Acceptance Criteria:**
 
-- [ ] `bin/audit-check.sh --path src/wambatic --path bin` exits 0
-- [ ] Every accept marker is the scoped form `accept[<rule>]` with a reason
+- [x] `bin/audit-check.sh --path src/wambatic --path bin` exits 0
+- [x] Every accept marker is the scoped form `accept[<rule>]` with a reason
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests` for the test modules of each changed source module, named in the commit message, passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests` for the test modules of each changed source module, named in the commit message, passes
 
 **Notes:**
 

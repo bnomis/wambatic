@@ -14,6 +14,7 @@ def resolve_token() -> str:
     if token:
         return token
     try:
+        # auditme: accept[subprocess-without-memoisation] once per sync; a cache outlives gh auth
         result = subprocess.run(
             ['gh', 'auth', 'token'],
             capture_output=True,

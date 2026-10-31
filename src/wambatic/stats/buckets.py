@@ -90,7 +90,7 @@ def bucket_range(
     since: datetime.date, until: datetime.date, granularity: wambatic.stats.base.Granularity
 ) -> list[wambatic.stats.base.Bucket]:
     """The buckets covering the local dates `since` to `until`, both inclusive, in order.
-    For TOTAL, the one bucket Bucket(since, 'total').
+    For TOTAL, the single Bucket(since, 'total').
 
     Raises:
         InvalidRangeError: `since` is after `until`.

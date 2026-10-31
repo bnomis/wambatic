@@ -24,13 +24,16 @@ class Bucket:
     label: str
 
 
+ByKind = typing.Literal['author', 'repo']
+
+
 @dataclasses.dataclass(frozen=True, slots=True)
 class Series:
     metric: str
     unit: str
     points: dict[Bucket, float]
     by: str | None = None
-    by_kind: typing.Literal['author', 'repo'] | None = None
+    by_kind: ByKind | None = None
 
     def __post_init__(self) -> None:
         if (self.by is None) != (self.by_kind is None):

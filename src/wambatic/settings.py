@@ -30,11 +30,15 @@ class StatsSettings:
     timezone: str = 'UTC'
 
 
+Format = typing.Literal['html', 'json', 'terminal']
+Theme = typing.Literal['auto', 'dark', 'light']
+
+
 @dataclasses.dataclass(frozen=True, slots=True)
 class ReportSettings:
     allow_remote: bool = False
-    format: typing.Literal['html', 'json', 'terminal'] = 'terminal'
-    html_theme: typing.Literal['auto', 'dark', 'light'] = 'auto'
+    format: Format = 'terminal'
+    html_theme: Theme = 'auto'
     out_dir: pathlib.Path = pathlib.Path('./wambatic-reports')
     web_host: str = '127.0.0.1'
     web_port: int = 8000
@@ -52,6 +56,7 @@ class SettingsError(Exception):
 
 
 DEFAULT_CONFIG_PATH = pathlib.Path('~/.config/wambatic/config.json')
+# auditme: accept[non-alphabetical-dict-keys] ordered from the shortest unit to the longest
 DURATION_UNITS = {
     's': datetime.timedelta(seconds=1),
     'm': datetime.timedelta(minutes=1),
@@ -115,6 +120,7 @@ def convert(key: str, annotation: object, value: object) -> object:
             try:
                 return parse_duration(value)
             except SettingsError as e:
+                # auditme: accept[except-interpolation] the duration error says what is wrong
                 raise SettingsError(f'{key}: {e}') from None
         ok = False
     else:
@@ -168,6 +174,7 @@ def read_config(config_path: pathlib.Path | None) -> object:
     try:
         return json.loads(text)
     except json.JSONDecodeError as e:
+        # auditme: accept[except-interpolation] the parser message says where the JSON is wrong
         raise SettingsError(f'config file {path} is not valid JSON ({e.msg})') from None
 
 

@@ -34,12 +34,16 @@ REST_PAGE = 5
 
 LISTING_OWNER = 'octocat'
 ORGANIZATION = 'github'
+IDENTITY_FIELDS = ('login', 'type')
 # A repository with a short history, for the listing, history, compare and commit-node calls.
+# auditme: accept[non-alphabetical-literal] owner then name, as the pair is read
 HISTORY_OWNER, HISTORY_NAME = 'octocat', 'Hello-World'
 # A small public repository with pull requests (one by a bot), issues, releases (one a
 # prerelease) and Actions runs, so each page is short and every field is present.
+# auditme: accept[non-alphabetical-literal] owner then name, as the pair is read
 FLOW_OWNER, FLOW_NAME = 'miguelangellv', 'ha-gas-station-spain'
 # A repository of the recording account with stars and forks (see the module docstring).
+# auditme: accept[non-alphabetical-literal] owner then name, as the pair is read
 STAR_OWNER, STAR_NAME = 'bnomis', 'ab2cb'
 # A pull request reviewed by GitHub Copilot, for the type and login of an automatic reviewer.
 BOT_REVIEW_OWNER, BOT_REVIEW_NAME, BOT_REVIEW_NUMBER = 'microsoft', 'vscode', 345267
@@ -68,6 +72,7 @@ RECORDED_QUERIES = (
     'REPOSITORY',
     'STARGAZERS',
 )
+# auditme: accept[non-alphabetical-literal] the order the fields are recorded in
 RUN_FIELDS = (
     'id',
     'name',
@@ -187,8 +192,8 @@ def record(recorder: Recorder) -> dict[str, object]:
         'COMMIT_COUNTS_OK': recorder.graphql(queries.commit_counts(len(oids)), **counts_variables),
         'REPO': pick(repo, ('id', 'full_name', 'default_branch')),
         'REPO_ETAG': repo_headers['ETag'],
-        'USER_OK': pick(recorder.rest(f'/users/{LISTING_OWNER}'), ('login', 'type')),
-        'ORGANIZATION_OK': pick(recorder.rest(f'/users/{ORGANIZATION}'), ('login', 'type')),
+        'USER_OK': pick(recorder.rest(f'/users/{LISTING_OWNER}'), IDENTITY_FIELDS),
+        'ORGANIZATION_OK': pick(recorder.rest(f'/users/{ORGANIZATION}'), IDENTITY_FIELDS),
         'PULL_REQUESTS_OK': recorder.graphql(queries.PULL_REQUESTS, cursor=None, **flow),
         'ISSUES_OK': recorder.graphql(queries.ISSUES, cursor=None, **flow),
         'RELEASES_OK': recorder.graphql(queries.RELEASES, cursor=None, **flow),

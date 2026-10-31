@@ -43,6 +43,7 @@ BAD_REQUEST = (
     wambatic.stats.errors.InvalidRequestError,
 )
 NOT_FOUND = (wambatic.fetch.errors.NotFoundError, wambatic.stats.errors.EmptySubjectError)
+# auditme: accept[non-alphabetical-literal] loopback names before addresses
 LOOPBACK_HOSTS = ('localhost', '127.0.0.1', '[::1]')
 PAGE_PATHS = frozenset({'/', '/report'})
 TRUE_VALUES = frozenset({'1', 'on', 'true'})
@@ -145,6 +146,7 @@ class Jobs:
                 job.phase = 'running'
                 await run(job)
             job.phase = 'done'
+        # auditme: accept[silent-broad-except] logged by error_response()
         except Exception as e:  # noqa: BLE001 - logged by error_response()
             job.status, job.error = error_response(e)
             job.phase = 'failed'
@@ -205,6 +207,7 @@ class RawQuery:
     job: str | None
 
 
+# auditme: accept[passthrough-shim] the FastAPI dependency that reads the query string
 def raw_query(
     target: Target = None,
     by: By = None,
@@ -413,6 +416,7 @@ def make_app(
     ) -> fastapi.Response:
         try:
             return await call_next(request)
+        # auditme: accept[silent-broad-except] logged by error_response()
         except Exception as e:  # noqa: BLE001 - logged by error_response()
             return error_reply(request, *error_response(e))
 
@@ -554,6 +558,7 @@ def listen(host: str, port: int) -> socket.socket:
         return socket.create_server((bare, port), family=family)
     except OSError as e:
         raise wambatic.reports.errors.ServeError(
+            # auditme: accept[except-interpolation] the OS reason says why the port cannot be used
             f'cannot listen on {host}:{port}: {e.strerror or e}'
         ) from e
 

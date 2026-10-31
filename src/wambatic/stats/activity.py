@@ -63,7 +63,7 @@ def series_of(
     buckets: list[wambatic.stats.base.Bucket],
     tallies: collections.abc.Mapping[int, Tally],
     by: str | None = None,
-    by_kind: typing.Literal['author', 'repo'] | None = None,
+    by_kind: wambatic.stats.base.ByKind | None = None,
 ) -> wambatic.stats.base.Series:
     empty = Tally()
     points = {

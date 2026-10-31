@@ -131,6 +131,10 @@ CREATE TABLE IF NOT EXISTS sync_state (
     PRIMARY KEY (repo, resource)
 );
 """
+# auditme: accept[non-alphabetical-literal] repo first, as the key columns are declared
+REPO_ID = ('repo', 'id')
+# auditme: accept[non-alphabetical-literal] repo first, as the key columns are declared
+REPO_NUMBER = ('repo', 'number')
 OVERRIDE_KEY = 'version_override_at'
 
 
@@ -172,6 +176,7 @@ def optional_to_text(value: datetime.datetime | None) -> str | None:
     return None if value is None else to_text(value)
 
 
+# auditme: accept[passthrough-shim] the inverse of to_text
 def from_text(value: str) -> datetime.datetime:
     return datetime.datetime.fromisoformat(value)
 
@@ -313,13 +318,13 @@ def tables() -> Tables:
             'merged_at': optional_from_text,
             'updated_at': from_text,
         },
-        ('repo', 'number'),
+        REPO_NUMBER,
     )
     ISSUES = Table.of(
         'issues',
         wambatic.fetch.base.Issue,
         {'closed_at': optional_from_text, 'created_at': from_text, 'updated_at': from_text},
-        ('repo', 'number'),
+        REPO_NUMBER,
     )
     RELEASES = Table.of(
         'releases',
@@ -335,7 +340,7 @@ def tables() -> Tables:
             'run_started_at': optional_from_text,
             'updated_at': from_text,
         },
-        ('repo', 'id'),
+        REPO_ID,
     )
     STAR_EVENTS = Table.of(
         'star_events',
@@ -347,7 +352,7 @@ def tables() -> Tables:
         'forks',
         wambatic.fetch.base.Fork,
         {'created_at': from_text},
-        ('repo', 'id'),
+        REPO_ID,
     )
     return Tables(
         commits=COMMITS,

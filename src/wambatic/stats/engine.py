@@ -15,8 +15,8 @@ import wambatic.stats.popularity
 
 RESOURCES_BY_GROUP = {
     'activity': frozenset({'commits'}),
-    'flow': frozenset({'issues', 'pull_requests'}),
     'delivery': frozenset({'pull_requests', 'releases', 'workflow_runs'}),
+    'flow': frozenset({'issues', 'pull_requests'}),
     'popularity': frozenset({'forks', 'star_events'}),
 }
 

@@ -63,10 +63,13 @@ PALETTE: types.MappingProxyType[typing.Literal['dark', 'light'], Theme] = types.
 )
 
 
+Group = typing.Literal['activity', 'delivery', 'flow', 'popularity']
+
+
 @dataclasses.dataclass(frozen=True, slots=True)
 class Figure:
     key: str
-    group: typing.Literal['activity', 'delivery', 'flow', 'popularity']
+    group: Group
     title: str
     description: str
     data: list[dict[str, object]]
@@ -87,7 +90,7 @@ class Trace:
 @dataclasses.dataclass(frozen=True, slots=True)
 class Chart:
     key: str
-    group: typing.Literal['activity', 'delivery', 'flow', 'popularity']
+    group: Group
     title: str
     description: str
     unit: str
@@ -438,6 +441,7 @@ def build_figures(result: wambatic.stats.base.StatsResult) -> list[Figure]:
     return figures
 
 
+# auditme: accept[non-alphabetical-literal] the order of the days of the week
 WEEKDAYS = ('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
 BAR_ROW_HEIGHT = 28
 BAR_CHART_PADDING = 96

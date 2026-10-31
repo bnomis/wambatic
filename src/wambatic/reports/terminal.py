@@ -59,6 +59,7 @@ def format_cell(metric: str, value: float | None) -> str:
     return format_number(value, signed=metric in wambatic.reports.rows.SIGNED_METRICS)
 
 
+# auditme: accept[passthrough-shim] names the concept of a cell that is never read as markup
 def text_cell(value: str) -> rich.text.Text:
     """A string cell that Rich does not read as markup (a login can be `dependabot[bot]`)."""
     return rich.text.Text(value)

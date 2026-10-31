@@ -1,7 +1,9 @@
 """The static HTML report: one self-contained file holding the summary, every chart and every
 table, built from the results of one request that differ only in granularity."""
 
+import collections.abc
 import dataclasses
+import functools
 import html
 import importlib.resources
 import json
@@ -18,18 +20,22 @@ import wambatic.reports.errors
 import wambatic.reports.figures
 import wambatic.reports.rows
 import wambatic.reports.terminal
+import wambatic.settings
 import wambatic.stats.base
 import wambatic.stats.popularity
 
-Granularity = wambatic.stats.base.Granularity
-Theme = typing.Literal['auto', 'dark', 'light']
-PERIODS = (Granularity.YEAR, Granularity.MONTH, Granularity.WEEK, Granularity.DAY)
+PERIODS = (
+    wambatic.stats.base.Granularity.YEAR,
+    wambatic.stats.base.Granularity.MONTH,
+    wambatic.stats.base.Granularity.WEEK,
+    wambatic.stats.base.Granularity.DAY,
+)
 SAFE_FILENAME = re.compile(r'[^A-Za-z0-9._-]')
 FILE_MODE = 0o644
 PROXIES_LINE = 'The DORA figures are proxies; how each is measured is described in the README.'
 OTHER_LANGUAGE = wambatic.stats.popularity.OTHER
 POPULARITY_LINE = 'Counts are as of the last sync; totals count the stars and forks that exist now.'
-JSON_ESCAPES = {'<': '\\u003c', '>': '\\u003e', '&': '\\u0026'}
+JSON_ESCAPES = {'&': '\\u0026', '<': '\\u003c', '>': '\\u003e'}
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -39,8 +45,8 @@ class HtmlReport:
     is the granularity shown on load."""
 
     total: wambatic.stats.base.StatsResult
-    periods: dict[Granularity, wambatic.stats.base.StatsResult]
-    initial: Granularity
+    periods: dict[wambatic.stats.base.Granularity, wambatic.stats.base.StatsResult]
+    initial: wambatic.stats.base.Granularity
 
 
 def period_requests(
@@ -50,11 +56,13 @@ def period_requests(
     and DAY, everything else unchanged."""
     return [
         dataclasses.replace(request, granularity=granularity)
-        for granularity in (Granularity.TOTAL, *PERIODS)
+        for granularity in (wambatic.stats.base.Granularity.TOTAL, *PERIODS)
     ]
 
 
-def html_report(results: list[wambatic.stats.base.StatsResult], initial: Granularity) -> HtmlReport:
+def html_report(
+    results: list[wambatic.stats.base.StatsResult], initial: wambatic.stats.base.Granularity
+) -> HtmlReport:
     """The `HtmlReport` of the five results of `period_requests`, in that order."""
     total, *periods = results
     return HtmlReport(
@@ -65,7 +73,7 @@ def html_report(results: list[wambatic.stats.base.StatsResult], initial: Granula
 
 
 class SubjectLike(typing.Protocol):
-    """What `report_filename` reads of a `wambatic.fetch.Subject`, which `wambatic.reports` may
+    """What `report_filename` reads of a `wambatic.fetch.base.Subject`, which `wambatic.reports` may
     not import."""
 
     @property
@@ -105,22 +113,31 @@ def first_difference(
 
 
 def check_report(report: HtmlReport) -> None:
-    if report.total.request.granularity is not Granularity.TOTAL:
-        raise ValueError(f'total must be a TOTAL result, not {report.total.request.granularity}')
+    if report.total.request.granularity is not wambatic.stats.base.Granularity.TOTAL:
+        raise wambatic.reports.errors.UsageError(
+            f'total must be a TOTAL result, not {report.total.request.granularity}'
+        )
     if set(report.periods) != set(PERIODS):
-        raise ValueError(
+        raise wambatic.reports.errors.UsageError(
             f'periods must be exactly {", ".join(PERIODS)}, not '
             f'{", ".join(sorted(report.periods)) or "none"}'
         )
     if report.initial not in report.periods:
-        raise ValueError(f'initial must be one of {", ".join(PERIODS)}, not {report.initial}')
+        raise wambatic.reports.errors.UsageError(
+            f'initial must be one of {", ".join(PERIODS)}, not {report.initial}'
+        )
     for granularity, result in report.periods.items():
         if result.request.granularity is not granularity:
-            raise ValueError(f'the {granularity} result is by {result.request.granularity}')
+            raise wambatic.reports.errors.UsageError(
+                f'the {granularity} result is by {result.request.granularity}'
+            )
         if (difference := first_difference(report.total, result)) is not None:
-            raise ValueError(f'the {granularity} result differs from the total in {difference}')
+            raise wambatic.reports.errors.UsageError(
+                f'the {granularity} result differs from the total in {difference}'
+            )
 
 
+@functools.cache
 def read_template(name: str) -> str:
     """The packaged template `name`.
 
@@ -174,7 +191,7 @@ def tokens(theme: wambatic.reports.figures.Theme) -> str:
     return '\n  '.join(f'--{name}: {colour};' for name, colour in declarations.items())
 
 
-def theme_attribute(theme: Theme) -> str:
+def theme_attribute(theme: wambatic.settings.Theme) -> str:
     """The `<html>` attribute that fixes a theme; `auto` leaves the choice to the viewer."""
     return '' if theme == 'auto' else f' data-theme="{theme}"'
 
@@ -192,10 +209,10 @@ def cell(text: str, numeric: bool, tag: str = 'td') -> str:
 
 def table_html(
     title: str,
-    headers: typing.Sequence[str],
-    rows: typing.Sequence[typing.Sequence[str]],
+    headers: collections.abc.Sequence[str],
+    rows: collections.abc.Sequence[collections.abc.Sequence[str]],
     *,
-    footer: typing.Sequence[str] | None = None,
+    footer: collections.abc.Sequence[str] | None = None,
     note: str = '',
     attributes: str = '',
 ) -> str:
@@ -217,7 +234,10 @@ def table_html(
 
 
 def period_table_html(
-    table: wambatic.reports.rows.PeriodTable, granularity: Granularity, hidden: bool, note: str
+    table: wambatic.reports.rows.PeriodTable,
+    granularity: wambatic.stats.base.Granularity,
+    hidden: bool,
+    note: str,
 ) -> str:
     rows = [
         [
@@ -251,10 +271,10 @@ def period_table_html(
 
 def period_tables_html(
     report: HtmlReport,
-    build: typing.Callable[
+    build: collections.abc.Callable[
         [wambatic.stats.base.StatsResult], wambatic.reports.rows.PeriodTable | None
     ],
-    note: typing.Callable[[wambatic.reports.rows.PeriodTable], str],
+    note: collections.abc.Callable[[wambatic.reports.rows.PeriodTable], str],
 ) -> str:
     """One table for each granularity, all but the initial one hidden."""
     pieces = []
@@ -388,12 +408,34 @@ def figure_html(figure: wambatic.reports.figures.Figure, wide: bool = False) -> 
     )
 
 
-def period_figures(report: HtmlReport) -> list[wambatic.reports.figures.Figure]:
+@dataclasses.dataclass(frozen=True, slots=True)
+class PageFigures:
+    """Every figure of one page, each built once by `build_page_figures`."""
+
+    periods: dict[wambatic.stats.base.Granularity, list[wambatic.reports.figures.Figure]]
+    range_figures: list[wambatic.reports.figures.Figure]
+    calendar: wambatic.reports.figures.Figure | None
+
+
+def build_page_figures(report: HtmlReport) -> PageFigures:
+    return PageFigures(
+        periods={
+            granularity: wambatic.reports.figures.build_figures(result)
+            for granularity, result in report.periods.items()
+        },
+        range_figures=wambatic.reports.figures.build_range_figures(report.total),
+        calendar=wambatic.reports.figures.build_calendar(
+            report.periods[wambatic.stats.base.Granularity.DAY]
+        ),
+    )
+
+
+def period_figures(report: HtmlReport, built: PageFigures) -> list[wambatic.reports.figures.Figure]:
     """One figure for each chart any granularity has, in page order, as the elements the page
     script draws into."""
     seen: dict[str, wambatic.reports.figures.Figure] = {}
     for granularity in (report.initial, *PERIODS):
-        for figure in wambatic.reports.figures.build_figures(report.periods[granularity]):
+        for figure in built.periods[granularity]:
             seen.setdefault(figure.key, figure)
     order = {chart.key: index for index, chart in enumerate(wambatic.reports.figures.CHARTS)}
     return sorted(seen.values(), key=lambda figure: order[figure.key])
@@ -459,9 +501,7 @@ def popularity_tiles(total: wambatic.stats.base.StatsResult) -> list[str]:
     if now is None:
         return []
     format_number = wambatic.reports.terminal.format_number
-    sums = now.total or (
-        now.rows[0] if now.rows else wambatic.reports.rows.PopularityRow('', 0, 0, 0)
-    )
+    sums = now.total or (now.rows[0] if now.rows else wambatic.reports.rows.PopularityRow.empty())
     languages = wambatic.reports.rows.languages_rows(total)
     named = (
         [row.language for row in languages.rows if row.language != OTHER_LANGUAGE]
@@ -510,11 +550,11 @@ def footer_html(total: wambatic.stats.base.StatsResult) -> str:
     )
 
 
-def sections_html(report: HtmlReport) -> str:
+def sections_html(report: HtmlReport, built: PageFigures) -> str:
     total = report.total
-    figures = period_figures(report)
-    range_figures = wambatic.reports.figures.build_range_figures(total)
-    calendar = wambatic.reports.figures.build_calendar(report.periods[Granularity.DAY])
+    figures = period_figures(report, built)
+    range_figures = built.range_figures
+    calendar = built.calendar
     sections = []
     if wambatic.reports.rows.activity_table(total) is not None:
         charts = [f for f in figures if f.group == 'activity']
@@ -582,8 +622,10 @@ def sections_html(report: HtmlReport) -> str:
     return ''.join(sections)
 
 
-def page_data(report: HtmlReport, theme: Theme) -> dict[str, object]:
-    calendar = wambatic.reports.figures.build_calendar(report.periods[Granularity.DAY])
+def page_data(
+    report: HtmlReport, theme: wambatic.settings.Theme, built: PageFigures
+) -> dict[str, object]:
+    calendar = built.calendar
     return {
         'initial': str(report.initial),
         'theme': theme,
@@ -592,23 +634,19 @@ def page_data(report: HtmlReport, theme: Theme) -> dict[str, object]:
             for name, colours in wambatic.reports.figures.PALETTE.items()
         },
         'periods': {
-            str(granularity): [
-                dataclasses.asdict(f) for f in wambatic.reports.figures.build_figures(result)
-            ]
-            for granularity, result in report.periods.items()
+            str(granularity): [dataclasses.asdict(f) for f in figures]
+            for granularity, figures in built.periods.items()
         },
-        'range': [
-            dataclasses.asdict(f)
-            for f in wambatic.reports.figures.build_range_figures(report.total)
-        ],
+        'range': [dataclasses.asdict(f) for f in built.range_figures],
         'calendar': None if calendar is None else dataclasses.asdict(calendar),
     }
 
 
-def html_document(report: HtmlReport, theme: Theme) -> str:
+def html_document(report: HtmlReport, theme: wambatic.settings.Theme) -> str:
     """The whole self-contained page. Pure: the only reads are of this package's templates.
-    Raises ValueError when the five results differ in anything but granularity."""
+    Raises UsageError when the five results differ in anything but granularity."""
     check_report(report)
+    built = build_page_figures(report)
     title = f'wambatic: {wambatic.reports.rows.subject_text(report.total)}'
     return string.Template(read_template('report.html')).substitute(
         theme_attribute=theme_attribute(theme),
@@ -616,15 +654,17 @@ def html_document(report: HtmlReport, theme: Theme) -> str:
         style=stylesheet(),
         header=header_html(report),
         tiles=tiles_html(report.total),
-        sections=sections_html(report),
+        sections=sections_html(report, built),
         footer=footer_html(report.total),
-        data=json_for_script(page_data(report, theme)),
+        data=json_for_script(page_data(report, theme, built)),
         plotlyjs=read_plotlyjs(),
         script=read_template('report.js'),
     )
 
 
-def render_html(report: HtmlReport, out: pathlib.Path, theme: Theme) -> pathlib.Path:
+def render_html(
+    report: HtmlReport, out: pathlib.Path, theme: wambatic.settings.Theme
+) -> pathlib.Path:
     """Write `html_document(report, theme)` to `out` and return it. The file is written to a
     temporary file beside `out` and moved into place, so a failed write leaves `out` as it was
     and no temporary file behind. Missing parent directories are created. Raises OutputError
@@ -642,6 +682,7 @@ def render_html(report: HtmlReport, out: pathlib.Path, theme: Theme) -> pathlib.
                 temporary.chmod(FILE_MODE)
                 os.replace(temporary, out)
             except BaseException:
+                # Cleans up the temporary file, then re-raises the original error.
                 temporary.unlink(missing_ok=True)
                 raise
     except OSError as e:

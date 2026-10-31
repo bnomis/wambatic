@@ -20,6 +20,7 @@ import tests.fixtures.fetch.server
 COMPARE_PATH = re.compile(r'/repos/(?P<name>[^/]+/[^/]+)/compare/(?P<base>\w+)\.\.\.(?P<head>\w+)')
 RUNS_PATH = re.compile(r'/repos/(?P<name>[^/]+/[^/]+)/actions/runs(?:/(?P<id>\d+))?')
 FORKS_PATH = re.compile(r'/repos/(?P<name>[^/]+/[^/]+)/forks')
+HiddenStars = typing.Literal['empty', 'forbidden']
 
 
 @dataclasses.dataclass(slots=True)
@@ -112,7 +113,7 @@ class FakeRepo:
     stars: list[FakeStar] = dataclasses.field(default_factory=list)
     forks: list[FakeFork] = dataclasses.field(default_factory=list)
     forks_of_forks: int = 0
-    hidden_stars: typing.Literal['empty', 'forbidden'] | None = None
+    hidden_stars: HiddenStars | None = None
     watchers: int = 0
     languages: list[tuple[str, int]] | None = None
     has_forks: bool = True
@@ -486,7 +487,7 @@ class Upstream:
             200, tests.fixtures.fetch.responses.compare_response(status, shown, total=len(commits))
         )
 
-    def requests(self, server: tests.fixtures.fetch.server.ReplayServer) -> list[str]:
+    def requests(self, server: tests.fixtures.fetch.server.ReplayServer) -> tuple[str, ...]:
         """The kind of each request the server received, in order."""
         kinds = {
             'query OwnerRepositories': 'listing',
@@ -510,7 +511,7 @@ class Upstream:
             assert isinstance(received.json, dict)
             query = str(received.json['query'])
             found.append(next(kind for key, kind in kinds.items() if key in query))
-        return found
+        return tuple(found)
 
 
 LARGE_ORG_REPOS = 300

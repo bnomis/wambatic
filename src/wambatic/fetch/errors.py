@@ -1,4 +1,5 @@
 import datetime
+import types
 
 NO_TOKEN_MESSAGE = 'No GitHub token found: set GITHUB_TOKEN or run `gh auth login`'
 
@@ -7,13 +8,17 @@ class FetchError(Exception):
     """Base class of every error the fetch layer raises."""
 
 
+class InvalidRequestError(FetchError):
+    """A caller mistake: an unknown resource, a malformed subject, records of another repo."""
+
+
 class AuthError(FetchError):
     pass
 
 
 class GraphQLError(FetchError):
     def __init__(self, errors: list[tuple[str, str]]) -> None:
-        self.errors = errors
+        self.errors = tuple(errors)
         super().__init__('; '.join(f'{kind}: {message}' for kind, message in errors))
 
 
@@ -45,7 +50,7 @@ class CacheVersionError(FetchError):
     """
 
     def __init__(self, differences: dict[str, tuple[str | None, str | None]]) -> None:
-        self.differences = differences
+        self.differences = types.MappingProxyType(dict(differences))
         lines = '; '.join(
             f'{key}: cache has {recorded or "nothing"}, this wambatic has {running or "nothing"}'
             for key, (recorded, running) in sorted(differences.items())

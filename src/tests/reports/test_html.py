@@ -1,3 +1,4 @@
+import collections.abc
 import dataclasses
 import html.parser
 import importlib.resources
@@ -7,20 +8,21 @@ import pathlib
 import re
 import stat
 import string
-import typing
 
 import plotly.offline
 import pytest
 
 import tests.conftest
-import tests.fixtures.stats as fixture
+import tests.fixtures.reports
+import tests.fixtures.stats
 import wambatic.fetch.base
 import wambatic.reports.errors
 import wambatic.reports.figures
 import wambatic.reports.html
+import wambatic.settings
 import wambatic.stats.base
 
-Granularity = wambatic.stats.base.Granularity
+PERIOD_NAMES = ('day', 'month', 'week', 'year')
 HOSTILE = '<b>&"\'</script>'
 
 
@@ -78,7 +80,9 @@ def keys_of(report: wambatic.reports.html.HtmlReport) -> set[str]:
     for result in report.periods.values():
         keys |= {f.key for f in wambatic.reports.figures.build_figures(result)}
     keys |= {f.key for f in wambatic.reports.figures.build_range_figures(report.total)}
-    calendar = wambatic.reports.figures.build_calendar(report.periods[Granularity.DAY])
+    calendar = wambatic.reports.figures.build_calendar(
+        report.periods[wambatic.stats.base.Granularity.DAY]
+    )
     assert calendar is not None
     return keys | {calendar.key}
 
@@ -105,15 +109,11 @@ def test_the_figures_of_every_granularity_are_in_the_embedded_data(
     data = json.loads(page.data)
     assert data['initial'] == 'month'
     assert data['theme'] == 'dark'
-    assert sorted(data['periods']) == ['day', 'month', 'week', 'year']
+    assert sorted(data['periods']) == list(PERIOD_NAMES)
     months = data['periods']['month'][0]['data'][0]['x']
-    assert months == list(fixture.LABELS)
+    assert months == list(tests.fixtures.stats.LABELS)
     assert data['calendar']['key'] == 'activity-calendar'
-    assert [f['key'] for f in data['range']] == [
-        'activity-top-contributors',
-        'activity-by-repository',
-        'activity-by-author',
-    ]
+    assert [f['key'] for f in data['range']] == list(tests.fixtures.reports.RANGE_FIGURE_KEYS)
     assert data['palette']['light']['categorical'] == ['#2a78d6', '#eb6834', '#1baf7a']
     assert set(data['palette']) == {'light', 'dark'}
 
@@ -128,15 +128,15 @@ def test_period_tables_appear_once_per_granularity_with_only_the_initial_one_vis
         granularity = table['data-granularity']
         assert granularity is not None
         seen.setdefault(granularity, []).append('hidden' if 'hidden' in table else None)
-    assert sorted(seen) == ['day', 'month', 'week', 'year']
+    assert sorted(seen) == list(PERIOD_NAMES)
     assert all(len(hidden) == 3 for hidden in seen.values())  # activity, flow, flow times
     visible = {g for g, hidden in seen.items() if hidden[0] is None}
-    assert visible == {'month'}
+    assert visible == tests.fixtures.reports.MONTH_ONLY
     assert all(h is None for h in seen['month'])
     assert all(h == 'hidden' for g, hidden in seen.items() if g != 'month' for h in hidden)
     other = Page(
         wambatic.reports.html.html_document(
-            dataclasses.replace(org_report, initial=Granularity.DAY), 'auto'
+            dataclasses.replace(org_report, initial=wambatic.stats.base.Granularity.DAY), 'auto'
         )
     )
     day_tables = [t for t in other.tables() if t.get('data-granularity') == 'day']
@@ -218,7 +218,7 @@ def test_nothing_refers_outside_the_file(org_report: wambatic.reports.html.HtmlR
 def test_a_hostile_login_is_escaped_in_the_html_and_round_trips_in_the_data(
     org_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    rows = [{**fixture.ORG_TOP_CONTRIBUTORS[0], 'login': HOSTILE}]
+    rows = [{**tests.fixtures.stats.ORG_TOP_CONTRIBUTORS[0], 'login': HOSTILE}]
     total = dataclasses.replace(
         org_report.total, tables={**org_report.total.tables, 'top_contributors': rows}
     )
@@ -251,7 +251,7 @@ def test_hostile_labels_in_the_other_tables_are_escaped(
 def test_the_embedded_data_is_valid_json_with_unicode_kept(
     org_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    rows = [{**fixture.ORG_TOP_CONTRIBUTORS[0], 'login': 'zoë'}]
+    rows = [{**tests.fixtures.stats.ORG_TOP_CONTRIBUTORS[0], 'login': 'zoë'}]
     total = dataclasses.replace(
         org_report.total, tables={**org_report.total.tables, 'top_contributors': rows}
     )
@@ -278,16 +278,16 @@ def test_report_filename_names_the_kind_and_the_subject(
 
 
 def test_a_total_that_is_not_total_is_refused(org_report: wambatic.reports.html.HtmlReport) -> None:
-    month = org_report.periods[Granularity.MONTH]
-    with pytest.raises(ValueError, match='total must be a TOTAL result'):
+    month = org_report.periods[wambatic.stats.base.Granularity.MONTH]
+    with pytest.raises(wambatic.reports.errors.UsageError, match='total must be a TOTAL result'):
         wambatic.reports.html.html_document(dataclasses.replace(org_report, total=month), 'auto')
 
 
 def test_a_missing_granularity_is_refused(org_report: wambatic.reports.html.HtmlReport) -> None:
-    periods: dict[Granularity, wambatic.stats.base.StatsResult] = {
-        g: r for g, r in org_report.periods.items() if g is not Granularity.WEEK
+    periods: dict[wambatic.stats.base.Granularity, wambatic.stats.base.StatsResult] = {
+        g: r for g, r in org_report.periods.items() if g is not wambatic.stats.base.Granularity.WEEK
     }
-    with pytest.raises(ValueError, match='periods must be exactly'):
+    with pytest.raises(wambatic.reports.errors.UsageError, match='periods must be exactly'):
         wambatic.reports.html.html_document(
             dataclasses.replace(org_report, periods=periods), 'auto'
         )
@@ -296,35 +296,39 @@ def test_a_missing_granularity_is_refused(org_report: wambatic.reports.html.Html
 def test_an_initial_granularity_outside_the_periods_is_refused(
     org_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    with pytest.raises(ValueError, match='initial'):
+    with pytest.raises(wambatic.reports.errors.UsageError, match='initial'):
         wambatic.reports.html.html_document(
-            dataclasses.replace(org_report, initial=Granularity.TOTAL), 'auto'
+            dataclasses.replace(org_report, initial=wambatic.stats.base.Granularity.TOTAL), 'auto'
         )
 
 
 def test_results_without_a_requested_start_begin_at_their_own_period_start_and_build_a_page(
     stats_fetcher: wambatic.fetch.base.Fetcher,
 ) -> None:
-    request = wambatic.stats.base.StatsRequest(until=fixture.UNTIL)
+    request = wambatic.stats.base.StatsRequest(until=tests.fixtures.stats.UNTIL)
     results = [
-        tests.conftest.compute_stats(stats_fetcher, fixture.ORG, item)
+        tests.conftest.run_stats(stats_fetcher, tests.fixtures.stats.ORG, item)
         for item in wambatic.reports.html.period_requests(request)
     ]
     starts = {result.since for result in results}
     assert len(starts) > 1
-    report = wambatic.reports.html.html_report(results, Granularity.MONTH)
+    report = wambatic.reports.html.html_report(results, wambatic.stats.base.Granularity.MONTH)
     assert 'id="wambatic-data"' in wambatic.reports.html.html_document(report, 'auto')
 
 
 def test_a_result_made_for_another_range_is_refused_naming_the_difference(
     org_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    month = org_report.periods[Granularity.MONTH]
+    month = org_report.periods[wambatic.stats.base.Granularity.MONTH]
     other = dataclasses.replace(
-        month, request=dataclasses.replace(month.request, since=fixture.SINCE.replace(day=2))
+        month,
+        request=dataclasses.replace(month.request, since=tests.fixtures.stats.SINCE.replace(day=2)),
     )
-    periods = {**org_report.periods, Granularity.MONTH: other}
-    with pytest.raises(ValueError, match='month result differs from the total in request since'):
+    periods = {**org_report.periods, wambatic.stats.base.Granularity.MONTH: other}
+    with pytest.raises(
+        wambatic.reports.errors.UsageError,
+        match='month result differs from the total in request since',
+    ):
         wambatic.reports.html.html_document(
             dataclasses.replace(org_report, periods=periods), 'auto'
         )
@@ -333,20 +337,26 @@ def test_a_result_made_for_another_range_is_refused_naming_the_difference(
 def test_a_result_for_another_subject_or_groups_is_refused(
     org_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    day = org_report.periods[Granularity.DAY]
+    day = org_report.periods[wambatic.stats.base.Granularity.DAY]
     user = dataclasses.replace(day, subject=wambatic.fetch.base.Subject('user', 'octocat'))
-    with pytest.raises(ValueError, match='day result differs from the total in subject'):
+    with pytest.raises(
+        wambatic.reports.errors.UsageError, match='day result differs from the total in subject'
+    ):
         wambatic.reports.html.html_document(
-            dataclasses.replace(org_report, periods={**org_report.periods, Granularity.DAY: user}),
+            dataclasses.replace(
+                org_report,
+                periods={**org_report.periods, wambatic.stats.base.Granularity.DAY: user},
+            ),
             'auto',
         )
     groups = dataclasses.replace(
-        day, request=dataclasses.replace(day.request, groups=frozenset({'activity'}))
+        day, request=dataclasses.replace(day.request, groups=tests.fixtures.stats.GROUP_ACTIVITY)
     )
-    with pytest.raises(ValueError, match='request groups'):
+    with pytest.raises(wambatic.reports.errors.UsageError, match='request groups'):
         wambatic.reports.html.html_document(
             dataclasses.replace(
-                org_report, periods={**org_report.periods, Granularity.DAY: groups}
+                org_report,
+                periods={**org_report.periods, wambatic.stats.base.Granularity.DAY: groups},
             ),
             'auto',
         )
@@ -357,9 +367,11 @@ def test_a_result_filed_under_the_wrong_granularity_is_refused(
 ) -> None:
     periods = {
         **org_report.periods,
-        Granularity.WEEK: org_report.periods[Granularity.DAY],
+        wambatic.stats.base.Granularity.WEEK: org_report.periods[
+            wambatic.stats.base.Granularity.DAY
+        ],
     }
-    with pytest.raises(ValueError, match='week result is by day'):
+    with pytest.raises(wambatic.reports.errors.UsageError, match='week result is by day'):
         wambatic.reports.html.html_document(
             dataclasses.replace(org_report, periods=periods), 'auto'
         )
@@ -370,7 +382,7 @@ def test_a_result_filed_under_the_wrong_granularity_is_refused(
 )
 def test_each_theme_sets_data_theme_on_the_html_element_as_it_should(
     org_report: wambatic.reports.html.HtmlReport,
-    theme: typing.Literal['auto', 'dark', 'light'],
+    theme: wambatic.settings.Theme,
     attribute: str | None,
 ) -> None:
     page = Page(wambatic.reports.html.html_document(org_report, theme))
@@ -457,7 +469,9 @@ def test_render_html_writes_the_document_and_returns_the_path(
     assert out.read_text(encoding='utf-8') == wambatic.reports.html.html_document(
         org_report, 'light'
     )
-    assert sorted(path.name for path in out.parent.iterdir()) == ['report.html']
+    assert sorted(path.name for path in out.parent.iterdir()) == list(
+        tests.fixtures.reports.REPORT_FILES
+    )
     assert stat.S_IMODE(out.stat().st_mode) == 0o644
 
 
@@ -505,15 +519,15 @@ def test_a_failed_move_leaves_the_file_as_it_was_and_no_temporary_file(
         with pytest.raises(wambatic.reports.errors.OutputError, match='no space left'):
             wambatic.reports.html.render_html(org_report, out, 'auto')
     assert out.read_text() == 'earlier'
-    assert [path.name for path in directory.iterdir()] == ['report.html']
+    assert [path.name for path in directory.iterdir()] == list(tests.fixtures.reports.REPORT_FILES)
 
 
 def test_a_bad_report_writes_nothing(
     org_report: wambatic.reports.html.HtmlReport, tmp_path: pathlib.Path
 ) -> None:
-    bad = dataclasses.replace(org_report, initial=Granularity.TOTAL)
+    bad = dataclasses.replace(org_report, initial=wambatic.stats.base.Granularity.TOTAL)
     out = tmp_path / 'sub' / 'report.html'
-    with pytest.raises(ValueError, match='initial'):
+    with pytest.raises(wambatic.reports.errors.UsageError, match='initial'):
         wambatic.reports.html.render_html(bad, out, 'auto')
     assert not out.parent.exists()
 
@@ -530,7 +544,7 @@ def test_the_script_has_no_dollar_that_string_template_would_read() -> None:
 
 
 def only_delivery(
-    report: wambatic.reports.html.HtmlReport, keep: typing.Callable[[str], bool]
+    report: wambatic.reports.html.HtmlReport, keep: collections.abc.Callable[[str], bool]
 ) -> wambatic.reports.html.HtmlReport:
     """`report` with only the series whose metric `keep` accepts."""
 

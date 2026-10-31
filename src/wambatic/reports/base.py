@@ -58,6 +58,7 @@ def result_to_dict(result: wambatic.stats.base.StatsResult) -> dict[str, object]
             'settings': {
                 field.name: setting_to_json(getattr(request.settings, field.name))
                 for field in dataclasses.fields(wambatic.settings.StatsSettings)
+                if field.name != 'timezone'
             },
         },
         'since': result.since.isoformat(),

@@ -4,9 +4,11 @@ and the page script fills in the colours of the active theme, so no figure is ti
 
 import dataclasses
 import datetime
+import types
 import typing
 
 import wambatic.reports.base
+import wambatic.reports.errors
 import wambatic.reports.rows
 import wambatic.stats.base
 
@@ -37,32 +39,37 @@ class Theme:
 # The validated reference palette of the dataviz skill available to Claude Code sessions, read
 # 2026-10-30 (reports spec, Palette and themes): its first three categorical slots, which it
 # validates for every pair in both themes, its blue sequential ramp, and its surfaces and inks.
-PALETTE: dict[typing.Literal['dark', 'light'], Theme] = {
-    'light': Theme(
-        categorical=('#2a78d6', '#eb6834', '#1baf7a'),
-        sequential=('#cde2fb', '#86b6ef', '#3987e5', '#256abf', '#0d366b'),
-        surface='#fcfcfb',
-        page='#f9f9f7',
-        ink='#0b0b0b',
-        ink_secondary='#52514e',
-        grid='#e1e0d9',
-    ),
-    'dark': Theme(
-        categorical=('#3987e5', '#d95926', '#199e70'),
-        sequential=('#104281', '#1c5cab', '#3987e5', '#6da7ec', '#b7d3f6'),
-        surface='#1a1a19',
-        page='#0d0d0d',
-        ink='#f0efec',
-        ink_secondary='#c3c2b7',
-        grid='#2c2c2a',
-    ),
-}
+PALETTE: types.MappingProxyType[typing.Literal['dark', 'light'], Theme] = types.MappingProxyType(
+    {
+        'light': Theme(
+            categorical=('#2a78d6', '#eb6834', '#1baf7a'),
+            sequential=('#cde2fb', '#86b6ef', '#3987e5', '#256abf', '#0d366b'),
+            surface='#fcfcfb',
+            page='#f9f9f7',
+            ink='#0b0b0b',
+            ink_secondary='#52514e',
+            grid='#e1e0d9',
+        ),
+        'dark': Theme(
+            categorical=('#3987e5', '#d95926', '#199e70'),
+            sequential=('#104281', '#1c5cab', '#3987e5', '#6da7ec', '#b7d3f6'),
+            surface='#1a1a19',
+            page='#0d0d0d',
+            ink='#f0efec',
+            ink_secondary='#c3c2b7',
+            grid='#2c2c2a',
+        ),
+    }
+)
+
+
+Group = typing.Literal['activity', 'delivery', 'flow', 'popularity']
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class Figure:
     key: str
-    group: typing.Literal['activity', 'delivery', 'flow', 'popularity']
+    group: Group
     title: str
     description: str
     data: list[dict[str, object]]
@@ -83,7 +90,7 @@ class Trace:
 @dataclasses.dataclass(frozen=True, slots=True)
 class Chart:
     key: str
-    group: typing.Literal['activity', 'delivery', 'flow', 'popularity']
+    group: Group
     title: str
     description: str
     unit: str
@@ -393,7 +400,8 @@ def build_figures(result: wambatic.stats.base.StatsResult) -> list[Figure]:
         'popularity': wambatic.reports.rows.has_popularity(result),
     }
     series = wambatic.reports.rows.total_series(result)
-    labels = [bucket.label for bucket in wambatic.reports.rows.bucket_list(result)]
+    buckets = wambatic.reports.rows.buckets_from(series)
+    labels = [bucket.label for bucket in buckets]
     flags = partial_flags(labels, wambatic.reports.rows.partial_labels(result))
     units = {s.metric: s.unit for s in result.series if s.by is None}
     figures: list[Figure] = []
@@ -401,7 +409,6 @@ def build_figures(result: wambatic.stats.base.StatsResult) -> list[Figure]:
         if not present[chart.group] or any(t.metric not in series for t in chart.traces):
             continue
         points = {t.metric: dict(series[t.metric]) for t in chart.traces}
-        buckets = wambatic.reports.rows.bucket_list(result)
         values = {
             t.metric: [
                 number(points[t.metric].get(bucket), units[t.metric], t.below_zero)
@@ -434,6 +441,7 @@ def build_figures(result: wambatic.stats.base.StatsResult) -> list[Figure]:
     return figures
 
 
+# auditme: accept[non-alphabetical-literal] the order of the days of the week
 WEEKDAYS = ('Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun')
 BAR_ROW_HEIGHT = 28
 BAR_CHART_PADDING = 96
@@ -544,9 +552,9 @@ def build_range_figures(total: wambatic.stats.base.StatsResult) -> list[Figure]:
     """The whole-range charts of a TOTAL result: horizontal bars of commits (the top
     contributors, then each breakdown the result holds, with the tables' rows) when it has
     activity series, then the languages' shares when its languages table is not empty. Raises
-    ValueError for any other granularity."""
+    UsageError for any other granularity."""
     if total.request.granularity is not wambatic.stats.base.Granularity.TOTAL:
-        raise ValueError(
+        raise wambatic.reports.errors.UsageError(
             f'build_range_figures needs a TOTAL result, not {total.request.granularity}'
         )
     figures = activity_range_figures(total) if wambatic.reports.rows.has_activity(total) else []
@@ -558,10 +566,12 @@ def build_range_figures(total: wambatic.stats.base.StatsResult) -> list[Figure]:
 def build_calendar(day: wambatic.stats.base.StatsResult) -> Figure | None:
     """The commits-by-day heat-map of a DAY result: a column for each ISO week in the range
     (x is its Monday) and a row for each weekday, Monday at the top, a day outside the range
-    `None` so it is blank. None without activity series. Raises ValueError for any other
+    `None` so it is blank. None without activity series. Raises UsageError for any other
     granularity."""
     if day.request.granularity is not wambatic.stats.base.Granularity.DAY:
-        raise ValueError(f'build_calendar needs a DAY result, not {day.request.granularity}')
+        raise wambatic.reports.errors.UsageError(
+            f'build_calendar needs a DAY result, not {day.request.granularity}'
+        )
     if not wambatic.reports.rows.has_activity(day):
         return None
     series = wambatic.reports.rows.total_series(day)

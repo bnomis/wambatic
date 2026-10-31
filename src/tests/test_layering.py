@@ -2,7 +2,7 @@ import ast
 import pathlib
 
 SOURCE = pathlib.Path(__file__).parents[1] / 'wambatic'
-COMPOSITION_ROOTS = ('wambatic.cli', 'wambatic.__main__')
+COMPOSITION_ROOTS = ('wambatic.__main__', 'wambatic.cli')
 PLOTLY_IMPORTER = 'wambatic.reports.html'
 FETCH_IMPORTERS = ('wambatic.reports.service', 'wambatic.reports.web')
 

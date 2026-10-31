@@ -1,3 +1,5 @@
+import collections.abc
+import dataclasses
 import datetime
 import pathlib
 import sqlite3
@@ -7,6 +9,7 @@ import hypothesis
 import hypothesis.strategies
 import pytest
 
+import tests.fixtures.constants
 import tests.fixtures.stats
 import wambatic.fetch.base
 import wambatic.fetch.cache
@@ -14,24 +17,15 @@ import wambatic.fetch.errors
 import wambatic.fetch.queries
 import wambatic.version
 
-UTC = datetime.UTC
-T0 = datetime.datetime(2026, 10, 1, 9, 0, tzinfo=UTC)
+T0 = datetime.datetime(2026, 10, 1, 9, 0, tzinfo=datetime.UTC)
 HELLO = 'octocat/Hello-World'
 SPOON = 'octocat/Spoon-Knife'
+FIRST_OID = ('c1',)
+HOTFIX_LABELS = ('Hotfix', 'bug')
+SPOON_IDS = ('s1',)
+UNICODE_LABELS = ('ünïcode ✓',)
 CURRENT_SCHEMA_VERSION = wambatic.fetch.cache.SCHEMA_VERSION
 NEXT_SCHEMA_VERSION = CURRENT_SCHEMA_VERSION + 1
-
-
-@pytest.fixture
-def cache_path(tmp_path: pathlib.Path) -> pathlib.Path:
-    return tmp_path / 'nested' / 'cache.sqlite3'
-
-
-@pytest.fixture
-def cache(cache_path: pathlib.Path) -> typing.Iterator[wambatic.fetch.cache.Cache]:
-    opened = wambatic.fetch.cache.Cache.open(cache_path)
-    yield opened
-    opened.close()
 
 
 def repo(name: str = HELLO, **changes: object) -> wambatic.fetch.base.Repo:
@@ -329,14 +323,14 @@ def test_version_override_at_is_the_recorded_time_after_an_override(
 ) -> None:
     wambatic.fetch.cache.Cache.open(cache_path).close()
     monkeypatch.setattr(wambatic.fetch.cache, 'SCHEMA_VERSION', NEXT_SCHEMA_VERSION)
-    before = datetime.datetime.now(UTC)
+    before = datetime.datetime.now(datetime.UTC)
     opened = wambatic.fetch.cache.Cache.open(cache_path, ignore_version=True)
     try:
         recorded = opened.version_override_at()
     finally:
         opened.close()
     assert recorded is not None
-    assert before <= wambatic.fetch.cache.from_text(recorded) <= datetime.datetime.now(UTC)
+    assert before <= wambatic.fetch.cache.from_text(recorded) <= datetime.datetime.now(datetime.UTC)
 
 
 # Repos
@@ -377,7 +371,7 @@ def test_complete_listing_marks_absent_repos_missing_and_keeps_their_commits(
     }
     assert not by_name[HELLO].missing
     assert by_name[SPOON].missing
-    assert [c.oid for c in cache.read_commits(SPOON, None, None)] == ['s1']
+    assert [c.oid for c in cache.read_commits(SPOON, None, None)] == list(SPOON_IDS)
     cache.upsert_repos('octocat', [repo(), repo(SPOON)], complete=True)
     assert not cache.read_repos(wambatic.fetch.base.Subject('repo', 'octocat', 'Spoon-Knife'))[
         0
@@ -398,7 +392,7 @@ def test_complete_listing_leaves_other_owners_alone(cache: wambatic.fetch.cache.
 
 
 def test_naive_times_are_refused(cache: wambatic.fetch.cache.Cache) -> None:
-    with pytest.raises(ValueError, match='timezone-aware'):
+    with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='timezone-aware'):
         cache.upsert_repos(
             'octocat', [repo(updated_at=datetime.datetime(2026, 1, 1))], complete=False
         )
@@ -443,13 +437,13 @@ def test_replace_removes_commits_not_in_the_new_list(cache: wambatic.fetch.cache
     cache.write_commits(SPOON, [commit('s1', 1, SPOON)], state(SPOON), replace=False)
     cache.write_commits(HELLO, [commit('c2', 2), commit('c3', 3)], state(), replace=True)
     assert [c.oid for c in cache.read_commits(HELLO, None, None)] == ['c2', 'c3']
-    assert [c.oid for c in cache.read_commits(SPOON, None, None)] == ['s1']
+    assert [c.oid for c in cache.read_commits(SPOON, None, None)] == list(SPOON_IDS)
 
 
 def test_commits_of_another_repo_are_refused(cache: wambatic.fetch.cache.Cache) -> None:
-    with pytest.raises(ValueError, match='must belong to'):
+    with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
         cache.write_commits(HELLO, [commit('s1', repo_name=SPOON)], state(), replace=False)
-    with pytest.raises(ValueError, match='must belong to'):
+    with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
         cache.write_commits(HELLO, [], state(SPOON), replace=False)
 
 
@@ -466,7 +460,7 @@ def test_a_failure_mid_write_leaves_rows_and_state_unchanged(
     for replace in (False, True):
         with pytest.raises(wambatic.fetch.errors.CacheError, match='disk full'):
             cache.write_commits(HELLO, [commit('c2', 2)], state(head='b' * 40), replace=replace)
-        assert [c.oid for c in cache.read_commits(HELLO, None, None)] == ['c1']
+        assert [c.oid for c in cache.read_commits(HELLO, None, None)] == list(FIRST_OID)
         assert cache.sync_state(HELLO, 'commits') == old
 
 
@@ -481,7 +475,7 @@ def test_read_commits_bounds_are_half_open_and_ordered(cache: wambatic.fetch.cac
 
     assert oids(None, None) == ['c1', 'c2a', 'c2b', 'c3']
     assert oids(2, 3) == ['c2a', 'c2b']
-    assert oids(None, 2) == ['c1']
+    assert oids(None, 2) == list(FIRST_OID)
     assert oids(3, None) == ['c3']
     assert oids(4, None) == []
 
@@ -494,17 +488,17 @@ def test_commit_without_an_account_and_merge_flag_round_trip(
     assert cache.read_commits(HELLO, None, None) == [stored]
 
 
-instants = hypothesis.strategies.datetimes(
+INSTANTS = hypothesis.strategies.datetimes(
     min_value=datetime.datetime(2000, 1, 1),
     max_value=datetime.datetime(2100, 1, 1),
-    timezones=hypothesis.strategies.just(UTC),
+    timezones=hypothesis.strategies.just(datetime.UTC),
 )
-commit_lists = hypothesis.strategies.lists(
+COMMIT_LISTS = hypothesis.strategies.lists(
     hypothesis.strategies.builds(
         wambatic.fetch.base.Commit,
         repo=hypothesis.strategies.just(HELLO),
         oid=hypothesis.strategies.sampled_from(['a', 'b', 'c', 'd']),
-        authored_at=instants,
+        authored_at=INSTANTS,
         author_login=hypothesis.strategies.none() | hypothesis.strategies.just('octocat'),
         additions=hypothesis.strategies.integers(0, 10_000),
         deletions=hypothesis.strategies.integers(0, 10_000),
@@ -515,7 +509,7 @@ commit_lists = hypothesis.strategies.lists(
 
 
 @hypothesis.settings(max_examples=20, deadline=10000)
-@hypothesis.given(commits=commit_lists)
+@hypothesis.given(commits=COMMIT_LISTS)
 def test_write_then_read_keeps_the_last_commit_per_oid(
     commits: list[wambatic.fetch.base.Commit], tmp_path_factory: pytest.TempPathFactory
 ) -> None:
@@ -643,11 +637,11 @@ def test_a_pull_request_or_state_for_another_repo_raises_and_writes_nothing(
     cache: wambatic.fetch.cache.Cache, cache_path: pathlib.Path
 ) -> None:
     pulls_state = state(resource='pull_requests')
-    with pytest.raises(ValueError, match='must belong to'):
+    with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
         cache.write_pull_requests(
             HELLO, [pull_request(1), pull_request(2, repo_name=SPOON)], pulls_state, replace=False
         )
-    with pytest.raises(ValueError, match='must belong to'):
+    with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
         cache.write_pull_requests(
             HELLO, [pull_request(1)], state(SPOON, resource='pull_requests'), replace=False
         )
@@ -660,11 +654,11 @@ def test_an_issue_or_state_for_another_repo_raises_and_writes_nothing(
     cache: wambatic.fetch.cache.Cache, cache_path: pathlib.Path
 ) -> None:
     issues_state = state(resource='issues')
-    with pytest.raises(ValueError, match='must belong to'):
+    with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
         cache.write_issues(
             HELLO, [issue(1), issue(2, repo_name=SPOON)], issues_state, replace=False
         )
-    with pytest.raises(ValueError, match='must belong to'):
+    with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
         cache.write_issues(HELLO, [issue(1)], state(SPOON, resource='issues'), replace=False)
     assert table_rows(cache_path, 'issues') == []
     assert cache.sync_state(HELLO, 'issues') is None
@@ -706,17 +700,15 @@ def test_pull_requests_round_trip_with_labels_and_a_first_commit(
     cache: wambatic.fetch.cache.Cache,
 ) -> None:
     pulls = [
-        pull_request(
-            1, 2, labels=('Hotfix', 'bug'), first_commit_at=T0 - datetime.timedelta(days=1)
-        ),
-        pull_request(2, 3, labels=('ünïcode ✓',)),
+        pull_request(1, 2, labels=HOTFIX_LABELS, first_commit_at=T0 - datetime.timedelta(days=1)),
+        pull_request(2, 3, labels=UNICODE_LABELS),
         pull_request(3, 4, labels=(), first_commit_at=None),
     ]
     cache.write_pull_requests(HELLO, pulls, state(resource='pull_requests'), replace=False)
     read = cache.read_pull_requests(HELLO, None)
     assert read == pulls
-    assert read[0].labels == ('Hotfix', 'bug')
-    assert read[1].labels == ('ünïcode ✓',)
+    assert read[0].labels == HOTFIX_LABELS
+    assert read[1].labels == UNICODE_LABELS
     assert read[2].labels == ()
     assert read[2].first_commit_at is None
 
@@ -744,7 +736,7 @@ def test_write_releases_replaces_the_repos_rows_and_leaves_another_repo_alone(
     cache.write_releases(SPOON, [release('s1', repo_name=SPOON)], state(SPOON, resource='releases'))
     cache.write_releases(HELLO, [release('v3', 2)], state(resource='releases'))
     assert [r.tag_name for r in cache.read_releases(HELLO)] == ['v3']
-    assert [r.tag_name for r in cache.read_releases(SPOON)] == ['s1']
+    assert [r.tag_name for r in cache.read_releases(SPOON)] == list(SPOON_IDS)
 
 
 def test_workflow_runs_round_trip_with_none_fields(cache: wambatic.fetch.cache.Cache) -> None:
@@ -853,21 +845,21 @@ def test_the_sync_state_probe_and_the_repo_release_probe_round_trip(
 def test_a_release_or_run_or_state_for_another_repo_raises_and_writes_nothing(
     cache: wambatic.fetch.cache.Cache, cache_path: pathlib.Path
 ) -> None:
-    with pytest.raises(ValueError, match='must belong to'):
+    with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
         cache.write_releases(
             HELLO, [release('v1'), release('v2', repo_name=SPOON)], state(resource='releases')
         )
-    with pytest.raises(ValueError, match='must belong to'):
+    with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
         cache.write_releases(HELLO, [release('v1')], state(SPOON, resource='releases'))
     for replace in (False, True):
-        with pytest.raises(ValueError, match='must belong to'):
+        with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
             cache.write_workflow_runs(
                 HELLO,
                 [workflow_run(1), workflow_run(2, repo_name=SPOON)],
                 state(resource='workflow_runs'),
                 replace=replace,
             )
-        with pytest.raises(ValueError, match='must belong to'):
+        with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
             cache.write_workflow_runs(
                 HELLO, [workflow_run(1)], state(SPOON, resource='workflow_runs'), replace=replace
             )
@@ -983,29 +975,29 @@ def test_a_star_or_fork_or_state_for_another_repo_raises_and_writes_nothing(
     cache: wambatic.fetch.cache.Cache, cache_path: pathlib.Path
 ) -> None:
     for replace in (False, True):
-        with pytest.raises(ValueError, match='must belong to'):
+        with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
             cache.write_star_events(
                 HELLO,
                 [star_event('U_1'), star_event('U_2', repo_name=SPOON)],
                 state(resource='star_events'),
                 replace=replace,
             )
-        with pytest.raises(ValueError, match='must belong to'):
+        with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
             cache.write_star_events(
                 HELLO, [star_event('U_1')], state(SPOON, resource='star_events'), replace=replace
             )
-        with pytest.raises(ValueError, match='must belong to'):
+        with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
             cache.write_forks(
                 HELLO,
                 [fork(1), fork(2, repo_name=SPOON)],
                 state(resource='forks'),
                 replace=replace,
             )
-        with pytest.raises(ValueError, match='must belong to'):
+        with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='must belong to'):
             cache.write_forks(HELLO, [fork(1)], state(SPOON, resource='forks'), replace=replace)
     assert table_rows(cache_path, 'star_events') == []
     assert table_rows(cache_path, 'forks') == []
-    for resource in ('star_events', 'forks'):
+    for resource in sorted(tests.fixtures.stats.RESOURCES_POPULARITY):
         assert cache.sync_state(HELLO, resource) is None
         assert cache.sync_state(SPOON, resource) is None
 
@@ -1057,6 +1049,18 @@ def test_inspect_cache_of_a_missing_path_is_none_and_creates_nothing(
     assert wambatic.fetch.cache.inspect_cache(cache_path) is None
     assert not cache_path.exists()
     assert not cache_path.parent.exists()
+
+
+def test_inspect_cache_leaves_the_file_unchanged_and_reads_a_read_only_file(
+    stats_cache_path: pathlib.Path,
+) -> None:
+    before = stats_cache_path.stat().st_mtime_ns
+    stats_cache_path.chmod(0o444)
+    try:
+        assert wambatic.fetch.cache.inspect_cache(stats_cache_path) is not None
+    finally:
+        stats_cache_path.chmod(0o644)
+    assert stats_cache_path.stat().st_mtime_ns == before
 
 
 def test_inspect_cache_reports_counts_identity_and_latest_sync(
@@ -1266,3 +1270,197 @@ def test_clear_cache_of_a_file_that_cannot_be_deleted_is_a_cache_error(
     finally:
         cache_path.parent.chmod(0o755)
     assert cache_path.exists()
+
+
+def table_records() -> list[tuple[str, type, tuple[str, ...]]]:
+    tables = wambatic.fetch.cache.tables()
+    return [
+        (table.name, table.record_type, table.columns)  # type: ignore[misc]
+        for table in (
+            tables.commits,
+            tables.forks,
+            tables.issues,
+            tables.pull_requests,
+            tables.releases,
+            tables.star_events,
+            tables.workflow_runs,
+        )
+    ]
+
+
+def stored_columns(cache: wambatic.fetch.cache.Cache, table: str) -> tuple[str, ...]:
+    rows = cache.connection.execute(f'PRAGMA table_info({table})').fetchall()
+    return tuple(row[1] for row in rows)
+
+
+@pytest.mark.parametrize(('name', 'record_type', 'columns'), table_records())
+def test_each_record_field_has_a_cache_column(
+    cache: wambatic.fetch.cache.Cache, name: str, record_type: type, columns: tuple[str, ...]
+) -> None:
+    assert columns == tuple(field.name for field in dataclasses.fields(record_type))
+    assert stored_columns(cache, name) == columns
+
+
+def test_repo_and_sync_state_fields_have_cache_columns(
+    cache: wambatic.fetch.cache.Cache,
+) -> None:
+    tables = wambatic.fetch.cache.tables()
+    repos = stored_columns(cache, 'repos')
+    assert repos == (tables.repo_columns[0], 'owner', *tables.repo_columns[1:])
+    assert stored_columns(cache, 'sync_state') == tables.sync_state_columns
+
+
+def test_every_time_flag_and_json_field_has_a_converter() -> None:
+    tables = wambatic.fetch.cache.tables()
+    pairs: list[tuple[type, collections.abc.Mapping[str, object]]] = [
+        (table.record_type, table.converters)  # type: ignore[misc]
+        for table in (
+            tables.commits,
+            tables.forks,
+            tables.issues,
+            tables.pull_requests,
+            tables.releases,
+            tables.star_events,
+            tables.workflow_runs,
+        )
+    ]
+    pairs.append((wambatic.fetch.base.Repo, wambatic.fetch.cache.REPO_CONVERTERS))
+    pairs.append((wambatic.fetch.base.SyncState, wambatic.fetch.cache.SYNC_STATE_CONVERTERS))
+    for record_type, converters in pairs:
+        hints = typing.get_type_hints(record_type)
+        for field in dataclasses.fields(record_type):
+            needs = {datetime.datetime, bool, tuple} & set(
+                [hints[field.name], *typing.get_args(hints[field.name])]
+                + [typing.get_origin(hints[field.name])]
+            )
+            assert bool(needs) == (field.name in converters), (record_type.__name__, field.name)
+
+
+COLUMN_TEXT = hypothesis.strategies.text(min_size=1, max_size=20)
+COLUMN_COUNT = hypothesis.strategies.integers(0, 2**62)
+OPTIONAL_INSTANTS = hypothesis.strategies.none() | INSTANTS
+OPTIONAL_TEXT = hypothesis.strategies.none() | COLUMN_TEXT
+HELLO_REPO = hypothesis.strategies.just(HELLO)
+REPO_RECORDS = hypothesis.strategies.builds(
+    wambatic.fetch.base.Repo,
+    name_with_owner=COLUMN_TEXT,
+    default_branch=OPTIONAL_TEXT,
+    head_oid=OPTIONAL_TEXT,
+    is_archived=hypothesis.strategies.booleans(),
+    is_fork=hypothesis.strategies.booleans(),
+    pushed_at=OPTIONAL_INSTANTS,
+    updated_at=INSTANTS,
+    pull_requests_updated_at=OPTIONAL_INSTANTS,
+    issues_updated_at=OPTIONAL_INSTANTS,
+    releases_count=COLUMN_COUNT,
+    releases_updated_at=OPTIONAL_INSTANTS,
+    stargazer_count=COLUMN_COUNT,
+    fork_count=COLUMN_COUNT,
+    watcher_count=COLUMN_COUNT,
+    languages=hypothesis.strategies.lists(
+        hypothesis.strategies.tuples(COLUMN_TEXT, COLUMN_COUNT), max_size=5
+    ).map(tuple),
+    languages_size=COLUMN_COUNT,
+    missing=hypothesis.strategies.booleans(),
+)
+PULL_REQUEST_RECORDS = hypothesis.strategies.builds(
+    wambatic.fetch.base.PullRequest,
+    repo=HELLO_REPO,
+    number=COLUMN_COUNT,
+    author_login=OPTIONAL_TEXT,
+    created_at=INSTANTS,
+    updated_at=INSTANTS,
+    merged_at=OPTIONAL_INSTANTS,
+    closed_at=OPTIONAL_INSTANTS,
+    first_review_at=OPTIONAL_INSTANTS,
+    additions=COLUMN_COUNT,
+    deletions=COLUMN_COUNT,
+    labels=hypothesis.strategies.lists(COLUMN_TEXT, max_size=4).map(tuple),
+    first_commit_at=OPTIONAL_INSTANTS,
+)
+ISSUE_RECORDS = hypothesis.strategies.builds(
+    wambatic.fetch.base.Issue,
+    repo=HELLO_REPO,
+    number=COLUMN_COUNT,
+    author_login=OPTIONAL_TEXT,
+    created_at=INSTANTS,
+    updated_at=INSTANTS,
+    closed_at=OPTIONAL_INSTANTS,
+)
+RELEASE_RECORDS = hypothesis.strategies.builds(
+    wambatic.fetch.base.Release,
+    repo=HELLO_REPO,
+    tag_name=COLUMN_TEXT,
+    created_at=INSTANTS,
+    published_at=INSTANTS,
+    is_prerelease=hypothesis.strategies.booleans(),
+)
+WORKFLOW_RUN_RECORDS = hypothesis.strategies.builds(
+    wambatic.fetch.base.WorkflowRun,
+    repo=HELLO_REPO,
+    id=COLUMN_COUNT,
+    workflow_path=COLUMN_TEXT,
+    name=hypothesis.strategies.text(max_size=20),
+    event=COLUMN_TEXT,
+    head_branch=OPTIONAL_TEXT,
+    status=hypothesis.strategies.text(max_size=20),
+    conclusion=OPTIONAL_TEXT,
+    created_at=INSTANTS,
+    updated_at=INSTANTS,
+    run_started_at=OPTIONAL_INSTANTS,
+    run_attempt=COLUMN_COUNT,
+)
+STAR_EVENT_RECORDS = hypothesis.strategies.builds(
+    wambatic.fetch.base.StarEvent,
+    repo=HELLO_REPO,
+    user_id=COLUMN_TEXT,
+    starred_at=INSTANTS,
+)
+FORK_RECORDS = hypothesis.strategies.builds(
+    wambatic.fetch.base.Fork,
+    repo=HELLO_REPO,
+    id=COLUMN_COUNT,
+    created_at=INSTANTS,
+)
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(record=REPO_RECORDS)
+def test_repo_row_round_trips(record: wambatic.fetch.base.Repo) -> None:
+    stored = wambatic.fetch.cache.record_values(record)
+    assert wambatic.fetch.cache.repo_from_row(stored) == record
+    row = wambatic.fetch.cache.repo_row(record)
+    assert row[:2] == (record.name_with_owner, record.name_with_owner.partition('/')[0])
+    assert wambatic.fetch.cache.repo_from_row((row[0], *row[2:])) == dataclasses.replace(
+        record, missing=False
+    )
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(
+    fork=FORK_RECORDS,
+    issue=ISSUE_RECORDS,
+    pull_request=PULL_REQUEST_RECORDS,
+    release=RELEASE_RECORDS,
+    run=WORKFLOW_RUN_RECORDS,
+    star=STAR_EVENT_RECORDS,
+)
+def test_every_record_type_round_trips(
+    fork: wambatic.fetch.base.Fork,
+    issue: wambatic.fetch.base.Issue,
+    pull_request: wambatic.fetch.base.PullRequest,
+    release: wambatic.fetch.base.Release,
+    run: wambatic.fetch.base.WorkflowRun,
+    star: wambatic.fetch.base.StarEvent,
+) -> None:
+    tables = wambatic.fetch.cache.tables()
+    for table, record in (
+        (tables.forks, fork),
+        (tables.issues, issue),
+        (tables.pull_requests, pull_request),
+        (tables.releases, release),
+        (tables.star_events, star),
+        (tables.workflow_runs, run),
+    ):
+        stored = table.values(record)  # type: ignore[arg-type]
+        assert table.record(HELLO, stored[1:]) == record

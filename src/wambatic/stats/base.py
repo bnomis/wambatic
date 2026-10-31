@@ -3,8 +3,9 @@ import datetime
 import enum
 import typing
 
-import wambatic.fetch
+import wambatic.fetch.base
 import wambatic.settings
+import wambatic.stats.errors
 
 GROUPS = frozenset({'activity', 'delivery', 'flow', 'popularity'})
 
@@ -23,17 +24,22 @@ class Bucket:
     label: str
 
 
+ByKind = typing.Literal['author', 'repo']
+
+
 @dataclasses.dataclass(frozen=True, slots=True)
 class Series:
     metric: str
     unit: str
     points: dict[Bucket, float]
     by: str | None = None
-    by_kind: typing.Literal['author', 'repo'] | None = None
+    by_kind: ByKind | None = None
 
     def __post_init__(self) -> None:
         if (self.by is None) != (self.by_kind is None):
-            raise ValueError('by and by_kind are both set or both None')
+            raise wambatic.stats.errors.InvalidRequestError(
+                'by and by_kind are both set or both None'
+            )
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -51,7 +57,7 @@ class StatsRequest:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class StatsResult:
-    subject: wambatic.fetch.Subject
+    subject: wambatic.fetch.base.Subject
     request: StatsRequest
     since: datetime.date
     until: datetime.date

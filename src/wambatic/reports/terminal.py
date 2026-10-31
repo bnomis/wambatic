@@ -59,6 +59,7 @@ def format_cell(metric: str, value: float | None) -> str:
     return format_number(value, signed=metric in wambatic.reports.rows.SIGNED_METRICS)
 
 
+# auditme: accept[passthrough-shim] names the concept of a cell that is never read as markup
 def text_cell(value: str) -> rich.text.Text:
     """A string cell that Rich does not read as markup (a login can be `dependabot[bot]`)."""
     return rich.text.Text(value)
@@ -135,7 +136,7 @@ def trend_lines(result: wambatic.stats.base.StatsResult, width: int) -> list[str
     """One `<metric>  <sparkline>  <min> to <max>` line per total series, cropped to the latest
     buckets that fit `width` with `last N periods` added."""
     series = wambatic.reports.rows.total_series(result)
-    buckets = len(wambatic.reports.rows.bucket_list(result))
+    buckets = len(wambatic.reports.rows.buckets_from(series))
     metrics = [
         m for m in wambatic.reports.rows.TREND_METRICS if m in series and len(series[m]) == buckets
     ]
@@ -143,15 +144,25 @@ def trend_lines(result: wambatic.stats.base.StatsResult, width: int) -> list[str
     lines: list[str] = []
     for metric in metrics:
         values = [value for _, value in series[metric]]
+        signed = metric in wambatic.reports.rows.SIGNED_METRICS
+        low = high = values[-1]
+        spans: dict[int, str] = {}
+        for count, value in enumerate(reversed(values), start=1):
+            low, high = min(low, value), max(high, value)
+            spans[count] = (
+                f'{format_number(low, signed=signed)} to {format_number(high, signed=signed)}'
+            )
+
+        def note_for(count: int, total: int = len(values)) -> str:
+            return '' if count == total else f'  last {count} {plural(count)}'
+
         shown = len(values)
-        while True:
-            kept = values[len(values) - shown :]
-            span = value_range(kept, signed=metric in wambatic.reports.rows.SIGNED_METRICS)
-            note = '' if shown == len(values) else f'  last {shown} {plural(shown)}'
-            line = f'{metric:<{label_width}}  {sparkline(kept)}  {span}{note}'
-            if len(line) <= width or shown == 1:
-                break
+        while shown > 1 and (
+            label_width + 2 + shown + 2 + len(spans[shown]) + len(note_for(shown)) > width
+        ):
             shown -= 1
+        kept = values[len(values) - shown :]
+        line = f'{metric:<{label_width}}  {sparkline(kept)}  {spans[shown]}{note_for(shown)}'
         lines.append(line)
     return lines
 
@@ -329,8 +340,6 @@ def render_popularity(
         )
     console.print()
     console.print(table)
-    if languages.more:
-        console.print(rich.text.Text(f'and {languages.more} more'))
 
 
 def render_terminal(result: wambatic.stats.base.StatsResult, console: rich.console.Console) -> None:
@@ -339,7 +348,7 @@ def render_terminal(result: wambatic.stats.base.StatsResult, console: rich.conso
     console.print(title_line(result))
     if activity is not None:
         console.print(period_table(activity))
-    if len(wambatic.reports.rows.bucket_list(result)) > 1 and any(
+    if len(wambatic.reports.rows.buckets_from(series)) > 1 and any(
         metric in series for metric in wambatic.reports.rows.TREND_METRICS
     ):
         heading(console, 'Trends')

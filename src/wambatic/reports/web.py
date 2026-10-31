@@ -29,19 +29,21 @@ import wambatic.reports.errors
 import wambatic.reports.html
 import wambatic.reports.service
 import wambatic.settings
-import wambatic.stats
 import wambatic.stats.base
+import wambatic.stats.engine
+import wambatic.stats.errors
 import wambatic.version
 
 JobKey = tuple[str, frozenset[str]]
 INTERNAL_ERROR = 'internal error; see the server log'
 BAD_REQUEST = (
     wambatic.settings.SettingsError,
-    wambatic.stats.UnknownGroupError,
-    wambatic.stats.InvalidRangeError,
-    wambatic.stats.InvalidRequestError,
+    wambatic.stats.errors.UnknownGroupError,
+    wambatic.stats.errors.InvalidRangeError,
+    wambatic.stats.errors.InvalidRequestError,
 )
-NOT_FOUND = (wambatic.fetch.errors.NotFoundError, wambatic.stats.EmptySubjectError)
+NOT_FOUND = (wambatic.fetch.errors.NotFoundError, wambatic.stats.errors.EmptySubjectError)
+# auditme: accept[non-alphabetical-literal] loopback names before addresses
 LOOPBACK_HOSTS = ('localhost', '127.0.0.1', '[::1]')
 PAGE_PATHS = frozenset({'/', '/report'})
 TRUE_VALUES = frozenset({'1', 'on', 'true'})
@@ -80,6 +82,7 @@ def error_response(error: BaseException) -> tuple[int, str]:
 
 @dataclasses.dataclass(slots=True)
 class SyncJob:
+    # Mutable by design: the background sync updates the phase and progress that the page polls.
     id: str
     key: JobKey
     phase: typing.Literal['queued', 'running', 'done', 'failed'] = 'queued'
@@ -143,6 +146,7 @@ class Jobs:
                 job.phase = 'running'
                 await run(job)
             job.phase = 'done'
+        # auditme: accept[silent-broad-except] logged by error_response()
         except Exception as e:  # noqa: BLE001 - logged by error_response()
             job.status, job.error = error_response(e)
             job.phase = 'failed'
@@ -203,6 +207,7 @@ class RawQuery:
     job: str | None
 
 
+# auditme: accept[passthrough-shim] the FastAPI dependency that reads the query string
 def raw_query(
     target: Target = None,
     by: By = None,
@@ -222,7 +227,6 @@ class Query:
 
     target: wambatic.fetch.base.Subject | str
     request: wambatic.stats.base.StatsRequest
-    by_author: bool
     key: JobKey
     job: str | None
 
@@ -232,9 +236,19 @@ def blank_to_none(value: str | None) -> str | None:
     return value.strip() or None if value is not None else None
 
 
-def parse_query(settings: wambatic.settings.Settings, raw: RawQuery, *, page: bool) -> Query:
+def parse_query(
+    settings: wambatic.settings.Settings,
+    raw: RawQuery,
+    today: datetime.datetime,
+    *,
+    page: bool,
+) -> Query:
     """The CLI's parsers applied to the parameters, so a value the CLI rejects is rejected with
-    the same message."""
+    the same message.
+
+    Raises:
+        UsageError: a query parameter is invalid.
+    """
     text = (blank_to_none(raw.target) or '').strip()
     if not text:
         raise wambatic.reports.errors.UsageError(
@@ -262,11 +276,13 @@ def parse_query(settings: wambatic.settings.Settings, raw: RawQuery, *, page: bo
         blank_to_none(raw.until),
         blank_to_none(raw.groups),
         by_author,
-        wambatic.reports.service.resolve_tz(effective),
         effective,
+        today,
     )
-    resources = wambatic.stats.resources_for(request.groups) & wambatic.fetch.base.BUILT_RESOURCES
-    return Query(target, request, by_author, (text, resources), blank_to_none(raw.job))
+    resources = (
+        wambatic.stats.engine.resources_for(request.groups) & wambatic.fetch.base.BUILT_RESOURCES
+    )
+    return Query(target, request, (text, resources), blank_to_none(raw.job))
 
 
 CallNext = collections.abc.Callable[[fastapi.Request], collections.abc.Awaitable[fastapi.Response]]
@@ -300,7 +316,6 @@ def make_app(
     cache: wambatic.fetch.cache.Cache,
     *,
     default_target: str | None = None,
-    check_host: bool = True,
     clock: collections.abc.Callable[[], datetime.datetime] = wambatic.fetch.ratelimit.utc_now,
 ) -> fastapi.FastAPI:
     jobs = Jobs()
@@ -335,12 +350,11 @@ def make_app(
         query: Query,
         requests: list[wambatic.stats.base.StatsRequest],
     ) -> list[wambatic.stats.base.StatsResult]:
-        _, results = await wambatic.reports.service.build_results(
+        _, results = await wambatic.reports.service.sync_and_compute(
             settings,
             cache,
             subject,
             requests,
-            by_author=query.by_author,
             full_refresh=False,
             no_fetch=False,
             sync=False,
@@ -354,8 +368,7 @@ def make_app(
                 settings,
                 cache,
                 query.target,
-                query.request.groups,
-                by_author=query.by_author,
+                query.request,
                 full_refresh=False,
                 no_fetch=False,
                 sync=True,
@@ -369,7 +382,11 @@ def make_app(
         query: Query, requests: list[wambatic.stats.base.StatsRequest]
     ) -> list[wambatic.stats.base.StatsResult] | SyncJob:
         """The results at once when the cache is fresh or the request names its finished job;
-        else the job that brings the cache up to date."""
+        else the job that brings the cache up to date.
+
+        Raises:
+            JobError: the finished job for the request failed.
+        """
         job = jobs.get(query.job) if query.job is not None else None
         if job is not None and job.key == query.key:
             if job.phase == 'failed':
@@ -399,6 +416,7 @@ def make_app(
     ) -> fastapi.Response:
         try:
             return await call_next(request)
+        # auditme: accept[silent-broad-except] logged by error_response()
         except Exception as e:  # noqa: BLE001 - logged by error_response()
             return error_reply(request, *error_response(e))
 
@@ -407,7 +425,7 @@ def make_app(
         request: fastapi.Request,
         call_next: CallNext,
     ) -> fastapi.Response:
-        if check_host:
+        if not settings.report.allow_remote:
             server = request.scope.get('server')
             port = server[1] if server else None
             suffix = '' if port is None else f':{port}'
@@ -449,7 +467,7 @@ def make_app(
     async def report(
         request: fastapi.Request, raw: typing.Annotated[RawQuery, fastapi.Depends(raw_query)]
     ) -> fastapi.responses.HTMLResponse:
-        query = parse_query(settings, raw, page=True)
+        query = parse_query(settings, raw, clock(), page=True)
         outcome = await results_or_job(query, wambatic.reports.html.period_requests(query.request))
         if isinstance(outcome, SyncJob):
             reload = reload_path(request.url.components, outcome.id)
@@ -478,7 +496,7 @@ def make_app(
         raw: typing.Annotated[RawQuery, fastapi.Depends(raw_query)],
     ) -> fastapi.responses.JSONResponse:
         """The result as `report --format json` prints it, or 202 and a job to follow."""
-        query = parse_query(settings, raw, page=False)
+        query = parse_query(settings, raw, clock(), page=False)
         outcome = await results_or_job(query, [query.request])
         if isinstance(outcome, SyncJob):
             return fastapi.responses.JSONResponse(
@@ -509,8 +527,12 @@ def is_loopback(host: str) -> bool:
         return False
 
 
-def check_bind(host: str, allow_remote: bool) -> None:
-    """Refuse a host that other machines can reach unless remote access was asked for."""
+def warn_on_bind(host: str, allow_remote: bool) -> None:
+    """Refuse a host that other machines can reach unless remote access was asked for.
+
+    Raises:
+        UsageError: the host is not a loopback address and no override is given.
+    """
     if is_loopback(host):
         return
     if not allow_remote:
@@ -525,13 +547,18 @@ def check_bind(host: str, allow_remote: bool) -> None:
 
 def listen(host: str, port: int) -> socket.socket:
     """The listening socket, bound here rather than by uvicorn, which logs a bind failure and
-    exits the process itself."""
+    exits the process itself.
+
+    Raises:
+        ServeError: the address cannot be listened on.
+    """
     bare = host.strip('[]')
     family = socket.AF_INET6 if ':' in bare else socket.AF_INET
     try:
         return socket.create_server((bare, port), family=family)
     except OSError as e:
         raise wambatic.reports.errors.ServeError(
+            # auditme: accept[except-interpolation] the OS reason says why the port cannot be used
             f'cannot listen on {host}:{port}: {e.strerror or e}'
         ) from e
 
@@ -540,9 +567,14 @@ def serve(
     settings: wambatic.settings.Settings, *, default_target: str | None, ignore_cache_version: bool
 ) -> None:
     """Open the cache, bind `report.web_host:report.web_port`, then run the app on uvicorn until
-    Ctrl-C, which ends in the KeyboardInterrupt uvicorn raises again after a graceful stop."""
+    Ctrl-C, which ends in the KeyboardInterrupt uvicorn raises again after a graceful stop.
+
+    Raises:
+        UsageError: the bind address is refused.
+        ServeError: the address cannot be listened on.
+    """
     report = settings.report
-    check_bind(report.web_host, report.allow_remote)
+    warn_on_bind(report.web_host, report.allow_remote)
     if not 1 <= report.web_port <= 65535:
         raise wambatic.reports.errors.UsageError('the port must be from 1 to 65535')
     if default_target is not None:
@@ -553,9 +585,7 @@ def serve(
     sock: socket.socket | None = None
     try:
         sock = listen(report.web_host, report.web_port)
-        app = make_app(
-            settings, cache, default_target=default_target, check_host=not report.allow_remote
-        )
+        app = make_app(settings, cache, default_target=default_target)
         shown = f'[{report.web_host}]' if ':' in report.web_host else report.web_host
         base = f'http://{shown}:{sock.getsockname()[1]}'
         loguru.logger.info(f'Serving on {base}/ (Ctrl-C to stop)')

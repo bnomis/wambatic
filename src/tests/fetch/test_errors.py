@@ -4,6 +4,11 @@ import pytest
 
 import wambatic.fetch.errors
 
+FORBIDDEN_NO = ('FORBIDDEN', 'no')
+INTERNAL_BOOM = ('INTERNAL', 'boom')
+LETTERS = ('a', 'b')
+SCHEMA_DIFFERENCE = ('1', '2')
+
 
 @pytest.mark.parametrize(
     'cls',
@@ -28,9 +33,9 @@ def test_rate_limit_error_names_reset() -> None:
 
 
 def test_graphql_error_exposes_pairs() -> None:
-    pairs = [('INTERNAL', 'boom'), ('FORBIDDEN', 'no')]
+    pairs = [INTERNAL_BOOM, FORBIDDEN_NO]
     error = wambatic.fetch.errors.GraphQLError(pairs)
-    assert error.errors == pairs
+    assert error.errors == tuple(pairs)
     assert 'INTERNAL' in str(error)
     assert 'FORBIDDEN' in str(error)
 
@@ -38,7 +43,7 @@ def test_graphql_error_exposes_pairs() -> None:
 def test_cache_version_error_names_each_key_with_both_values_and_the_remedies() -> None:
     error = wambatic.fetch.errors.CacheVersionError(
         {
-            'schema_version': ('1', '2'),
+            'schema_version': SCHEMA_DIFFERENCE,
             'query:NEW': (None, 'abc'),
             'query:OLD': ('def', None),
         }
@@ -49,4 +54,20 @@ def test_cache_version_error_names_each_key_with_both_values_and_the_remedies() 
     assert 'query:OLD: cache has def, this wambatic has nothing' in message
     assert 'wambatic cache clear' in message
     assert '--ignore-cache-version' in message
-    assert error.differences['schema_version'] == ('1', '2')
+    assert error.differences['schema_version'] == SCHEMA_DIFFERENCE
+
+
+def test_graphql_error_keeps_its_own_copy_of_the_pairs() -> None:
+    pairs = [INTERNAL_BOOM]
+    error = wambatic.fetch.errors.GraphQLError(pairs)
+    pairs.append(FORBIDDEN_NO)
+    assert error.errors == (INTERNAL_BOOM,)
+
+
+def test_cache_version_error_differences_cannot_be_changed() -> None:
+    source: dict[str, tuple[str | None, str | None]] = {'schema_version': SCHEMA_DIFFERENCE}
+    error = wambatic.fetch.errors.CacheVersionError(source)
+    source['other'] = LETTERS
+    assert 'other' not in error.differences
+    with pytest.raises(TypeError):
+        error.differences['other'] = LETTERS  # type: ignore[index]

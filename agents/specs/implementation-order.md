@@ -18,16 +18,16 @@ The order in which wambatic is built, with what each step delivers, what it depe
 
 | # | Step | Specs | Depends on | Status |
 |---|------|-------|------------|--------|
-| 1 | Skeleton and settings | [system](system/spec.md) | none | done |
+| 1 | Skeleton and settings | [system](system/spec.md) | none | done: [tasks-1](../tasks/system/tasks-1.md) |
 | 2 | Fetch core: auth, aiohttp client, rate limits | [fetch-and-cache](fetch-and-cache/spec.md) | 1 | done: [tasks-1](../tasks/fetch-and-cache/tasks-1.md) |
 | 3 | Cache and incremental sync for repos and commits | [fetch-and-cache](fetch-and-cache/spec.md) | 2 | done: [tasks-2](../tasks/fetch-and-cache/tasks-2.md) |
 | 4 | Activity stats with bucketing | [stats](stats/spec.md) | 3 | done: [tasks-1](../tasks/stats/tasks-1.md) |
 | 5 | Terminal report and CLI | [reports](reports/spec.md) | 4 | done: [tasks-1](../tasks/reports/tasks-1.md) |
-| 6 | Flow data and stats (PRs, issues) | fetch-and-cache, stats | 3, 4 | done: [tasks-2](../tasks/stats/tasks-2.md) |
+| 6 | Flow data and stats (PRs, issues) | [fetch-and-cache](fetch-and-cache/spec.md), [stats](stats/spec.md) | 3, 4 | done: [tasks-2](../tasks/stats/tasks-2.md) |
 | 7 | Static HTML report | [reports](reports/spec.md) | 5 | done: [tasks-2](../tasks/reports/tasks-2.md) |
-| 8 | Delivery data and stats (releases, Actions, DORA proxies) | fetch-and-cache, stats, reports | 6, 7 | done: [tasks-3](../tasks/stats/tasks-3.md) |
-| 9 | Local web app | [reports](reports/spec.md), fetch-and-cache | 7 | done: [tasks-3](../tasks/reports/tasks-3.md) |
-| 10 | Popularity data and stats (stars, forks, watchers, languages) | fetch-and-cache, stats, reports | 7 | done: [tasks-4](../tasks/stats/tasks-4.md) |
+| 8 | Delivery data and stats (releases, Actions, DORA proxies) | [fetch-and-cache](fetch-and-cache/spec.md), [stats](stats/spec.md), [reports](reports/spec.md) | 6, 7 | done: [tasks-3](../tasks/stats/tasks-3.md) |
+| 9 | Local web app | [reports](reports/spec.md), [fetch-and-cache](fetch-and-cache/spec.md) | 7 | done: [tasks-3](../tasks/reports/tasks-3.md) |
+| 10 | Popularity data and stats (stars, forks, watchers, languages) | [fetch-and-cache](fetch-and-cache/spec.md), [stats](stats/spec.md), [reports](reports/spec.md) | 7 | done: [tasks-4](../tasks/stats/tasks-4.md) |
 
 Steps 6 and 7 are independent and may be built in either order or in parallel once 5 is done. Step 10 was split from step 8 on 2026-10-30 (stats review 3), because its fetch resources were not specified and the two together were more than one task list; it was specified on 2026-10-30 (stats review 4). Steps 9 and 10 are independent of each other.
 
@@ -74,15 +74,15 @@ Done when: the file opens offline with no network request, shows all four granul
 Deliver: the `Release` and `WorkflowRun` records and tables, the `PullRequest` fields `labels` and `first_commit_at`, the listing's release probe and `sync_state.probe` (cache schema 3), `releases()` (full read when the probe changes) and `workflow_runs()` (REST, a free 304 when unchanged, in-progress runs re-read), `releases` and `workflow_runs` in `BUILT_RESOURCES`, the `delivery` group (Actions and release metrics, and the DORA proxies emitted only when their inputs exist), the terminal's Delivery by period and DORA proxies by period tables, the HTML page's delivery tiles, charts and tables, the release and run counts in `cache info`, and the README's delivery section. Fetch spec 1.6, stats spec 1.3 and reports spec 1.5; the choices are in the [stats review 3](stats/review-3.md).
 Done when: unconfigured proxies are listed as `unavailable` with a reason, in-progress runs are refreshed on the next sync, an unchanged repo's workflow runs cost one 304 and its releases no request, and `--groups delivery` renders in the terminal, JSON and HTML formats.
 
-### 10. Popularity data and stats
-
-Deliver: the `StarEvent` and `Fork` records and tables, the listing's star, fork and watcher counts and language sizes, the star and fork probes (cache schema 4), `star_events()` (GraphQL stargazers, newest first, stopping at the watermark) and `forks()` (the REST fork list), both read in full when their count falls, `star_events` and `forks` in `BUILT_RESOURCES`, the `popularity` group (stars and forks added and cumulative per period, the `popularity` and `languages` tables) in `compute`, with the four metrics leaving `activity`'s unavailable list, the terminal's Popularity by period, Popularity now and Languages tables, the HTML page's popularity tiles, charts, languages chart and tables, the star and fork counts in `cache info`, and the README's popularity section. Fetch spec 1.8, stats spec 1.4 and reports spec 1.7; the choices are in the [stats review 4](stats/review-4.md).
-Done when: an unchanged repo's stars and forks cost no request, a removed star leaves the cache on the next sync, the default report lists nothing as unavailable, and `--groups popularity` renders in the terminal, JSON and HTML formats.
-
 ### 9. Local web app
 
 Deliver: the CLI's sync-then-compute code moved to `reports/service.py` and the five-result HTML build to `html.py`, `SyncProgress` and `Fetcher.sync`'s `progress` argument, the `fastapi` and `uvicorn` dependencies (and `httpx` for tests), the sync jobs, a FastAPI app with `/`, `/report`, `/api/stats` and `/api/progress`, the form, progress and message pages, the `Host` check, loopback-only binding and `--allow-remote`, the `serve` command, and the README's web app section. Reports spec 1.6 and fetch spec 1.7; the choices are in the [reports review 3](reports/review-3.md).
 Done when: a large-org fixture does not block the page, invalid parameters return 400, and a non-loopback bind without the flag refuses to start.
+
+### 10. Popularity data and stats
+
+Deliver: the `StarEvent` and `Fork` records and tables, the listing's star, fork and watcher counts and language sizes, the star and fork probes (cache schema 4), `star_events()` (GraphQL stargazers, newest first, stopping at the watermark) and `forks()` (the REST fork list), both read in full when their count falls, `star_events` and `forks` in `BUILT_RESOURCES`, the `popularity` group (stars and forks added and cumulative per period, the `popularity` and `languages` tables) in `compute`, with the four metrics leaving `activity`'s unavailable list, the terminal's Popularity by period, Popularity now and Languages tables, the HTML page's popularity tiles, charts, languages chart and tables, the star and fork counts in `cache info`, and the README's popularity section. Fetch spec 1.8, stats spec 1.4 and reports spec 1.7; the choices are in the [stats review 4](stats/review-4.md).
+Done when: an unchanged repo's stars and forks cost no request, a removed star leaves the cache on the next sync, the default report lists nothing as unavailable, and `--groups popularity` renders in the terminal, JSON and HTML formats.
 
 ## Not in scope for this order
 

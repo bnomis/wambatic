@@ -38,7 +38,7 @@ The first run reads the whole history of the repository and may take a while for
 
 - a title line with the subject, the date range, the period and the time zone;
 - Activity by period: commits, contributors, active days, lines added, deleted and net for each period, with a `Total` row when there is more than one period. A period that the range cuts short ends in `*`, which the caption explains;
-- Trends: a sparkline for each metric that has a value in every period (the activity metrics, the flow counts, the delivery counts and the popularity counts), cropped to the width of your terminal;
+- Trends, when there is more than one period (so not with `--by total`): a sparkline for each metric that has a value in every period (the activity metrics, the flow counts, the delivery counts and the popularity counts), cropped to the width of your terminal;
 - By repository (for a user or organisation) and By author (with `--by-author`);
 - Top contributors, with only the first rows shown (the JSON output has every row);
 - Flow by period: pull requests opened and merged and issues opened and closed for each period, with a `Total` row when there is more than one period;
@@ -169,7 +169,7 @@ wambatic report org:octocat --groups popularity
 
 The totals are cumulative: a period's total is the events before the range plus those up to the end of the period, so they do not add up over periods. They count what exists now, so a star that was later removed is in none of them. Each event is placed in the period of its own date in the report time zone, as in [Flow](#flow). For a user target, every star and fork of the user's own repositories counts.
 
-Two tables go with the series. Popularity now lists GitHub's own star, fork (the whole network) and watcher counts for each repository at the last sync, most starred first, and watchers exist only as this current count: GitHub does not say when anyone started watching. Languages adds up the bytes of the 20 largest languages GitHub reports for each repository, shown as a share of the total; whatever those leave of a repository's code is one `Other` row, last. It is a snapshot of the last sync, not a history.
+Two tables go with the series. Popularity now lists GitHub's own star, fork (the whole network) and watcher counts for each repository at the last sync, most starred first, and watchers exist only as this current count: GitHub does not say when anyone started watching. Languages adds up the bytes of the 20 largest languages GitHub reports for each repository, shown as a share of the total; whatever those leave of a repository's code is one `Other` row, last. With more than 10 languages the table and the chart show the largest nine and one `Other` row adding up the rest (the JSON output has every row). It is a snapshot of the last sync, not a history.
 
 The first sync with `--groups popularity` reads every star, newest first, about one request for each hundred, and lists every fork the same way, so a popular repository costs many requests. Later syncs compare the listed counts with the cache and read only the newer events; a count that has fallen (a star removed, a fork deleted) makes wambatic read that repository's stars or forks again from the start.
 
@@ -225,11 +225,13 @@ Global options come before the command: `wambatic -v report ...`.
 |--------|---------|---------|
 | `-v`, `--verbose` | off | Log debugging detail, with time and source location |
 | `-q`, `--quiet` | off | Log warnings and errors only; cannot be used with `-v` |
+| `-h`, `--help` | | Show the help and exit |
+| `--completion generate\|complete` | | Print the shell completion source (`generate`), or complete a command line (`complete`) |
 | `--format terminal\|html\|json` | `report.format` | The output format |
 | `--out PATH` | `report.out_dir` | With `--format html`, the file to write, or an existing directory to write the report into; an error with another format |
 | `--by year\|month\|week\|day\|total` | `month` | The period to bucket by; weeks are ISO weeks starting on Monday. With `--format html`, the period shown when the page opens, and `total` is an error |
-| `--since YYYY-MM-DD` | the first commit | First day, inclusive, in the report time zone |
-| `--until YYYY-MM-DD` | today | Last day, inclusive, in the report time zone |
+| `--since YYYY-MM-DD` | the first commit | First day, inclusive, in the report time zone; not before 2008-01-01 |
+| `--until YYYY-MM-DD` | today | Last day, inclusive, in the report time zone; not after tomorrow in that zone |
 | `--groups NAMES` | `activity,flow` | Comma-separated metric groups: `activity`, `delivery`, `flow`, `popularity`. `delivery` and `popularity` are off by default because they read every workflow run, star and fork, which costs requests (see [The cache](#the-cache)) |
 | `--by-author` | off | Break activity down by author; not for a user target |
 | `--tz ZONE` | `stats.timezone` | An [IANA time zone](https://www.iana.org/time-zones) such as `Europe/Berlin` |
@@ -322,4 +324,4 @@ Each failure prints one line to stderr that says what to do, such as setting `GI
 
 ## More
 
-The design is in [the system spec](agents/specs/system/spec.md), [fetch and cache](agents/specs/fetch-and-cache/spec.md), [stats](agents/specs/stats/spec.md) and [reports](agents/specs/reports/spec.md); the order of work is in [the implementation order](agents/specs/implementation-order.md). Contributor and agent rules are in [AGENTS.md](AGENTS.md).
+The design is in [the system spec](agents/specs/system/spec.md), [fetch and cache](agents/specs/fetch-and-cache/spec.md), [stats](agents/specs/stats/spec.md) and [reports](agents/specs/reports/spec.md); the order of work is in [the implementation order](agents/specs/implementation-order.md). Contributors: the project layout, tools and checks are in [AGENTS.md](AGENTS.md), and the shared rules are in the `.agents` submodule.

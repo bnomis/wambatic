@@ -3,6 +3,7 @@ import collections
 import collections.abc
 import datetime
 import statistics
+import types
 
 import wambatic.fetch.base
 import wambatic.settings
@@ -24,6 +25,8 @@ DELIVERY_METRICS = (
     ('time_to_restore_p50', 'hours'),
     ('time_to_restore_p90', 'hours'),
 )
+# auditme: accept[non-alphabetical-literal] the order the metrics are listed in
+COUNT_METRICS = ('workflow_runs', 'release_count', 'deployments')
 DEPLOYMENT_METRICS = frozenset({'deployments', 'lead_time_p50', 'lead_time_p90'})
 FAILURE_METRICS = frozenset({'change_failure_rate'})
 RESTORE_METRICS = frozenset({'time_to_restore_p50', 'time_to_restore_p90'})
@@ -33,7 +36,7 @@ DORA_METRICS = tuple(
     if name in DEPLOYMENT_METRICS | FAILURE_METRICS | RESTORE_METRICS
 )
 ACTIONS_RELEASE_METRICS = tuple(name for name, _ in DELIVERY_METRICS if name not in DORA_METRICS)
-UNITS = dict(DELIVERY_METRICS)
+UNITS = types.MappingProxyType(dict(DELIVERY_METRICS))
 OUTCOMES = frozenset({'failure', 'startup_failure', 'success', 'timed_out'})
 NO_RELEASES = 'no releases in the cache and stats.deploy_workflow is not set'
 NO_DEPLOY_RUNS = 'no successful run of the workflow named by stats.deploy_workflow'
@@ -129,7 +132,7 @@ def aggregate(
     runs, releases, pull_requests = list(runs), list(releases), list(pull_requests)
     place = wambatic.stats.buckets.placer(buckets, tz, since, until)
     size = len(buckets)
-    counts = {name: [0] * size for name in ('workflow_runs', 'release_count', 'deployments')}
+    counts = {name: [0] * size for name in COUNT_METRICS}
     outcomes, successes, failures = ([0] * size for _ in range(3))
     values: dict[str, list[list[float]]] = {
         name: [[] for _ in buckets]
@@ -174,14 +177,20 @@ def aggregate(
             values['time_to_restore'][index].append(
                 wambatic.stats.percentile.hours(pull.created_at, pull.merged_at)
             )
+    for opened_times in hotfix_opened.values():
+        opened_times.sort()
     for repo, moments in by_repo.items():
+        opened_times = hotfix_opened.get(repo, [])
         for moment in moments:
             if (index := place(moment)) is None:
                 continue
             counts['deployments'][index] += 1
             window_closed = moment + window <= horizon
-            failures[index] += window_closed and any(
-                moment < opened <= moment + window for opened in hotfix_opened[repo]
+            first = bisect.bisect_right(opened_times, moment)
+            failures[index] += (
+                window_closed
+                and first < len(opened_times)
+                and opened_times[first] <= moment + window
             )
     for pull in pull_requests:
         if pull.merged_at is None:

@@ -3,7 +3,7 @@ import dataclasses
 import pytest
 
 import tests.conftest
-import tests.fixtures.stats as fixture
+import tests.fixtures.stats
 import wambatic.fetch.base
 import wambatic.reports.rows
 import wambatic.stats.base
@@ -21,7 +21,7 @@ def test_the_activity_rows_are_the_hand_worked_months(
 ) -> None:
     table = wambatic.reports.rows.activity_table(org_result)
     assert table is not None
-    assert table_by_label(table) == fixture.ORG_BY_MONTH_UTC
+    assert table_by_label(table) == tests.fixtures.stats.ORG_BY_MONTH_UTC
     assert table.headers == wambatic.reports.rows.ACTIVITY_HEADERS
 
 
@@ -31,7 +31,7 @@ def test_the_activity_total_row_adds_up_and_counts_contributors_once(
     table = wambatic.reports.rows.activity_table(org_result)
     assert table is not None
     assert table.total is not None
-    assert dict(zip(table.metrics, table.total, strict=True)) == fixture.ORG_TOTAL_UTC
+    assert dict(zip(table.metrics, table.total, strict=True)) == tests.fixtures.stats.ORG_TOTAL_UTC
 
 
 def test_the_buckets_the_provenance_names_are_marked_partial_on_their_rows_only(
@@ -55,13 +55,16 @@ def test_the_flow_rows_are_the_hand_worked_months(
     table = wambatic.reports.rows.flow_table(org_result)
     assert table is not None
     expected = {
-        label: {metric: fixture.ORG_FLOW_BY_MONTH_UTC[metric][label] for metric in FLOW_METRICS}
-        for label in fixture.LABELS
+        label: {
+            metric: tests.fixtures.stats.ORG_FLOW_BY_MONTH_UTC[metric][label]
+            for metric in FLOW_METRICS
+        }
+        for label in tests.fixtures.stats.LABELS
     }
     assert table_by_label(table) == expected
     assert table.total is not None
     assert table.total == tuple(
-        sum(fixture.ORG_FLOW_BY_MONTH_UTC[metric].values()) for metric in FLOW_METRICS
+        sum(tests.fixtures.stats.ORG_FLOW_BY_MONTH_UTC[metric].values()) for metric in FLOW_METRICS
     )
 
 
@@ -74,9 +77,11 @@ def test_a_flow_times_bucket_with_no_value_is_none_and_there_is_no_total(
     rows = table_by_label(table)
     assert rows['2026-11']['time_to_merge_p50'] is None
     assert rows['2026-11']['time_to_close_p50'] == 12.0
-    for label in fixture.LABELS:
+    for label in tests.fixtures.stats.LABELS:
         for metric in wambatic.reports.rows.FLOW_TIMES_METRICS:
-            assert rows[label][metric] == fixture.ORG_FLOW_BY_MONTH_UTC[metric].get(label)
+            assert rows[label][metric] == tests.fixtures.stats.ORG_FLOW_BY_MONTH_UTC[metric].get(
+                label
+            )
 
 
 def test_the_breakdown_rows_add_up_to_the_total_row(
@@ -100,18 +105,12 @@ def test_the_breakdown_rows_are_ordered_by_commits_then_name(
 ) -> None:
     rows = wambatic.reports.rows.breakdown_rows(org_result, 'author')
     assert rows is not None
-    assert [row.name for row in rows] == [
-        'Octocat',
-        'hubot',
-        'dependabot[bot]',
-        'monalisa',
-        'unattributed',
-    ]
+    assert [row.name for row in rows] == list(tests.fixtures.stats.AUTHORS_BY_COMMITS)
     repos = wambatic.reports.rows.breakdown_rows(org_result, 'repo')
     assert repos is not None
     assert [(row.name, row.commits) for row in repos] == [
-        (fixture.ALPHA, 6),
-        (fixture.BETA, 4),
+        (tests.fixtures.stats.ALPHA, 6),
+        (tests.fixtures.stats.BETA, 4),
     ]
 
 
@@ -172,7 +171,9 @@ def test_the_top_contributors_come_in_the_tables_order_and_can_be_limited(
     org_result: wambatic.stats.base.StatsResult,
 ) -> None:
     rows = wambatic.reports.rows.top_contributors(org_result)
-    assert [dataclasses.asdict(row) for row in rows] == fixture.ORG_TOP_CONTRIBUTORS
+    assert [dataclasses.asdict(row) for row in rows] == list(
+        tests.fixtures.stats.ORG_TOP_CONTRIBUTORS
+    )
     assert wambatic.reports.rows.top_contributors(org_result, 2) == rows[:2]
     assert wambatic.reports.rows.contributor_count(org_result) == 3
 
@@ -199,12 +200,13 @@ def test_the_provenance_lines_start_with_the_computed_time(
 
 
 def delivery_expected(
-    metrics: tuple[str, ...], *sources: dict[str, dict[str, float]]
+    metrics: tuple[str, ...], *sources: tests.fixtures.stats.MonthFigures
 ) -> dict[str, dict[str, float | None]]:
     """The hand-worked values by month for `metrics`, `None` where no source has one."""
     merged = {metric: values for source in sources for metric, values in source.items()}
     return {
-        label: {metric: merged[metric].get(label) for metric in metrics} for label in fixture.LABELS
+        label: {metric: merged[metric].get(label) for metric in metrics}
+        for label in tests.fixtures.stats.LABELS
     }
 
 
@@ -237,7 +239,8 @@ def test_the_delivery_rows_are_the_hand_worked_months_with_no_value_as_none(
         'Release interval p50',
     )
     assert_cells_match(
-        table_by_label(table), delivery_expected(table.metrics, fixture.ORG_DELIVERY_BY_MONTH_UTC)
+        table_by_label(table),
+        delivery_expected(table.metrics, tests.fixtures.stats.ORG_DELIVERY_BY_MONTH_UTC),
     )
     assert table_by_label(table)['2026-11']['workflow_success_rate'] is None
 
@@ -250,11 +253,15 @@ def test_the_delivery_total_row_adds_runs_and_releases_only(
     assert table.total is not None
     total = dict(zip(table.metrics, table.total, strict=True))
     assert total == {
-        'workflow_runs': sum(fixture.ORG_DELIVERY_BY_MONTH_UTC['workflow_runs'].values()),
+        'workflow_runs': sum(
+            tests.fixtures.stats.ORG_DELIVERY_BY_MONTH_UTC['workflow_runs'].values()
+        ),
         'workflow_success_rate': None,
         'workflow_duration_p50': None,
         'workflow_duration_p90': None,
-        'release_count': sum(fixture.ORG_DELIVERY_BY_MONTH_UTC['release_count'].values()),
+        'release_count': sum(
+            tests.fixtures.stats.ORG_DELIVERY_BY_MONTH_UTC['release_count'].values()
+        ),
         'release_interval_p50': None,
     }
 
@@ -276,10 +283,12 @@ def test_the_dora_rows_are_the_hand_worked_months_of_the_release_deployments(
     )
     assert_cells_match(
         table_by_label(table),
-        delivery_expected(table.metrics, fixture.ORG_DORA_RELEASES_BY_MONTH_UTC),
+        delivery_expected(table.metrics, tests.fixtures.stats.ORG_DORA_RELEASES_BY_MONTH_UTC),
     )
     assert table.total is not None
-    assert table.total[0] == sum(fixture.ORG_DORA_RELEASES_BY_MONTH_UTC['deployments'].values())
+    assert table.total[0] == sum(
+        tests.fixtures.stats.ORG_DORA_RELEASES_BY_MONTH_UTC['deployments'].values()
+    )
     assert all(value is None for value in table.total[1:])
 
 
@@ -308,11 +317,7 @@ def test_a_result_without_delivery_or_proxy_series_has_neither_table(
 
 
 def test_the_trend_metrics_hold_the_three_delivery_counts_before_the_popularity_ones() -> None:
-    assert wambatic.reports.rows.TREND_METRICS[-7:-4] == (
-        'workflow_runs',
-        'release_count',
-        'deployments',
-    )
+    assert wambatic.reports.rows.TREND_METRICS[-7:-4] == tests.fixtures.stats.DELIVERY_COUNTS
 
 
 # Popularity
@@ -324,9 +329,12 @@ def test_the_popularity_rows_are_the_hand_worked_months_with_cumulative_totals_i
     table = wambatic.reports.rows.popularity_table(popularity_result)
     assert table is not None
     assert table.headers == wambatic.reports.rows.POPULARITY_HEADERS
-    assert table_by_label(table) == fixture.ORG_POPULARITY_BY_MONTH_UTC
+    assert table_by_label(table) == tests.fixtures.stats.ORG_POPULARITY_BY_MONTH_UTC
     assert table.total is not None
-    assert dict(zip(table.metrics, table.total, strict=True)) == fixture.ORG_POPULARITY_TOTAL
+    assert (
+        dict(zip(table.metrics, table.total, strict=True))
+        == tests.fixtures.stats.ORG_POPULARITY_TOTAL
+    )
 
 
 def test_a_single_popularity_bucket_has_no_footer(
@@ -334,15 +342,15 @@ def test_a_single_popularity_bucket_has_no_footer(
 ) -> None:
     request = wambatic.stats.base.StatsRequest(
         granularity=wambatic.stats.base.Granularity.TOTAL,
-        since=fixture.SINCE,
-        until=fixture.UNTIL,
-        groups=frozenset({'popularity'}),
+        since=tests.fixtures.stats.SINCE,
+        until=tests.fixtures.stats.UNTIL,
+        groups=tests.fixtures.stats.GROUP_POPULARITY,
     )
-    result = tests.conftest.compute_stats(stats_fetcher, fixture.ORG, request)
+    result = tests.conftest.run_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
     table = wambatic.reports.rows.popularity_table(result)
     assert table is not None
     assert table.total is None
-    assert table_by_label(table) == {'total': fixture.ORG_POPULARITY_TOTAL}
+    assert table_by_label(table) == {'total': tests.fixtures.stats.ORG_POPULARITY_TOTAL}
 
 
 def test_popularity_now_lists_the_repositories_by_stars_with_a_total_when_there_are_several(
@@ -352,7 +360,7 @@ def test_popularity_now_lists_the_repositories_by_stars_with_a_total_when_there_
     assert now is not None
     assert [(r.repo, r.stars, r.forks, r.watchers) for r in now.rows] == [
         (row['repo'], row['stars'], row['forks'], row['watchers'])
-        for row in fixture.ORG_POPULARITY_TABLE
+        for row in tests.fixtures.stats.ORG_POPULARITY_TABLE
     ]
     assert now.total == wambatic.reports.rows.PopularityRow(
         'Total', 10, 5, 6
@@ -363,28 +371,56 @@ def test_popularity_now_of_one_repository_has_no_total(
     stats_fetcher: wambatic.fetch.base.Fetcher,
 ) -> None:
     request = wambatic.stats.base.StatsRequest(
-        since=fixture.SINCE, until=fixture.UNTIL, groups=frozenset({'popularity'})
+        since=tests.fixtures.stats.SINCE,
+        until=tests.fixtures.stats.UNTIL,
+        groups=tests.fixtures.stats.GROUP_POPULARITY,
     )
     subject = wambatic.fetch.base.Subject('repo', 'octo-org', 'alpha')
-    result = tests.conftest.compute_stats(stats_fetcher, subject, request)
+    result = tests.conftest.run_stats(stats_fetcher, subject, request)
     now = wambatic.reports.rows.popularity_now(result)
     assert now is not None
     assert len(now.rows) == 1
     assert now.total is None
 
 
-def test_languages_rows_cut_at_the_limit_and_count_what_is_left(
+def test_languages_rows_keep_everything_up_to_the_limit(
     popularity_result: wambatic.stats.base.StatsResult,
 ) -> None:
     everything = wambatic.reports.rows.languages_rows(popularity_result)
     assert everything is not None
-    assert [row.language for row in everything.rows] == ['Python', 'Go', 'Shell', 'Other']
-    assert everything.more == 0
+    assert [row.language for row in everything.rows] == list(tests.fixtures.stats.LANGUAGES_BY_SIZE)
+    exact = wambatic.reports.rows.languages_rows(popularity_result, len(everything.rows))
+    assert exact == everything
+    assert wambatic.reports.rows.TOP_LANGUAGES_SHOWN == 10
+
+
+def test_languages_rows_cut_at_the_limit_end_in_one_other_row(
+    popularity_result: wambatic.stats.base.StatsResult,
+) -> None:
     cut = wambatic.reports.rows.languages_rows(popularity_result, 3)
     assert cut is not None
-    assert [row.language for row in cut.rows] == ['Python', 'Go', 'Shell']
-    assert cut.more == 1
-    assert wambatic.reports.rows.TOP_LANGUAGES_SHOWN == 10
+    assert [row.language for row in cut.rows] == ['Python', 'Go', 'Other']
+    assert cut.rows[-1].bytes == 1000 + 500
+
+
+@pytest.mark.parametrize('count', [9, 10, 11])
+def test_languages_rows_never_exceed_the_limit(
+    popularity_result: wambatic.stats.base.StatsResult, count: int
+) -> None:
+    many = [
+        {'language': f'L{n:02d}', 'bytes': 100 - n, 'share': (100 - n) / 1000} for n in range(count)
+    ]
+    result = dataclasses.replace(popularity_result, tables={'languages': many})
+    shown = wambatic.reports.rows.languages_rows(result, wambatic.reports.rows.TOP_LANGUAGES_SHOWN)
+    assert shown is not None
+    names = [row.language for row in shown.rows]
+    if count <= wambatic.reports.rows.TOP_LANGUAGES_SHOWN:
+        assert names == [row['language'] for row in many]
+    else:
+        assert names[:-1] == [f'L{n:02d}' for n in range(9)]
+        assert names[-1] == 'Other'
+        assert shown.rows[-1].bytes == sum(100 - n for n in range(9, count))
+        assert len(names) == wambatic.reports.rows.TOP_LANGUAGES_SHOWN
 
 
 def test_there_are_no_popularity_rows_without_the_group(
@@ -396,9 +432,4 @@ def test_there_are_no_popularity_rows_without_the_group(
 
 
 def test_the_trend_metrics_end_with_the_four_popularity_series() -> None:
-    assert wambatic.reports.rows.TREND_METRICS[-4:] == (
-        'stars_added',
-        'stars_total',
-        'forks_added',
-        'forks_total',
-    )
+    assert wambatic.reports.rows.TREND_METRICS[-4:] == tests.fixtures.stats.POPULARITY_METRICS

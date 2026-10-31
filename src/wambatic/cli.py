@@ -7,7 +7,6 @@ import os
 import pathlib
 import sys
 import typing
-import zoneinfo
 
 import cappa
 import loguru
@@ -27,11 +26,11 @@ import wambatic.reports.service
 import wambatic.reports.terminal
 import wambatic.reports.web
 import wambatic.settings
-import wambatic.stats
 import wambatic.stats.base
+import wambatic.stats.engine
+import wambatic.stats.errors
 
-GRANULARITIES = typing.Literal['day', 'month', 'total', 'week', 'year']
-FORMATS = typing.Literal['html', 'json', 'terminal']
+Granularities = typing.Literal['day', 'month', 'total', 'week', 'year']
 
 
 @cappa.command(name='report', help='Print a report of a user, an organisation or a repository.')
@@ -41,7 +40,7 @@ class Report:
         str, cappa.Arg(help='user:NAME, org:NAME, repo:OWNER/NAME, OWNER/NAME or a bare NAME')
     ]
     format: typing.Annotated[
-        FORMATS | None,
+        wambatic.settings.Format | None,
         cappa.Arg(long=True, help='Output format: terminal, html or json (default: report.format)'),
     ] = None
     out: typing.Annotated[
@@ -52,7 +51,7 @@ class Report:
         ),
     ] = None
     by: typing.Annotated[
-        GRANULARITIES,
+        Granularities,
         cappa.Arg(
             long=True,
             help='Period to bucket by; with html, the period shown first (default: month)',
@@ -179,7 +178,11 @@ def check_verbosity(root: Wambatic) -> None:
 
 
 def check_report(report: Report, settings: wambatic.settings.Settings) -> None:
-    """The flag combinations that can be rejected before the cache or the network is touched."""
+    """The flag combinations that can be rejected before the cache or the network is touched.
+
+    Raises:
+        UsageError: the options conflict.
+    """
     if report.full_refresh and report.no_fetch:
         raise wambatic.reports.errors.UsageError('--full-refresh and --no-fetch cannot be combined')
     if report.out is not None and settings.report.format != 'html':
@@ -199,10 +202,12 @@ def check_report(report: Report, settings: wambatic.settings.Settings) -> None:
 
 
 def build_request(
-    report: Report, settings: wambatic.settings.Settings, tz: zoneinfo.ZoneInfo
+    report: Report,
+    settings: wambatic.settings.Settings,
+    today: datetime.datetime,
 ) -> wambatic.stats.base.StatsRequest:
     return wambatic.reports.service.make_request(
-        report.by, report.since, report.until, report.groups, report.by_author, tz, settings
+        report.by, report.since, report.until, report.groups, report.by_author, settings, today
     )
 
 
@@ -244,20 +249,19 @@ async def run_report(
     """Check the flags, bring the cache up to date if needed, compute and print the report."""
     target = wambatic.reports.service.parse_target(report.target)
     check_report(report, settings)
-    request = build_request(report, settings, wambatic.reports.service.resolve_tz(settings))
-    wambatic.stats.resources_for(request.groups)
+    request = build_request(report, settings, clock())
+    wambatic.stats.engine.resources_for(request.groups)
     cache = wambatic.fetch.cache.Cache.open(
         settings.fetch.cache_path, ignore_version=report.ignore_cache_version
     )
     as_html = settings.report.format == 'html'
     requests = wambatic.reports.html.period_requests(request) if as_html else [request]
     try:
-        subject, results = await wambatic.reports.service.build_results(
+        subject, results = await wambatic.reports.service.sync_and_compute(
             settings,
             cache,
             target,
             requests,
-            by_author=report.by_author,
             full_refresh=report.full_refresh,
             no_fetch=report.no_fetch,
             clock=clock,
@@ -341,7 +345,11 @@ def execute(root: Wambatic) -> None:
     console = rich.console.Console()
     if isinstance(command, Report):
         settings = wambatic.settings.load_settings(None, overrides(command))
-        asyncio.run(run_report(command, settings, console, sys.stdout))
+        asyncio.run(
+            run_report(
+                command, settings, console, sys.stdout, clock=wambatic.fetch.ratelimit.utc_now
+            )
+        )
     elif isinstance(command, Serve):
         wambatic.reports.web.serve(
             wambatic.settings.load_settings(None, serve_overrides(command)),
@@ -367,14 +375,15 @@ def main(argv: list[str] | None = None) -> int:
     try:
         execute(root)
     except (wambatic.reports.errors.UsageError, wambatic.settings.SettingsError) as e:
+        # Expected domain errors are logged with `error`, without a traceback (review-1 F16).
         loguru.logger.error(wambatic.reports.service.redact_environment_token(str(e)))
         return 2
     except (
         wambatic.fetch.errors.FetchError,
-        wambatic.reports.errors.OutputError,
-        wambatic.reports.errors.ServeError,
-        wambatic.stats.StatsError,
+        wambatic.reports.errors.ReportsError,
+        wambatic.stats.errors.StatsError,
     ) as e:
+        # Expected domain errors are logged with `error`, without a traceback (review-1 F16).
         loguru.logger.error(wambatic.reports.service.redact_environment_token(str(e)))
         return 1
     except KeyboardInterrupt:
@@ -386,6 +395,7 @@ def main(argv: list[str] | None = None) -> int:
             os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
         return 1
     except Exception as e:
+        # auditme: accept[except-interpolation] redact_error strips what must not be logged
         loguru.logger.exception(f'Unexpected error: {wambatic.reports.service.redact_error(e)}')
         return 1
     return 0

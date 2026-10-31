@@ -8,12 +8,14 @@ import pytest
 import wambatic.fetch.auth
 import wambatic.fetch.errors
 
+GH_ARGV = ('gh',)
+
 
 def fake_run(
     monkeypatch: pytest.MonkeyPatch, *, stdout: str = '', stderr: str = '', code: int = 0
 ) -> None:
     def run(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
-        return subprocess.CompletedProcess(['gh'], code, stdout, stderr)
+        return subprocess.CompletedProcess(GH_ARGV, code, stdout, stderr)
 
     monkeypatch.setattr(subprocess, 'run', run)
 
@@ -50,7 +52,7 @@ def test_gh_failure_or_empty_raises(
 
 @pytest.mark.parametrize(
     'exc',
-    [FileNotFoundError(), subprocess.TimeoutExpired(['gh'], 10)],
+    [FileNotFoundError(), subprocess.TimeoutExpired(GH_ARGV, 10)],
 )
 def test_gh_missing_or_timeout_raises(monkeypatch: pytest.MonkeyPatch, exc: Exception) -> None:
     def run(*args: object, **kwargs: object) -> None:

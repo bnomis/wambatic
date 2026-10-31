@@ -2,9 +2,12 @@ import asyncio
 import collections.abc
 import dataclasses
 import datetime
+import email.utils
 import random
 
 import aiohttp
+import hypothesis
+import hypothesis.strategies
 import loguru
 import pytest
 
@@ -794,3 +797,84 @@ def test_202_exhausts_stats_retries(
 def test_default_rng_is_independent() -> None:
     client = wambatic.fetch.client.GitHubClient('t', wambatic.settings.FetchSettings())
     assert isinstance(client.rng, random.Random)
+
+
+URL_TEXT = hypothesis.strategies.text(
+    alphabet=hypothesis.strategies.characters(blacklist_characters='<>,;"', codec='ascii'),
+    min_size=1,
+    max_size=40,
+)
+JSON_VALUES = hypothesis.strategies.recursive(
+    hypothesis.strategies.none()
+    | hypothesis.strategies.booleans()
+    | hypothesis.strategies.integers()
+    | hypothesis.strategies.text(max_size=10),
+    lambda inner: (
+        hypothesis.strategies.lists(inner, max_size=3)
+        | hypothesis.strategies.dictionaries(
+            hypothesis.strategies.text(max_size=6), inner, max_size=3
+        )
+    ),
+    max_leaves=8,
+)
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(
+    first=URL_TEXT,
+    following=URL_TEXT,
+)
+def test_next_link_picks_the_next_relation(first: str, following: str) -> None:
+    header = f'<{first}>; rel="prev", <{following}>; rel="next", <{first}>; rel="last"'
+    assert wambatic.fetch.client.next_link(header) == following
+    assert wambatic.fetch.client.next_link(f'<{first}>; rel="last"') is None
+    assert wambatic.fetch.client.next_link(None) is None
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(header=hypothesis.strategies.text(max_size=80))
+def test_next_link_never_fails(header: str) -> None:
+    result = wambatic.fetch.client.next_link(header)
+    assert result is None or result in header
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(data=JSON_VALUES)
+def test_error_types_gives_string_pairs(data: object) -> None:
+    pairs = wambatic.fetch.client.error_types(data)
+    assert all(isinstance(kind, str) and isinstance(message, str) for kind, message in pairs)
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(
+    kind=hypothesis.strategies.text(max_size=10), message=hypothesis.strategies.text(max_size=10)
+)
+def test_error_types_reads_the_errors_list(kind: str, message: str) -> None:
+    data = {'errors': [{'type': kind, 'message': message}, 'junk', {}]}
+    assert wambatic.fetch.client.error_types(data) == [(kind, message), ('UNKNOWN', '')]
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(
+    moment=hypothesis.strategies.datetimes(
+        min_value=datetime.datetime(2000, 1, 1),
+        max_value=datetime.datetime(2100, 1, 1),
+        timezones=hypothesis.strategies.just(datetime.UTC),
+    ).map(lambda value: value.replace(microsecond=0))
+)
+def test_header_date_reads_an_http_date(moment: datetime.datetime) -> None:
+    response = wambatic.fetch.client.Response(
+        200,
+        {'Date': email.utils.format_datetime(moment, usegmt=True)},
+        None,
+        None,  # type: ignore[arg-type]
+    )
+    assert wambatic.fetch.client.header_date(response) == moment
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(value=hypothesis.strategies.text(max_size=40))
+def test_header_date_is_utc_or_none(value: str) -> None:
+    response = wambatic.fetch.client.Response(200, {'Date': value}, None, None)  # type: ignore[arg-type]
+    result = wambatic.fetch.client.header_date(response)
+    assert result is None or result.utcoffset() == datetime.timedelta(0)

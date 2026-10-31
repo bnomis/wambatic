@@ -457,7 +457,7 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 ## Task 12: Property tests for fetch, settings and the CLI, and tests for record-fixtures
 
-**Status:** todo
+**Status:** done
 **Priority:** low
 **Complexity:** large
 **Source Reference:** F17 / Decision 5 (B): T1, T2 (fetch, settings, CLI, service rows), T3
@@ -466,23 +466,23 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 **Subtasks:**
 
-- [ ] Hypothesis round-trips through the cache for every record type (`repo_from_row` and the rows at `fetch/cache.py:227`, `:281`, `:301`, `:313`, `:324`, `:342`, `:349`)
-- [ ] Hypothesis tests for the GraphQL and REST parsers (`fetch/base.py` `parse_repo`, `parse_languages`, `parse_pull_request`, `parse_issue`, `parse_release`, `parse_workflow_run`, `parse_star_edge`, `parse_fork`, `parse_history_node`, `parse_compare_commit`): valid shapes parse, malformed ones raise the fetch domain error
-- [ ] Hypothesis tests for `timestamp`, `actor_login`, `count_of_probe`, `RateLimitState.from_headers`/`from_graphql`, `next_link`, `error_types`, `header_date`
-- [ ] Hypothesis tests for `settings.convert`/`apply_layer` (arbitrary values and unknown keys raise `SettingsError`), `parse_duration` limits, `service.parse_date`, `cli.check_report` flag combinations
-- [ ] `bin/record-fixtures.py`: unit tests for `Recorder.send` (with and without `params` and `body`), `Recorder.graphql`'s error branch, `pick`, `compare_commit`, and a `main` run against the fake upstream that writes to a temporary path (add an `--out` option for it, argparse rule layout)
-- [ ] Every hypothesis test uses `@settings(max_examples=20, deadline=10000)`
+- [x] Hypothesis round-trips through the cache for every record type (`repo_from_row` and the rows at `fetch/cache.py:227`, `:281`, `:301`, `:313`, `:324`, `:342`, `:349`)
+- [x] Hypothesis tests for the GraphQL and REST parsers (`fetch/base.py` `parse_repo`, `parse_languages`, `parse_pull_request`, `parse_issue`, `parse_release`, `parse_workflow_run`, `parse_star_edge`, `parse_fork`, `parse_history_node`, `parse_compare_commit`): valid shapes parse, malformed ones raise the fetch domain error
+- [x] Hypothesis tests for `timestamp`, `actor_login`, `count_of_probe`, `RateLimitState.from_headers`/`from_graphql`, `next_link`, `error_types`, `header_date`
+- [x] Hypothesis tests for `settings.convert`/`apply_layer` (arbitrary values and unknown keys raise `SettingsError`), `parse_duration` limits, `service.parse_date`, `cli.check_report` flag combinations
+- [x] `bin/record-fixtures.py`: unit tests for `Recorder.send` (with and without `params` and `body`), `Recorder.graphql`'s error branch, `pick`, `compare_commit`, and a `main` run against the fake upstream that writes to a temporary path (add an `--out` option for it, argparse rule layout)
+- [x] Every hypothesis test uses `@settings(max_examples=20, deadline=10000)`
 
 **Acceptance Criteria:**
 
-- [ ] The `parse_duration` test fails on the code before Task 3 (checked once by reverting the fix locally)
-- [ ] A test exercises every branch T1 names in `bin/record-fixtures.py`
+- [x] The `parse_duration` test fails on the code before Task 3 (checked once by reverting the fix locally)
+- [x] A test exercises every branch T1 names in `bin/record-fixtures.py`
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/fetch src/tests/test_settings.py src/tests/test_cli.py src/tests/reports/test_service.py src/tests/test_record_fixtures.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/fetch src/tests/test_settings.py src/tests/test_cli.py src/tests/reports/test_service.py src/tests/test_record_fixtures.py` passes
 
 **Notes:**
 

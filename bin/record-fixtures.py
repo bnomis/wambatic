@@ -12,8 +12,11 @@ run with GITHUB_TOKEN unset to use the GitHub CLI's classic token.
 The GraphQL responses are recorded whole: the queries already select only what is read. The
 REST lists are asked for a short page (REST_PAGE), because the tests read a page's shape, not
 its length.
+
+The recording goes to OUT unless `--out FILE` names another file.
 """
 
+import argparse
 import collections.abc
 import datetime
 import hashlib
@@ -261,34 +264,48 @@ def module_text(recorded_at: str, responses: dict[str, object]) -> str:
     return '\n'.join(lines) + '\n'
 
 
-def write_fixtures(text: str) -> None:
-    """Write `text` to OUT and format it with ruff.
+def write_fixtures(text: str, out: pathlib.Path) -> None:
+    """Write `text` to `out` and format it with ruff.
 
     Raises:
         RecordingError: when the file cannot be written or ruff cannot format it.
     """
     try:
-        OUT.write_text(text, encoding='utf-8')
+        out.write_text(text, encoding='utf-8')
     except OSError as error:
         # auditme: accept[except-interpolation] the OS reason says what to fix
-        raise RecordingError(f'cannot write {OUT}: {error.strerror or error}') from error
+        raise RecordingError(f'cannot write {out}: {error.strerror or error}') from error
     try:
-        subprocess.run(['ruff', 'format', '--quiet', str(OUT)], check=True)
+        subprocess.run(['ruff', 'format', '--quiet', str(out)], check=True)
     except (OSError, subprocess.CalledProcessError) as error:
         # auditme: accept[except-interpolation] the reason ruff could not run is the payload
-        raise RecordingError(f'cannot format {OUT} with ruff: {error}') from error
+        raise RecordingError(f'cannot format {out} with ruff: {error}') from error
 
 
-def main() -> int:
+def parse_args(argv: list[str] | None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description='Record the successful GitHub responses the fetch tests replay.',
+    )
+    parser.add_argument(
+        '--out',
+        type=pathlib.Path,
+        default=OUT,
+        help='File to write the recording to (default: src/tests/fixtures/fetch/recorded.py)',
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
     recorder = Recorder(wambatic.fetch.auth.resolve_token())
     recorded_at = datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
     try:
-        write_fixtures(module_text(recorded_at, record(recorder)))
+        write_fixtures(module_text(recorded_at, record(recorder)), args.out)
     except RecordingError as error:
         # auditme: accept[except-interpolation] the one line is the failure's own message
         print(f'record-fixtures: {error}', file=sys.stderr)
         return 1
-    print(OUT)
+    print(args.out)
     return 0
 
 

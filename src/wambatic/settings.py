@@ -1,8 +1,10 @@
+import collections.abc
 import dataclasses
 import datetime
 import json
 import os
 import pathlib
+import types
 import typing
 
 
@@ -64,11 +66,13 @@ DURATION_UNITS = {
     'd': datetime.timedelta(days=1),
     'w': datetime.timedelta(weeks=1),
 }
-SECTIONS: dict[str, type] = {
-    'fetch': FetchSettings,
-    'report': ReportSettings,
-    'stats': StatsSettings,
-}
+SECTIONS: collections.abc.Mapping[str, type] = types.MappingProxyType(
+    {
+        'fetch': FetchSettings,
+        'report': ReportSettings,
+        'stats': StatsSettings,
+    }
+)
 
 
 def parse_duration(text: str) -> datetime.timedelta:

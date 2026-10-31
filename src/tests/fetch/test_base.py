@@ -5,6 +5,7 @@ import typing
 
 import pytest
 
+import tests.fixtures.constants
 import tests.fixtures.fetch.recorded
 import tests.fixtures.fetch.responses
 import tests.fixtures.thaw
@@ -432,7 +433,7 @@ def test_a_run_with_null_name_status_and_branch_and_no_attempt_still_parses() ->
     assert (run.name, run.status, run.head_branch, run.run_attempt) == ('', '', None, 1)
 
 
-@pytest.mark.parametrize('field', ['id', 'path', 'event', 'created_at', 'updated_at'])
+@pytest.mark.parametrize('field', tests.fixtures.constants.WORKFLOW_RUN_REQUIRED_FIELDS)
 def test_a_malformed_run_raises(field: str) -> None:
     node = tests.fixtures.fetch.responses.workflow_run_object(1)
     del node[field]

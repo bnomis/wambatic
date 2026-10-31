@@ -48,15 +48,25 @@ MakeFetcher = collections.abc.Callable[..., wambatic.fetch.base.Fetcher]
 BIN = pathlib.Path(__file__).resolve().parent.parent.parent / 'bin'
 
 
-@pytest.fixture(scope='session')
-def audit_check() -> types.ModuleType:
-    """bin/audit-check.py, loaded as a module (its name has a dash, so it cannot be imported)."""
-    spec = importlib.util.spec_from_file_location('audit_check', BIN / 'audit-check.py')
+def load_script(name: str) -> types.ModuleType:
+    """bin/`name`.py, loaded as a module (its name has a dash, so it cannot be imported)."""
+    path = BIN / f'{name}.py'
+    spec = importlib.util.spec_from_file_location(name.replace('-', '_'), path)
     if spec is None or spec.loader is None:
-        raise ImportError(f'cannot load {BIN / "audit-check.py"}')
+        raise ImportError(f'cannot load {path}')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+@pytest.fixture(scope='session')
+def audit_check() -> types.ModuleType:
+    return load_script('audit-check')
+
+
+@pytest.fixture(scope='session')
+def record_fixtures() -> types.ModuleType:
+    return load_script('record-fixtures')
 
 
 @pytest.fixture

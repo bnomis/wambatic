@@ -55,4 +55,5 @@ USER_REQUEST = (  # auditme: accept[non-alphabetical-literal] the (method, path)
     'GET',
     '/users/octocat',
 )
+WORKFLOW_RUN_REQUIRED_FIELDS = ('created_at', 'event', 'id', 'path', 'updated_at')
 ZERO_COUNT = ('0',)

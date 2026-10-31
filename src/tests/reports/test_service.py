@@ -136,6 +136,22 @@ def test_a_login_over_the_length_limit_is_rejected(login: str) -> None:
         wambatic.reports.service.parse_target(f'user:{login}')
 
 
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(day=hypothesis.strategies.dates())
+def test_parse_date_reads_what_isoformat_writes(day: datetime.date) -> None:
+    assert wambatic.reports.service.parse_date(day.isoformat()) == day
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(text=hypothesis.strategies.text(max_size=20))
+def test_parse_date_is_a_date_or_a_usage_error(text: str) -> None:
+    try:
+        parsed = wambatic.reports.service.parse_date(text)
+    except wambatic.reports.errors.UsageError:
+        return
+    assert parsed.isoformat() == text
+
+
 def test_dates_are_exactly_year_month_day() -> None:
     assert wambatic.reports.service.parse_date('2026-10-29') == datetime.date(2026, 10, 29)
 

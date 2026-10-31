@@ -1322,3 +1322,133 @@ def test_every_time_flag_and_json_field_has_a_converter() -> None:
                 + [typing.get_origin(hints[field.name])]
             )
             assert bool(needs) == (field.name in converters), (record_type.__name__, field.name)
+
+
+COLUMN_TEXT = hypothesis.strategies.text(min_size=1, max_size=20)
+COLUMN_COUNT = hypothesis.strategies.integers(0, 2**62)
+OPTIONAL_INSTANTS = hypothesis.strategies.none() | INSTANTS
+OPTIONAL_TEXT = hypothesis.strategies.none() | COLUMN_TEXT
+HELLO_REPO = hypothesis.strategies.just(HELLO)
+REPO_RECORDS = hypothesis.strategies.builds(
+    wambatic.fetch.base.Repo,
+    name_with_owner=COLUMN_TEXT,
+    default_branch=OPTIONAL_TEXT,
+    head_oid=OPTIONAL_TEXT,
+    is_archived=hypothesis.strategies.booleans(),
+    is_fork=hypothesis.strategies.booleans(),
+    pushed_at=OPTIONAL_INSTANTS,
+    updated_at=INSTANTS,
+    pull_requests_updated_at=OPTIONAL_INSTANTS,
+    issues_updated_at=OPTIONAL_INSTANTS,
+    releases_count=COLUMN_COUNT,
+    releases_updated_at=OPTIONAL_INSTANTS,
+    stargazer_count=COLUMN_COUNT,
+    fork_count=COLUMN_COUNT,
+    watcher_count=COLUMN_COUNT,
+    languages=hypothesis.strategies.lists(
+        hypothesis.strategies.tuples(COLUMN_TEXT, COLUMN_COUNT), max_size=5
+    ).map(tuple),
+    languages_size=COLUMN_COUNT,
+    missing=hypothesis.strategies.booleans(),
+)
+PULL_REQUEST_RECORDS = hypothesis.strategies.builds(
+    wambatic.fetch.base.PullRequest,
+    repo=HELLO_REPO,
+    number=COLUMN_COUNT,
+    author_login=OPTIONAL_TEXT,
+    created_at=INSTANTS,
+    updated_at=INSTANTS,
+    merged_at=OPTIONAL_INSTANTS,
+    closed_at=OPTIONAL_INSTANTS,
+    first_review_at=OPTIONAL_INSTANTS,
+    additions=COLUMN_COUNT,
+    deletions=COLUMN_COUNT,
+    labels=hypothesis.strategies.lists(COLUMN_TEXT, max_size=4).map(tuple),
+    first_commit_at=OPTIONAL_INSTANTS,
+)
+ISSUE_RECORDS = hypothesis.strategies.builds(
+    wambatic.fetch.base.Issue,
+    repo=HELLO_REPO,
+    number=COLUMN_COUNT,
+    author_login=OPTIONAL_TEXT,
+    created_at=INSTANTS,
+    updated_at=INSTANTS,
+    closed_at=OPTIONAL_INSTANTS,
+)
+RELEASE_RECORDS = hypothesis.strategies.builds(
+    wambatic.fetch.base.Release,
+    repo=HELLO_REPO,
+    tag_name=COLUMN_TEXT,
+    created_at=INSTANTS,
+    published_at=INSTANTS,
+    is_prerelease=hypothesis.strategies.booleans(),
+)
+WORKFLOW_RUN_RECORDS = hypothesis.strategies.builds(
+    wambatic.fetch.base.WorkflowRun,
+    repo=HELLO_REPO,
+    id=COLUMN_COUNT,
+    workflow_path=COLUMN_TEXT,
+    name=hypothesis.strategies.text(max_size=20),
+    event=COLUMN_TEXT,
+    head_branch=OPTIONAL_TEXT,
+    status=hypothesis.strategies.text(max_size=20),
+    conclusion=OPTIONAL_TEXT,
+    created_at=INSTANTS,
+    updated_at=INSTANTS,
+    run_started_at=OPTIONAL_INSTANTS,
+    run_attempt=COLUMN_COUNT,
+)
+STAR_EVENT_RECORDS = hypothesis.strategies.builds(
+    wambatic.fetch.base.StarEvent,
+    repo=HELLO_REPO,
+    user_id=COLUMN_TEXT,
+    starred_at=INSTANTS,
+)
+FORK_RECORDS = hypothesis.strategies.builds(
+    wambatic.fetch.base.Fork,
+    repo=HELLO_REPO,
+    id=COLUMN_COUNT,
+    created_at=INSTANTS,
+)
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(record=REPO_RECORDS)
+def test_repo_row_round_trips(record: wambatic.fetch.base.Repo) -> None:
+    stored = wambatic.fetch.cache.record_values(record)
+    assert wambatic.fetch.cache.repo_from_row(stored) == record
+    row = wambatic.fetch.cache.repo_row(record)
+    assert row[:2] == (record.name_with_owner, record.name_with_owner.partition('/')[0])
+    assert wambatic.fetch.cache.repo_from_row((row[0], *row[2:])) == dataclasses.replace(
+        record, missing=False
+    )
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(
+    fork=FORK_RECORDS,
+    issue=ISSUE_RECORDS,
+    pull_request=PULL_REQUEST_RECORDS,
+    release=RELEASE_RECORDS,
+    run=WORKFLOW_RUN_RECORDS,
+    star=STAR_EVENT_RECORDS,
+)
+def test_every_record_type_round_trips(
+    fork: wambatic.fetch.base.Fork,
+    issue: wambatic.fetch.base.Issue,
+    pull_request: wambatic.fetch.base.PullRequest,
+    release: wambatic.fetch.base.Release,
+    run: wambatic.fetch.base.WorkflowRun,
+    star: wambatic.fetch.base.StarEvent,
+) -> None:
+    tables = wambatic.fetch.cache.tables()
+    for table, record in (
+        (tables.forks, fork),
+        (tables.issues, issue),
+        (tables.pull_requests, pull_request),
+        (tables.releases, release),
+        (tables.star_events, star),
+        (tables.workflow_runs, run),
+    ):
+        stored = table.values(record)  # type: ignore[arg-type]
+        assert table.record(HELLO, stored[1:]) == record

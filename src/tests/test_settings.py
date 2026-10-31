@@ -3,6 +3,7 @@ import datetime
 import json
 import pathlib
 import tempfile
+import typing
 
 import hypothesis
 import hypothesis.strategies
@@ -277,6 +278,86 @@ def test_no_field_names_a_token() -> None:
         return out
 
     assert not [name for name in names(wambatic.settings.Settings) if 'token' in name]
+
+
+JSON_VALUES = hypothesis.strategies.recursive(
+    hypothesis.strategies.none()
+    | hypothesis.strategies.booleans()
+    | hypothesis.strategies.integers()
+    | hypothesis.strategies.floats(allow_nan=False)
+    | hypothesis.strategies.text(max_size=10),
+    lambda inner: (
+        hypothesis.strategies.lists(inner, max_size=3)
+        | hypothesis.strategies.dictionaries(
+            hypothesis.strategies.text(max_size=6), inner, max_size=3
+        )
+    ),
+    max_leaves=6,
+)
+SETTING_ANNOTATIONS = [
+    (f'{section}.{field}', annotation)
+    for section, cls in sorted(wambatic.settings.SECTIONS.items())
+    for field, annotation in typing.get_type_hints(cls).items()
+]
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(choice=hypothesis.strategies.sampled_from(SETTING_ANNOTATIONS), value=JSON_VALUES)
+def test_convert_gives_the_setting_type_or_a_settings_error(
+    choice: tuple[str, object], value: object
+) -> None:
+    key, annotation = choice
+    try:
+        converted = wambatic.settings.convert(key, annotation, value)
+    except wambatic.settings.SettingsError:
+        return
+    if annotation is bool:
+        assert isinstance(converted, bool)
+    elif annotation is int:
+        assert isinstance(converted, int)
+        assert not isinstance(converted, bool)
+    elif annotation is datetime.timedelta:
+        assert isinstance(converted, datetime.timedelta)
+    elif annotation is pathlib.Path:
+        assert isinstance(converted, pathlib.Path)
+    elif annotation == tuple[str, ...]:
+        assert isinstance(converted, tuple)
+        assert all(isinstance(item, str) for item in converted)
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(
+    section=hypothesis.strategies.sampled_from(sorted(wambatic.settings.SECTIONS)),
+    name=hypothesis.strategies.text(min_size=1, max_size=12),
+)
+def test_an_unknown_setting_or_section_is_a_settings_error(section: str, name: str) -> None:
+    known = {field.name for field in dataclasses.fields(wambatic.settings.SECTIONS[section])}
+    hypothesis.assume(name not in known)
+    with pytest.raises(wambatic.settings.SettingsError):
+        wambatic.settings.apply_layer(wambatic.settings.Settings(), {section: {name: 1}}, 'test')
+    hypothesis.assume(name not in wambatic.settings.SECTIONS)
+    with pytest.raises(wambatic.settings.SettingsError):
+        wambatic.settings.apply_layer(wambatic.settings.Settings(), {name: {}}, 'test')
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(layer=JSON_VALUES)
+def test_apply_layer_of_any_json_is_settings_or_a_settings_error(layer: object) -> None:
+    try:
+        applied = wambatic.settings.apply_layer(wambatic.settings.Settings(), layer, 'test')
+    except wambatic.settings.SettingsError:
+        return
+    assert isinstance(applied, wambatic.settings.Settings)
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(text=hypothesis.strategies.text(max_size=12))
+def test_parse_duration_of_any_text_is_a_duration_or_a_settings_error(text: str) -> None:
+    try:
+        parsed = wambatic.settings.parse_duration(text)
+    except wambatic.settings.SettingsError:
+        return
+    assert parsed >= datetime.timedelta(0)
 
 
 def test_a_duration_too_long_for_a_timedelta_raises() -> None:

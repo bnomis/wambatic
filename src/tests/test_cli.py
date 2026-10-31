@@ -18,6 +18,8 @@ import typing
 import cappa
 import fastapi
 import httpx
+import hypothesis
+import hypothesis.strategies
 import loguru
 import pytest
 import rich.console
@@ -1909,6 +1911,52 @@ def test_the_json_format_gives_the_popularity_series_and_tables(
         {'repo': 'octo-org/alpha', 'stars': 6, 'forks': 3, 'watchers': 4}
     ]
     assert [row['language'] for row in data['tables']['languages']] == ['Python', 'Shell', 'Other']
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(
+    by=hypothesis.strategies.sampled_from(sorted(g.value for g in wambatic.stats.base.Granularity)),
+    by_author=hypothesis.strategies.booleans(),
+    format=hypothesis.strategies.sampled_from([None, 'html', 'json', 'terminal']),
+    full_refresh=hypothesis.strategies.booleans(),
+    no_fetch=hypothesis.strategies.booleans(),
+    out=hypothesis.strategies.sampled_from([None, 'x.html']),
+    target=hypothesis.strategies.sampled_from(
+        ['bare', 'org:octo-org', 'octo-org/alpha', 'repo:octo-org/alpha', 'user:octocat']
+    ),
+)
+def test_check_report_rejects_exactly_the_conflicting_flags(
+    by: str,
+    by_author: bool,
+    format: str | None,
+    full_refresh: bool,
+    no_fetch: bool,
+    out: str | None,
+    target: str,
+) -> None:
+    flags = wambatic.cli.Report(
+        target=target,
+        by=by,  # type: ignore[arg-type]
+        by_author=by_author,
+        format=format,  # type: ignore[arg-type]
+        full_refresh=full_refresh,
+        no_fetch=no_fetch,
+        out=out,
+    )
+    html = format == 'html'
+    conflicts = [
+        full_refresh and no_fetch,
+        out is not None and not html,
+        html and by == 'total',
+        no_fetch and target == 'bare',
+        by_author and target == 'user:octocat',
+    ]
+    settings = settings_for(flags)
+    if any(conflicts):
+        with pytest.raises(wambatic.reports.errors.UsageError):
+            wambatic.cli.check_report(flags, settings)
+    else:
+        wambatic.cli.check_report(flags, settings)
 
 
 def test_the_report_help_names_every_group(capsys: pytest.CaptureFixture[str]) -> None:

@@ -303,6 +303,6 @@ def test_main_reports_a_failure_in_one_line(
     monkeypatch.setenv('GITHUB_TOKEN', TOKEN)
     assert record_fixtures.main(['--out', str(tmp_path / 'missing' / 'recorded.py')]) == 1
     captured = capsys.readouterr()
-    assert captured.err.startswith('record-fixtures: cannot write')
+    assert captured.err.startswith('ERROR: record-fixtures: cannot write')
     assert TOKEN not in captured.err
     assert captured.out == ''

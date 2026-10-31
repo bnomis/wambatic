@@ -307,7 +307,7 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 ## Task 9: Record the deliberate exceptions and fix the doc details
 
-**Status:** todo
+**Status:** done
 **Priority:** low
 **Complexity:** small
 **Source Reference:** G8 / Decision 1 (A), G10, G11, G14
@@ -316,21 +316,21 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 **Subtasks:**
 
-- [ ] Decision 1 A: a comment at `reports/web.py` `Jobs.execute` and at the `convert_errors` middleware saying they are the server's error boundary (a failed job would otherwise hang its progress page; an unexpected error would reach the client unredacted), citing review-2 Decision 1; the same in a line of AGENTS.md
-- [ ] G10: lower-case the local variables of `fetch/cache.py` `tables()`; `bin/record-fixtures.py:306` logs its failure with `loguru.logger.error` (and drop the `T20` per-file ignore if nothing else in the file prints); in AGENTS.md's Tests section, list the deliberate test-layout exceptions (property tests, browser tests, live tests, `test_layering.py`, `test_package.py`, the bin-script tests, the fixtures of the fake GitHub) beside the `test_fetcher.py` note
-- [ ] G11: a line in AGENTS.md that logins and repository names are logged by design (public identifiers the user typed; the only sink is local stderr)
-- [ ] G14: link `.claude/skills/project-setup` to `.agents/claude/skills/project-setup` (and any other shared skill without a link); AGENTS.md says the project's `claude/` directory is created with the first project rule; AGENTS.md's on-commit list names the end-of-file and trailing-whitespace hooks; `README.md:9` says Python 3.14.7 or later 3.14
+- [x] Decision 1 A: a comment at `reports/web.py` `Jobs.execute` and at the `convert_errors` middleware saying they are the server's error boundary (a failed job would otherwise hang its progress page; an unexpected error would reach the client unredacted), citing review-2 Decision 1; the same in a line of AGENTS.md
+- [x] G10: lower-case the local variables of `fetch/cache.py` `tables()`; `bin/record-fixtures.py:306` logs its failure with `loguru.logger.error` (and drop the `T20` per-file ignore if nothing else in the file prints); in AGENTS.md's Tests section, list the deliberate test-layout exceptions (property tests, browser tests, live tests, `test_layering.py`, `test_package.py`, the bin-script tests, the fixtures of the fake GitHub) beside the `test_fetcher.py` note
+- [x] G11: a line in AGENTS.md that logins and repository names are logged by design (public identifiers the user typed; the only sink is local stderr)
+- [x] G14: link `.claude/skills/project-setup` to `.agents/claude/skills/project-setup` (and any other shared skill without a link); AGENTS.md says the project's `claude/` directory is created with the first project rule; AGENTS.md's on-commit list names the end-of-file and trailing-whitespace hooks; `README.md:9` says Python 3.14.7 or later 3.14
 
 **Acceptance Criteria:**
 
-- [ ] Every shared skill under `.agents/claude/skills/` has a link in `.claude/skills/`
+- [x] Every shared skill under `.agents/claude/skills/` has a link in `.claude/skills/`
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `bin/audit-check.sh --path src/wambatic --path bin` exits 0
-- [ ] `pytest src/tests/fetch/test_cache.py src/tests/test_record_fixtures.py src/tests/reports/test_web.py` passes
+- [ ] `source bin/activate.sh` succeeds (not run: the sandbox refused `source`; the tools ran from `.venv/bin`)
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `bin/audit-check.sh --path src/wambatic --path bin` exits 0 (run as the pre-push audit hook)
+- [x] `pytest src/tests/fetch/test_cache.py src/tests/test_record_fixtures.py src/tests/reports/test_web.py` passes
 
 **Notes:**
 

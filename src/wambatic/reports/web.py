@@ -141,6 +141,8 @@ class Jobs:
         job: SyncJob,
         run: collections.abc.Callable[[SyncJob], collections.abc.Awaitable[None]],
     ) -> None:
+        # Error boundary (review-2 Decision 1): a failed job would otherwise
+        # leave its progress page hanging.
         try:
             async with self.lock:
                 job.phase = 'running'
@@ -423,6 +425,8 @@ def make_app(
         request: fastapi.Request,
         call_next: CallNext,
     ) -> fastapi.Response:
+        # Error boundary (review-2 Decision 1): an unexpected error would
+        # otherwise reach the client unredacted.
         try:
             return await call_next(request)
         # auditme: accept[silent-broad-except] logged by error_response()

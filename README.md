@@ -6,7 +6,7 @@ wambatic reads the default-branch history, pull requests, issues, releases and G
 
 ## Install
 
-You need Python 3.14 and [uv](https://docs.astral.sh/uv/).
+You need Python 3.14.7 or later 3.14 and [uv](https://docs.astral.sh/uv/).
 
 ```shell
 git clone https://github.com/bnomis/wambatic

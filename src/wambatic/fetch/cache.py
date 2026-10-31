@@ -300,13 +300,13 @@ class Tables:
 @functools.cache
 def tables() -> Tables:
     """Built on first use: `wambatic.fetch.base` is not yet reachable while this module loads."""
-    COMMITS = Table.of(
+    commits = Table.of(
         'commits',
         wambatic.fetch.base.Commit,
         {'authored_at': from_text, 'is_merge': bool},
         ('repo', 'oid'),
     )
-    PULL_REQUESTS = Table.of(
+    pull_requests = Table.of(
         'pull_requests',
         wambatic.fetch.base.PullRequest,
         {
@@ -320,19 +320,19 @@ def tables() -> Tables:
         },
         REPO_NUMBER,
     )
-    ISSUES = Table.of(
+    issues = Table.of(
         'issues',
         wambatic.fetch.base.Issue,
         {'closed_at': optional_from_text, 'created_at': from_text, 'updated_at': from_text},
         REPO_NUMBER,
     )
-    RELEASES = Table.of(
+    releases = Table.of(
         'releases',
         wambatic.fetch.base.Release,
         {'created_at': from_text, 'is_prerelease': bool, 'published_at': from_text},
         ('repo', 'tag_name'),
     )
-    WORKFLOW_RUNS = Table.of(
+    workflow_runs = Table.of(
         'workflow_runs',
         wambatic.fetch.base.WorkflowRun,
         {
@@ -342,26 +342,26 @@ def tables() -> Tables:
         },
         REPO_ID,
     )
-    STAR_EVENTS = Table.of(
+    star_events = Table.of(
         'star_events',
         wambatic.fetch.base.StarEvent,
         {'starred_at': from_text},
         ('repo', 'user_id'),
     )
-    FORKS = Table.of(
+    forks = Table.of(
         'forks',
         wambatic.fetch.base.Fork,
         {'created_at': from_text},
         REPO_ID,
     )
     return Tables(
-        commits=COMMITS,
-        forks=FORKS,
-        issues=ISSUES,
-        pull_requests=PULL_REQUESTS,
-        releases=RELEASES,
-        star_events=STAR_EVENTS,
-        workflow_runs=WORKFLOW_RUNS,
+        commits=commits,
+        forks=forks,
+        issues=issues,
+        pull_requests=pull_requests,
+        releases=releases,
+        star_events=star_events,
+        workflow_runs=workflow_runs,
         repo_columns=column_names(wambatic.fetch.base.Repo),
         sync_state_columns=column_names(wambatic.fetch.base.SyncState),
     )

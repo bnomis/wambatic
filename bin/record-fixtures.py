@@ -27,8 +27,11 @@ import sys
 import urllib.parse
 import urllib.request
 
+import loguru
+
 import wambatic.fetch.auth
 import wambatic.fetch.queries
+import wambatic.logs
 import wambatic.version
 
 API = 'https://api.github.com'
@@ -313,13 +316,14 @@ def parse_args(argv: list[str] | None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    wambatic.logs.configure_logging('INFO')
     recorder = Recorder(wambatic.fetch.auth.fetch_token())
     recorded_at = datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
     try:
         write_fixtures(module_text(recorded_at, record(recorder)), args.out)
     except RecordingError as error:
         # auditme: accept[except-interpolation] the one line is the failure's own message
-        print(f'record-fixtures: {error}', file=sys.stderr)
+        loguru.logger.error('record-fixtures: {}', error)
         return 1
     print(args.out)
     return 0

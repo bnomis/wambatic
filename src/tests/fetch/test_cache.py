@@ -16,8 +16,7 @@ import wambatic.fetch.errors
 import wambatic.fetch.queries
 import wambatic.version
 
-UTC = datetime.UTC
-T0 = datetime.datetime(2026, 10, 1, 9, 0, tzinfo=UTC)
+T0 = datetime.datetime(2026, 10, 1, 9, 0, tzinfo=datetime.UTC)
 HELLO = 'octocat/Hello-World'
 SPOON = 'octocat/Spoon-Knife'
 CURRENT_SCHEMA_VERSION = wambatic.fetch.cache.SCHEMA_VERSION
@@ -319,14 +318,14 @@ def test_version_override_at_is_the_recorded_time_after_an_override(
 ) -> None:
     wambatic.fetch.cache.Cache.open(cache_path).close()
     monkeypatch.setattr(wambatic.fetch.cache, 'SCHEMA_VERSION', NEXT_SCHEMA_VERSION)
-    before = datetime.datetime.now(UTC)
+    before = datetime.datetime.now(datetime.UTC)
     opened = wambatic.fetch.cache.Cache.open(cache_path, ignore_version=True)
     try:
         recorded = opened.version_override_at()
     finally:
         opened.close()
     assert recorded is not None
-    assert before <= wambatic.fetch.cache.from_text(recorded) <= datetime.datetime.now(UTC)
+    assert before <= wambatic.fetch.cache.from_text(recorded) <= datetime.datetime.now(datetime.UTC)
 
 
 # Repos
@@ -487,7 +486,7 @@ def test_commit_without_an_account_and_merge_flag_round_trip(
 INSTANTS = hypothesis.strategies.datetimes(
     min_value=datetime.datetime(2000, 1, 1),
     max_value=datetime.datetime(2100, 1, 1),
-    timezones=hypothesis.strategies.just(UTC),
+    timezones=hypothesis.strategies.just(datetime.UTC),
 )
 COMMIT_LISTS = hypothesis.strategies.lists(
     hypothesis.strategies.builds(

@@ -1,9 +1,11 @@
 import dataclasses
 import datetime
+import typing
 
 import pytest
 
-import tests.fixtures.fetch.responses as responses
+import tests.fixtures.fetch.recorded
+import tests.fixtures.fetch.responses
 import wambatic.fetch.base
 import wambatic.fetch.errors
 
@@ -136,20 +138,19 @@ def test_a_pull_request_and_a_sync_state_built_without_the_new_fields_have_defau
 
 HELLO = 'octocat/Hello-World'
 HOUR = datetime.timedelta(hours=1)
-UTC = datetime.UTC
 
 
 def parse_pull(**changes: object) -> wambatic.fetch.base.PullRequest:
     return wambatic.fetch.base.parse_pull_request(
         HELLO,
-        responses.pull_request_node(1, **changes),  # type: ignore[arg-type]
+        tests.fixtures.fetch.responses.pull_request_node(1, **changes),  # type: ignore[arg-type]
     )
 
 
 def parse_issue(**changes: object) -> wambatic.fetch.base.Issue:
     return wambatic.fetch.base.parse_issue(
         HELLO,
-        responses.issue_node(1, **changes),  # type: ignore[arg-type]
+        tests.fixtures.fetch.responses.issue_node(1, **changes),  # type: ignore[arg-type]
     )
 
 
@@ -191,56 +192,58 @@ def test_the_pull_request_fields_are_read() -> None:
 
 def test_first_review_at_skips_the_authors_own_review_whatever_its_case() -> None:
     reviews = [
-        responses.review_node(NOW + 1 * HOUR, 'OctoCat'),
-        responses.review_node(NOW + 5 * HOUR, 'hubot'),
+        tests.fixtures.fetch.responses.review_node(NOW + 1 * HOUR, 'OctoCat'),
+        tests.fixtures.fetch.responses.review_node(NOW + 5 * HOUR, 'hubot'),
     ]
     assert parse_pull(login='octocat', reviews=reviews).first_review_at == NOW + 5 * HOUR
 
 
 def test_first_review_at_skips_bot_reviews_and_pending_reviews() -> None:
     reviews = [
-        responses.review_node(NOW + 1 * HOUR, 'copilot', bot=True),
-        responses.review_node(None, 'hubot'),
-        responses.review_node(NOW + 6 * HOUR, 'hubot'),
+        tests.fixtures.fetch.responses.review_node(NOW + 1 * HOUR, 'copilot', bot=True),
+        tests.fixtures.fetch.responses.review_node(None, 'hubot'),
+        tests.fixtures.fetch.responses.review_node(NOW + 6 * HOUR, 'hubot'),
     ]
     assert parse_pull(reviews=reviews).first_review_at == NOW + 6 * HOUR
 
 
 def test_first_review_at_counts_a_review_whose_author_is_null() -> None:
-    reviews = [responses.review_node(NOW + 2 * HOUR, None)]
+    reviews = [tests.fixtures.fetch.responses.review_node(NOW + 2 * HOUR, None)]
     assert parse_pull(reviews=reviews).first_review_at == NOW + 2 * HOUR
 
 
 def test_first_review_at_is_the_earliest_when_the_reviews_are_out_of_order() -> None:
     reviews = [
-        responses.review_node(NOW + 9 * HOUR, 'hubot'),
-        responses.review_node(NOW + 3 * HOUR, 'mona'),
-        responses.review_node(NOW + 7 * HOUR, 'hubot'),
+        tests.fixtures.fetch.responses.review_node(NOW + 9 * HOUR, 'hubot'),
+        tests.fixtures.fetch.responses.review_node(NOW + 3 * HOUR, 'mona'),
+        tests.fixtures.fetch.responses.review_node(NOW + 7 * HOUR, 'hubot'),
     ]
     assert parse_pull(reviews=reviews).first_review_at == NOW + 3 * HOUR
 
 
 def test_no_qualifying_review_gives_none() -> None:
     reviews = [
-        responses.review_node(NOW, 'octocat'),
-        responses.review_node(NOW, 'copilot', bot=True),
+        tests.fixtures.fetch.responses.review_node(NOW, 'octocat'),
+        tests.fixtures.fetch.responses.review_node(NOW, 'copilot', bot=True),
     ]
     assert parse_pull(login='octocat', reviews=reviews).first_review_at is None
     assert parse_pull(reviews=[]).first_review_at is None
 
 
 def test_a_review_by_a_pull_request_with_no_author_counts() -> None:
-    reviews = [responses.review_node(NOW, 'hubot')]
+    reviews = [tests.fixtures.fetch.responses.review_node(NOW, 'hubot')]
     assert parse_pull(login=None, reviews=reviews).first_review_at == NOW
 
 
 def test_a_probe_with_empty_nodes_gives_none_and_a_node_gives_its_update_time() -> None:
     bare = wambatic.fetch.base.parse_repo(
-        responses.repo_node('octocat/x', head=None, pushed_at=None, updated_at=NOW)
+        tests.fixtures.fetch.responses.repo_node(
+            'octocat/x', head=None, pushed_at=None, updated_at=NOW
+        )
     )
     assert (bare.pull_requests_updated_at, bare.issues_updated_at) == (None, None)
     probed = wambatic.fetch.base.parse_repo(
-        responses.repo_node(
+        tests.fixtures.fetch.responses.repo_node(
             'octocat/x',
             head=None,
             pushed_at=None,
@@ -254,7 +257,9 @@ def test_a_probe_with_empty_nodes_gives_none_and_a_node_gives_its_update_time() 
 
 
 def test_a_listing_node_without_the_probe_connections_is_malformed() -> None:
-    node = responses.repo_node('octocat/x', head=None, pushed_at=None, updated_at=NOW)
+    node = tests.fixtures.fetch.responses.repo_node(
+        'octocat/x', head=None, pushed_at=None, updated_at=NOW
+    )
     del node['pullRequests']
     with pytest.raises(wambatic.fetch.errors.GraphQLError):
         wambatic.fetch.base.parse_repo(node)
@@ -262,25 +267,26 @@ def test_a_listing_node_without_the_probe_connections_is_malformed() -> None:
 
 @pytest.mark.parametrize('field', ['number', 'createdAt', 'updatedAt', 'state'])
 def test_a_node_missing_a_required_field_raises(field: str) -> None:
-    pull = responses.pull_request_node(1)
+    pull = tests.fixtures.fetch.responses.pull_request_node(1)
     del pull[field]
     with pytest.raises(wambatic.fetch.errors.GraphQLError):
         wambatic.fetch.base.parse_pull_request(HELLO, pull)
-    issue = responses.issue_node(1)
+    issue = tests.fixtures.fetch.responses.issue_node(1)
     del issue[field]
     with pytest.raises(wambatic.fetch.errors.GraphQLError):
         wambatic.fetch.base.parse_issue(HELLO, issue)
 
 
 def test_an_author_without_a_login_is_malformed() -> None:
-    node = responses.pull_request_node(1)
+    node = tests.fixtures.fetch.responses.pull_request_node(1)
     node['author'] = {'__typename': 'User'}
     with pytest.raises(wambatic.fetch.errors.GraphQLError):
         wambatic.fetch.base.parse_pull_request(HELLO, node)
 
 
 def test_the_recorded_pull_request_and_issue_pages_parse() -> None:
-    pulls = responses.PULL_REQUESTS_OK['data']['repository']['pullRequests']['nodes']  # type: ignore[index]
+    recorded: dict[str, typing.Any] = tests.fixtures.fetch.recorded.PULL_REQUESTS_OK
+    pulls = recorded['data']['repository']['pullRequests']['nodes']
     parsed = [wambatic.fetch.base.parse_pull_request(HELLO, node) for node in pulls]
     assert parsed
     assert any(pull.merged_at is not None for pull in parsed)
@@ -290,14 +296,15 @@ def test_the_recorded_pull_request_and_issue_pages_parse() -> None:
     assert bots
     assert not any(login.endswith('[bot]') for login in bots)
     assert {f'{login}[bot]' for login in bots} <= {pull.author_login for pull in parsed}
-    issues = responses.ISSUES_OK['data']['repository']['issues']['nodes']  # type: ignore[index]
+    issues = tests.fixtures.fetch.recorded.ISSUES_OK['data']['repository']['issues']['nodes']  # type: ignore[index]
     assert [wambatic.fetch.base.parse_issue(HELLO, node).number for node in issues] == [
         node['number'] for node in issues
     ]
 
 
 def test_an_automatic_reviewer_is_a_bot_without_the_suffix_and_not_a_first_review() -> None:
-    reviews = responses.BOT_REVIEWS_OK['data']['repository']['pullRequest']['reviews']  # type: ignore[index]
+    recorded: dict[str, typing.Any] = tests.fixtures.fetch.recorded.BOT_REVIEWS_OK
+    reviews = recorded['data']['repository']['pullRequest']['reviews']
     # The recording is of a live pull request, so people may review it after the bot does.
     bots = [node for node in reviews['nodes'] if node['author']['__typename'] == 'Bot']
     assert [node['author'] for node in bots] == [
@@ -321,7 +328,7 @@ def test_first_commit_at_is_the_first_commits_authored_date_or_none() -> None:
 
 @pytest.mark.parametrize('field', ['labels', 'commits'])
 def test_a_pull_request_without_labels_or_commits_is_malformed(field: str) -> None:
-    node = responses.pull_request_node(1)
+    node = tests.fixtures.fetch.responses.pull_request_node(1)
     del node[field]
     with pytest.raises(wambatic.fetch.errors.GraphQLError):
         wambatic.fetch.base.parse_pull_request(HELLO, node)
@@ -330,27 +337,29 @@ def test_a_pull_request_without_labels_or_commits_is_malformed(field: str) -> No
 def test_a_release_parses_and_keeps_the_prerelease_flag() -> None:
     release = wambatic.fetch.base.parse_release(
         HELLO,
-        responses.release_node('v1', created_at=NOW - HOUR, published_at=NOW, is_prerelease=True),
+        tests.fixtures.fetch.responses.release_node(
+            'v1', created_at=NOW - HOUR, published_at=NOW, is_prerelease=True
+        ),
     )
     assert release == wambatic.fetch.base.Release(HELLO, 'v1', NOW - HOUR, NOW, True)
 
 
 def test_a_draft_or_a_release_without_publication_time_is_not_stored() -> None:
-    draft = responses.release_node('v2', is_draft=True)
-    unpublished = responses.release_node('v3', published_at=None)
+    draft = tests.fixtures.fetch.responses.release_node('v2', is_draft=True)
+    unpublished = tests.fixtures.fetch.responses.release_node('v3', published_at=None)
     assert wambatic.fetch.base.parse_release(HELLO, draft) is None
     assert wambatic.fetch.base.parse_release(HELLO, unpublished) is None
 
 
 def test_a_release_without_a_tag_is_malformed() -> None:
-    node = responses.release_node('v1')
+    node = tests.fixtures.fetch.responses.release_node('v1')
     del node['tagName']
     with pytest.raises(wambatic.fetch.errors.GraphQLError):
         wambatic.fetch.base.parse_release(HELLO, node)
 
 
 def test_the_recorded_release_page_parses_and_keeps_a_prerelease() -> None:
-    nodes = responses.RELEASES_OK['data']['repository']['releases']['nodes']  # type: ignore[index]
+    nodes = tests.fixtures.fetch.recorded.RELEASES_OK['data']['repository']['releases']['nodes']  # type: ignore[index]
     parsed = [wambatic.fetch.base.parse_release(HELLO, node) for node in nodes]
     assert [release.tag_name for release in parsed if release] == [
         node['tagName'] for node in nodes if not node['isDraft']
@@ -361,7 +370,7 @@ def test_the_recorded_release_page_parses_and_keeps_a_prerelease() -> None:
 def test_a_workflow_run_parses_every_field() -> None:
     run = wambatic.fetch.base.parse_workflow_run(
         HELLO,
-        responses.workflow_run_object(
+        tests.fixtures.fetch.responses.workflow_run_object(
             7,
             path='.github/workflows/deploy.yml',
             name='Deploy',
@@ -391,18 +400,25 @@ def test_a_workflow_run_parses_every_field() -> None:
 
 def test_an_unfinished_run_has_no_conclusion_and_a_queued_one_no_start() -> None:
     running = wambatic.fetch.base.parse_workflow_run(
-        HELLO, responses.workflow_run_object(1, status='in_progress', conclusion=None)
+        HELLO,
+        tests.fixtures.fetch.responses.workflow_run_object(
+            1, status='in_progress', conclusion=None
+        ),
     )
     queued = wambatic.fetch.base.parse_workflow_run(
         HELLO,
-        responses.workflow_run_object(2, status='queued', conclusion=None, run_started_at=None),
+        tests.fixtures.fetch.responses.workflow_run_object(
+            2, status='queued', conclusion=None, run_started_at=None
+        ),
     )
     assert (running.status, running.conclusion) == ('in_progress', None)
     assert (queued.status, queued.run_started_at) == ('queued', None)
 
 
 def test_a_run_with_null_name_status_and_branch_and_no_attempt_still_parses() -> None:
-    node = responses.workflow_run_object(3, name=None, status=None, head_branch=None)
+    node = tests.fixtures.fetch.responses.workflow_run_object(
+        3, name=None, status=None, head_branch=None
+    )
     del node['run_attempt']
     run = wambatic.fetch.base.parse_workflow_run(HELLO, node)
     assert (run.name, run.status, run.head_branch, run.run_attempt) == ('', '', None, 1)
@@ -410,26 +426,28 @@ def test_a_run_with_null_name_status_and_branch_and_no_attempt_still_parses() ->
 
 @pytest.mark.parametrize('field', ['id', 'path', 'event', 'created_at', 'updated_at'])
 def test_a_malformed_run_raises(field: str) -> None:
-    node = responses.workflow_run_object(1)
+    node = tests.fixtures.fetch.responses.workflow_run_object(1)
     del node[field]
     with pytest.raises(wambatic.fetch.errors.GraphQLError):
         wambatic.fetch.base.parse_workflow_run(HELLO, node)
 
 
 def test_the_recorded_run_pages_parse_with_the_short_workflow_path() -> None:
-    runs = responses.WORKFLOW_RUNS_OK['workflow_runs']
+    runs = tests.fixtures.fetch.recorded.WORKFLOW_RUNS_OK['workflow_runs']
     assert isinstance(runs, list)
     parsed = [wambatic.fetch.base.parse_workflow_run(HELLO, node) for node in runs]
     assert [run.id for run in parsed] == [node['id'] for node in runs]
     assert all(run.workflow_path.startswith('.github/workflows/') for run in parsed)
     assert all(run.name and run.status and run.run_started_at for run in parsed)
-    single = wambatic.fetch.base.parse_workflow_run(HELLO, responses.WORKFLOW_RUN_OK)
+    single = wambatic.fetch.base.parse_workflow_run(
+        HELLO, tests.fixtures.fetch.recorded.WORKFLOW_RUN_OK
+    )
     assert single == parsed[0]
 
 
 def test_the_release_probe_reads_the_count_and_the_newest_update() -> None:
     with_releases = wambatic.fetch.base.parse_repo(
-        responses.repo_node(
+        tests.fixtures.fetch.responses.repo_node(
             'octocat/x',
             head=None,
             pushed_at=None,
@@ -441,17 +459,23 @@ def test_the_release_probe_reads_the_count_and_the_newest_update() -> None:
     assert (with_releases.releases_count, with_releases.releases_updated_at) == (3, NOW - HOUR)
     assert wambatic.fetch.base.release_probe(with_releases) == '3 2026-10-29T11:00:00+00:00'
     without = wambatic.fetch.base.parse_repo(
-        responses.repo_node('octocat/x', head=None, pushed_at=None, updated_at=NOW)
+        tests.fixtures.fetch.responses.repo_node(
+            'octocat/x', head=None, pushed_at=None, updated_at=NOW
+        )
     )
     assert wambatic.fetch.base.release_probe(without) == '0 none'
 
 
 def test_a_listing_node_without_the_release_probe_is_malformed() -> None:
-    node = responses.repo_node('octocat/x', head=None, pushed_at=None, updated_at=NOW)
+    node = tests.fixtures.fetch.responses.repo_node(
+        'octocat/x', head=None, pushed_at=None, updated_at=NOW
+    )
     del node['releases']
     with pytest.raises(wambatic.fetch.errors.GraphQLError):
         wambatic.fetch.base.parse_repo(node)
-    node = responses.repo_node('octocat/x', head=None, pushed_at=None, updated_at=NOW)
+    node = tests.fixtures.fetch.responses.repo_node(
+        'octocat/x', head=None, pushed_at=None, updated_at=NOW
+    )
     del node['releases']['totalCount']  # type: ignore[attr-defined]
     with pytest.raises(wambatic.fetch.errors.GraphQLError):
         wambatic.fetch.base.parse_repo(node)
@@ -462,7 +486,13 @@ def test_a_listing_node_without_the_release_probe_is_malformed() -> None:
 
 def parse_popular(**changes: object) -> wambatic.fetch.base.Repo:
     return wambatic.fetch.base.parse_repo(
-        responses.repo_node('octocat/x', head=None, pushed_at=None, updated_at=NOW, **changes)  # type: ignore[arg-type]
+        tests.fixtures.fetch.responses.repo_node(
+            'octocat/x',
+            head=None,
+            pushed_at=None,
+            updated_at=NOW,
+            **changes,  # type: ignore[arg-type]
+        )
     )
 
 
@@ -492,7 +522,9 @@ def test_the_probes_are_the_listed_counts_as_text() -> None:
 
 @pytest.mark.parametrize('field', ['stargazerCount', 'forkCount', 'watchers'])
 def test_a_listing_node_without_a_count_is_malformed(field: str) -> None:
-    node = responses.repo_node('octocat/x', head=None, pushed_at=None, updated_at=NOW)
+    node = tests.fixtures.fetch.responses.repo_node(
+        'octocat/x', head=None, pushed_at=None, updated_at=NOW
+    )
     del node[field]
     with pytest.raises(wambatic.fetch.errors.GraphQLError):
         wambatic.fetch.base.parse_repo(node)
@@ -500,14 +532,18 @@ def test_a_listing_node_without_a_count_is_malformed(field: str) -> None:
 
 def test_a_language_edge_without_a_size_or_a_name_is_malformed() -> None:
     for broken in ({'node': {'name': 'C'}}, {'size': 1, 'node': {}}):
-        node = responses.repo_node('octocat/x', head=None, pushed_at=None, updated_at=NOW)
+        node = tests.fixtures.fetch.responses.repo_node(
+            'octocat/x', head=None, pushed_at=None, updated_at=NOW
+        )
         node['languages'] = {'totalSize': 1, 'edges': [broken]}
         with pytest.raises(wambatic.fetch.errors.GraphQLError):
             wambatic.fetch.base.parse_repo(node)
 
 
 def test_a_star_edge_keeps_the_node_id_and_no_login() -> None:
-    star = wambatic.fetch.base.parse_star_edge(HELLO, responses.star_edge('MDQ6VXNlcjE=', NOW))
+    star = wambatic.fetch.base.parse_star_edge(
+        HELLO, tests.fixtures.fetch.responses.star_edge('MDQ6VXNlcjE=', NOW)
+    )
     assert star == wambatic.fetch.base.StarEvent(HELLO, 'MDQ6VXNlcjE=', NOW)
     assert set(dataclasses.asdict(star)) == {'repo', 'user_id', 'starred_at'}
 
@@ -528,7 +564,7 @@ def test_a_malformed_star_edge_raises(edge: object) -> None:
 
 
 def test_a_fork_reads_its_id_and_creation_time() -> None:
-    fork = wambatic.fetch.base.parse_fork(HELLO, responses.fork_object(7, NOW))
+    fork = wambatic.fetch.base.parse_fork(HELLO, tests.fixtures.fetch.responses.fork_object(7, NOW))
     assert fork == wambatic.fetch.base.Fork(HELLO, 7, NOW)
 
 
@@ -542,7 +578,9 @@ def test_a_malformed_fork_raises(node: object) -> None:
 
 
 def test_the_recorded_popularity_responses_parse() -> None:
-    listing = responses.OWNER_REPOSITORIES_OK['data']['repositoryOwner']['repositories']['nodes']  # type: ignore[index]
+    listing = tests.fixtures.fetch.recorded.OWNER_REPOSITORIES_OK['data']['repositoryOwner'][
+        'repositories'
+    ]['nodes']  # type: ignore[index]
     repos = {node['nameWithOwner']: wambatic.fetch.base.parse_repo(node) for node in listing}
     hello, spoon = repos['octocat/Hello-World'], repos['octocat/Spoon-Knife']
     assert (hello.languages, hello.languages_size) == ((), 0)
@@ -551,13 +589,16 @@ def test_the_recorded_popularity_responses_parse() -> None:
     assert spoon.stargazer_count > 0
     assert spoon.fork_count > 0
     assert spoon.watcher_count > 0
-    stars = responses.STARGAZERS_OK['data']['repository']['stargazers']['edges']  # type: ignore[index]
+    stars = tests.fixtures.fetch.recorded.STARGAZERS_OK['data']['repository']['stargazers']['edges']  # type: ignore[index]
     parsed = [wambatic.fetch.base.parse_star_edge(HELLO, edge) for edge in stars]
     assert [star.user_id for star in parsed] == [edge['node']['id'] for edge in stars]
     assert [star.starred_at for star in parsed] == sorted(
         (star.starred_at for star in parsed), reverse=True
     )
-    forks = [wambatic.fetch.base.parse_fork(HELLO, fork) for fork in responses.FORKS_OK]
+    forks = [
+        wambatic.fetch.base.parse_fork(HELLO, fork)
+        for fork in tests.fixtures.fetch.recorded.FORKS_OK
+    ]
     assert [fork.created_at for fork in forks] == sorted(
         (fork.created_at for fork in forks), reverse=True
     )

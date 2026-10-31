@@ -23,8 +23,6 @@ import wambatic.fetch.cache
 import wambatic.reports.service
 import wambatic.settings
 
-UTC = datetime.UTC
-
 
 def alpha_upstream() -> tests.fixtures.fetch.upstream.Upstream:
     """A fake GitHub whose repositories match the stats fixture's, so a sync finds them
@@ -35,7 +33,7 @@ def alpha_upstream() -> tests.fixtures.fetch.upstream.Upstream:
             repo.name_with_owner,
             [
                 tests.fixtures.fetch.upstream.FakeCommit(
-                    str(repo.head_oid), datetime.datetime(2026, 10, 5, 10, 0, tzinfo=UTC)
+                    str(repo.head_oid), datetime.datetime(2026, 10, 5, 10, 0, tzinfo=datetime.UTC)
                 )
             ],
             pushed_at=repo.pushed_at or tests.fixtures.stats.NOW,

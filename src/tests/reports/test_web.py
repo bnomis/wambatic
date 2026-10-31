@@ -13,7 +13,7 @@ import typing
 
 import httpx
 import hypothesis
-import hypothesis.strategies as st
+import hypothesis.strategies
 import loguru
 import pytest
 
@@ -194,7 +194,6 @@ BASE = 'http://127.0.0.1:8000'
 FRESH_PARAMS = 'target=org:octo-org&since=2026-10-01&until=2027-01-21&by=month&by_author=1'
 HTML_PARAMS = FRESH_PARAMS.replace('until=2027-01-21', 'until=2027-01-31')
 ALPHA_PARAMS = 'target=repo:octo-org/alpha&since=2026-10-01&until=2027-01-21'
-NOW = tests.fixtures.stats.NOW
 
 
 def web_settings(max_age: str = '30d', theme: str = 'auto') -> wambatic.settings.Settings:
@@ -210,7 +209,7 @@ async def serving(
     *,
     allow_remote: bool = False,
     default_target: str | None = None,
-    clock: datetime.datetime = NOW,
+    clock: datetime.datetime = tests.fixtures.stats.NOW,
 ) -> collections.abc.AsyncIterator[httpx.AsyncClient]:
     """An HTTPX client for the app, with its lifespan entered (`ASGITransport` does not)."""
     settings = dataclasses.replace(
@@ -253,7 +252,7 @@ def direct(
         settings,
         tests.fixtures.stats.NOW,
     )
-    result = tests.conftest.compute_stats(cache_fetcher, subject, request)
+    result = tests.conftest.run_stats(cache_fetcher, subject, request)
     return typing.cast(
         dict[str, object], json.loads(json.dumps(wambatic.reports.base.result_to_dict(result)))
     )
@@ -686,7 +685,7 @@ def test_other_hosts_are_not_loopback(host: str) -> None:
 
 
 @hypothesis.settings(max_examples=20, deadline=10000)
-@hypothesis.given(address=st.ip_addresses(v=4))
+@hypothesis.given(address=hypothesis.strategies.ip_addresses(v=4))
 def test_is_loopback_agrees_with_ipaddress_for_ipv4(address: ipaddress.IPv4Address) -> None:
     assert wambatic.reports.web.is_loopback(str(address)) is address.is_loopback
 

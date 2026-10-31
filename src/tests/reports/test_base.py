@@ -5,10 +5,10 @@ import json
 import typing
 
 import hypothesis
-import hypothesis.strategies as st
+import hypothesis.strategies
 
 import tests.conftest
-import tests.fixtures.stats as fixture
+import tests.fixtures.stats
 import wambatic.fetch.base
 import wambatic.reports.base
 import wambatic.settings
@@ -29,10 +29,6 @@ SERIES_KEYS = ['metric', 'unit', 'by', 'by_kind', 'points']
 POINT_KEYS = ['label', 'start', 'value']
 
 
-def as_dict(result: wambatic.stats.base.StatsResult) -> dict[str, typing.Any]:
-    return wambatic.reports.base.result_to_dict(result)
-
-
 def series_points(data: dict[str, typing.Any], metric: str) -> list[dict[str, typing.Any]]:
     (series,) = [s for s in data['series'] if s['metric'] == metric]
     return typing.cast(list[dict[str, typing.Any]], series['points'])
@@ -47,7 +43,7 @@ def render(result: wambatic.stats.base.StatsResult) -> str:
 def test_top_level_keys_are_in_the_specified_order(
     org_result: wambatic.stats.base.StatsResult,
 ) -> None:
-    data = as_dict(org_result)
+    data: dict[str, typing.Any] = wambatic.reports.base.result_to_dict(org_result)
     assert list(data) == TOP_LEVEL_KEYS
     assert data['format_version'] == 1
     assert list(data['request']) == REQUEST_KEYS
@@ -58,7 +54,7 @@ def test_top_level_keys_are_in_the_specified_order(
 def test_the_header_fields_are_as_requested_and_as_resolved(
     org_result: wambatic.stats.base.StatsResult,
 ) -> None:
-    data = as_dict(org_result)
+    data: dict[str, typing.Any] = wambatic.reports.base.result_to_dict(org_result)
     assert data['subject'] == {'kind': 'org', 'login': 'octo-org', 'name': None}
     assert data['since'] == '2026-10-01'
     assert data['until'] == '2027-01-31'
@@ -73,7 +69,8 @@ def test_the_header_fields_are_as_requested_and_as_resolved(
 def test_the_time_zone_is_written_once_as_the_request_tz(
     org_result: wambatic.stats.base.StatsResult,
 ) -> None:
-    request = as_dict(org_result)['request']
+    full: dict[str, typing.Any] = wambatic.reports.base.result_to_dict(org_result)
+    request = full['request']
     assert request['tz'] == 'UTC'
     assert 'timezone' not in request['settings']
 
@@ -81,12 +78,12 @@ def test_the_time_zone_is_written_once_as_the_request_tz(
 def test_unrequested_dates_are_null_and_a_repo_subject_has_its_name(
     stats_fetcher: wambatic.fetch.base.Fetcher,
 ) -> None:
-    result = tests.conftest.compute_stats(
+    result = tests.conftest.run_stats(
         stats_fetcher,
         wambatic.fetch.base.Subject('repo', 'octo-org', 'alpha'),
         wambatic.stats.base.StatsRequest(granularity=wambatic.stats.base.Granularity.TOTAL),
     )
-    data = as_dict(result)
+    data: dict[str, typing.Any] = wambatic.reports.base.result_to_dict(result)
     request = data['request']
     assert (request['since'], request['until']) == (None, None)
     assert data['subject'] == {'kind': 'repo', 'login': 'octo-org', 'name': 'alpha'}
@@ -96,7 +93,7 @@ def test_unrequested_dates_are_null_and_a_repo_subject_has_its_name(
 def test_render_json_round_trips_through_result_to_dict(
     org_result: wambatic.stats.base.StatsResult,
 ) -> None:
-    assert json.loads(render(org_result)) == as_dict(org_result)
+    assert json.loads(render(org_result)) == wambatic.reports.base.result_to_dict(org_result)
 
 
 def test_output_ends_with_exactly_one_newline(org_result: wambatic.stats.base.StatsResult) -> None:
@@ -108,10 +105,10 @@ def test_output_ends_with_exactly_one_newline(org_result: wambatic.stats.base.St
 def test_a_series_points_are_in_bucket_order_with_matching_label_and_start(
     org_result: wambatic.stats.base.StatsResult,
 ) -> None:
-    data = as_dict(org_result)
+    data: dict[str, typing.Any] = wambatic.reports.base.result_to_dict(org_result)
     commits = [s for s in data['series'] if (s['metric'], s['by']) == ('commits', None)]
     (total,) = commits
-    assert [p['label'] for p in total['points']] == list(fixture.LABELS)
+    assert [p['label'] for p in total['points']] == list(tests.fixtures.stats.LABELS)
     assert [p['start'] for p in total['points']] == [
         '2026-10-01',
         '2026-11-01',
@@ -124,7 +121,7 @@ def test_a_series_points_are_in_bucket_order_with_matching_label_and_start(
 def test_count_day_and_line_values_are_integers_and_hours_are_floats(
     org_result: wambatic.stats.base.StatsResult,
 ) -> None:
-    data = as_dict(org_result)
+    data: dict[str, typing.Any] = wambatic.reports.base.result_to_dict(org_result)
     for series in data['series']:
         expected = float if series['unit'] == 'hours' else int
         for point in series['points']:
@@ -134,7 +131,7 @@ def test_count_day_and_line_values_are_integers_and_hours_are_floats(
 def test_delivery_values_are_integers_for_counts_and_days_and_floats_for_the_rest(
     delivery_result: wambatic.stats.base.StatsResult,
 ) -> None:
-    data = as_dict(delivery_result)
+    data: dict[str, typing.Any] = wambatic.reports.base.result_to_dict(delivery_result)
     units = {series['metric']: series['unit'] for series in data['series']}
     assert {'count', 'ratio', 'minutes', 'days', 'hours'} <= set(units.values())
     for series in data['series']:
@@ -157,7 +154,7 @@ def test_other_units_are_floats() -> None:
 def test_the_failure_window_is_written_as_seconds_and_parses_back(
     org_result: wambatic.stats.base.StatsResult,
 ) -> None:
-    data = as_dict(org_result)
+    data: dict[str, typing.Any] = wambatic.reports.base.result_to_dict(org_result)
     settings = data['request']['settings']
     assert settings['failure_window'] == '604800s'
     assert wambatic.settings.parse_duration(settings['failure_window']) == datetime.timedelta(
@@ -179,8 +176,10 @@ def test_non_ascii_logins_are_written_as_they_are(
     assert '\\u' not in text
 
 
-DURATIONS = st.integers(min_value=0, max_value=10**8).map(lambda n: datetime.timedelta(seconds=n))
-WORDS = st.lists(st.text(max_size=12), max_size=4).map(tuple)
+DURATIONS = hypothesis.strategies.integers(min_value=0, max_value=10**8).map(
+    lambda n: datetime.timedelta(seconds=n)
+)
+WORDS = hypothesis.strategies.lists(hypothesis.strategies.text(max_size=12), max_size=4).map(tuple)
 
 
 @hypothesis.settings(
@@ -189,14 +188,14 @@ WORDS = st.lists(st.text(max_size=12), max_size=4).map(tuple)
     suppress_health_check=[hypothesis.HealthCheck.function_scoped_fixture],
 )
 @hypothesis.given(
-    settings=st.builds(
+    settings=hypothesis.strategies.builds(
         wambatic.settings.StatsSettings,
         bot_logins=WORDS,
-        deploy_workflow=st.none() | st.text(max_size=12),
-        exclude_merge_commits=st.booleans(),
+        deploy_workflow=hypothesis.strategies.none() | hypothesis.strategies.text(max_size=12),
+        exclude_merge_commits=hypothesis.strategies.booleans(),
         failure_window=DURATIONS,
         hotfix_labels=WORDS,
-        timezone=st.text(max_size=12),
+        timezone=hypothesis.strategies.text(max_size=12),
     )
 )
 def test_any_stats_settings_survive_json_and_durations_parse_back(
@@ -205,7 +204,8 @@ def test_any_stats_settings_survive_json_and_durations_parse_back(
     result = dataclasses.replace(
         org_result, request=dataclasses.replace(org_result.request, settings=settings)
     )
-    written = as_dict(result)['request']['settings']
+    full: dict[str, typing.Any] = wambatic.reports.base.result_to_dict(result)
+    written = full['request']['settings']
     assert json.loads(json.dumps(written)) == written
     assert wambatic.settings.parse_duration(written['failure_window']) == settings.failure_window
 
@@ -213,12 +213,12 @@ def test_any_stats_settings_survive_json_and_durations_parse_back(
 def test_the_popularity_series_are_integers_and_the_tables_are_given_as_they_are(
     popularity_result: wambatic.stats.base.StatsResult,
 ) -> None:
-    data = as_dict(popularity_result)
+    data: dict[str, typing.Any] = wambatic.reports.base.result_to_dict(popularity_result)
     for metric in ('stars_added', 'stars_total', 'forks_added', 'forks_total'):
         points = series_points(data, metric)
         assert all(type(point['value']) is int for point in points), metric
     assert [point['value'] for point in series_points(data, 'stars_total')] == [5, 5, 6, 8]
-    assert data['tables']['popularity'] == fixture.ORG_POPULARITY_TABLE
+    assert data['tables']['popularity'] == tests.fixtures.stats.ORG_POPULARITY_TABLE
     assert [row['language'] for row in data['tables']['languages']] == [
         'Python',
         'Go',

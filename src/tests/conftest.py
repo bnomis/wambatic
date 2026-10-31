@@ -1,11 +1,11 @@
 import asyncio
+import collections.abc
 import dataclasses
 import datetime
 import importlib.util
 import pathlib
 import random
 import types
-import typing
 
 import loguru
 import pytest
@@ -25,7 +25,7 @@ import wambatic.stats.engine
 
 
 @pytest.fixture(autouse=True)
-def restore_logger() -> typing.Iterator[None]:
+def restore_logger() -> collections.abc.Iterator[None]:
     yield
     loguru.logger.remove()
 
@@ -36,14 +36,14 @@ def cache_path(tmp_path: pathlib.Path) -> pathlib.Path:
 
 
 @pytest.fixture
-def cache(cache_path: pathlib.Path) -> typing.Iterator[wambatic.fetch.cache.Cache]:
+def cache(cache_path: pathlib.Path) -> collections.abc.Iterator[wambatic.fetch.cache.Cache]:
     opened = wambatic.fetch.cache.Cache.open(cache_path)
     yield opened
     opened.close()
 
 
-MakeClient = typing.Callable[..., wambatic.fetch.client.GitHubClient]
-MakeFetcher = typing.Callable[..., wambatic.fetch.base.Fetcher]
+MakeClient = collections.abc.Callable[..., wambatic.fetch.client.GitHubClient]
+MakeFetcher = collections.abc.Callable[..., wambatic.fetch.base.Fetcher]
 
 BIN = pathlib.Path(__file__).resolve().parent.parent.parent / 'bin'
 
@@ -118,7 +118,7 @@ def make_fetcher(
     tmp_path: pathlib.Path,
     make_client: MakeClient,
     fetch_settings: wambatic.settings.FetchSettings,
-) -> typing.Iterator[MakeFetcher]:
+) -> collections.abc.Iterator[MakeFetcher]:
     caches: list[wambatic.fetch.cache.Cache] = []
 
     def make(
@@ -234,7 +234,7 @@ def store_popularity(
 
 
 @pytest.fixture
-def stats_cache(tmp_path: pathlib.Path) -> typing.Iterator[wambatic.fetch.cache.Cache]:
+def stats_cache(tmp_path: pathlib.Path) -> collections.abc.Iterator[wambatic.fetch.cache.Cache]:
     """A cache holding the stats fixture's repositories, commits, pull requests, issues, releases,
     workflow runs, stars and forks."""
     fixture = tests.fixtures.stats
@@ -269,7 +269,7 @@ def stats_fetcher(stats_cache: wambatic.fetch.cache.Cache) -> wambatic.fetch.bas
     return wambatic.fetch.base.Fetcher('test-token', stats_cache, wambatic.settings.FetchSettings())
 
 
-def compute_stats(
+def run_stats(
     fetcher: wambatic.fetch.base.Fetcher,
     subject: wambatic.fetch.base.Subject,
     request: wambatic.stats.base.StatsRequest,
@@ -286,7 +286,7 @@ def org_result(stats_fetcher: wambatic.fetch.base.Fetcher) -> wambatic.stats.bas
     request = wambatic.stats.base.StatsRequest(
         since=tests.fixtures.stats.SINCE, until=tests.fixtures.stats.UNTIL, by_author=True
     )
-    return compute_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
+    return run_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
 
 
 @pytest.fixture
@@ -297,7 +297,7 @@ def delivery_result(stats_fetcher: wambatic.fetch.base.Fetcher) -> wambatic.stat
         until=tests.fixtures.stats.UNTIL,
         groups=frozenset({'delivery'}),
     )
-    return compute_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
+    return run_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
 
 
 @pytest.fixture
@@ -310,7 +310,7 @@ def popularity_result(
         until=tests.fixtures.stats.UNTIL,
         groups=frozenset({'popularity'}),
     )
-    return compute_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
+    return run_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
 
 
 @pytest.fixture
@@ -324,7 +324,7 @@ def repo_total_result(
         until=tests.fixtures.stats.UNTIL,
     )
     subject = wambatic.fetch.base.Subject('repo', 'octo-org', 'alpha')
-    return compute_stats(stats_fetcher, subject, request)
+    return run_stats(stats_fetcher, subject, request)
 
 
 @pytest.fixture
@@ -338,7 +338,7 @@ def org_total_result(
         until=tests.fixtures.stats.UNTIL,
         by_author=True,
     )
-    return compute_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
+    return run_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
 
 
 @pytest.fixture
@@ -352,7 +352,7 @@ def popularity_total(
         until=tests.fixtures.stats.UNTIL,
         groups=frozenset({'popularity'}),
     )
-    return compute_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
+    return run_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
 
 
 @pytest.fixture
@@ -363,7 +363,7 @@ def org_day_result(stats_fetcher: wambatic.fetch.base.Fetcher) -> wambatic.stats
         since=tests.fixtures.stats.SINCE,
         until=tests.fixtures.stats.UNTIL,
     )
-    return compute_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
+    return run_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
 
 
 def make_report(
@@ -384,7 +384,7 @@ def make_report(
             by_author=by_author,
             groups=groups,
         )
-        return compute_stats(fetcher, subject, request, clock)
+        return run_stats(fetcher, subject, request, clock)
 
     return wambatic.reports.html.HtmlReport(
         total=result(wambatic.stats.base.Granularity.TOTAL),

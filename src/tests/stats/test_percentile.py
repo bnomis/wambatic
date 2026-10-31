@@ -2,16 +2,14 @@ import datetime
 import statistics
 
 import hypothesis
-import hypothesis.strategies as st
+import hypothesis.strategies
 import pytest
 
 import wambatic.stats.percentile
 
-UTC = datetime.UTC
-
 
 def test_hours_is_the_elapsed_time_in_hours() -> None:
-    start = datetime.datetime(2026, 10, 1, 9, 0, tzinfo=UTC)
+    start = datetime.datetime(2026, 10, 1, 9, 0, tzinfo=datetime.UTC)
     assert wambatic.stats.percentile.hours(start, start + datetime.timedelta(minutes=90)) == 1.5
 
 
@@ -26,7 +24,9 @@ def test_the_summary_follows_the_suffix() -> None:
 
 
 @hypothesis.settings(max_examples=20, deadline=10000)
-@hypothesis.given(st.lists(st.floats(0, 1e6), min_size=1, max_size=30))
+@hypothesis.given(
+    hypothesis.strategies.lists(hypothesis.strategies.floats(0, 1e6), min_size=1, max_size=30)
+)
 def test_p90_stays_inside_the_values_and_is_at_least_the_median(values: list[float]) -> None:
     result = wambatic.stats.percentile.p90(values)
     assert min(values) - 1e-6 <= result <= max(values) + 1e-6

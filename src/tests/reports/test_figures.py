@@ -7,13 +7,12 @@ import plotly.graph_objects
 import pytest
 
 import tests.fixtures.reports
-import tests.fixtures.stats as fixture
+import tests.fixtures.stats
 import wambatic.reports.errors
 import wambatic.reports.figures
 import wambatic.reports.rows
 import wambatic.stats.base
 
-Granularity = wambatic.stats.base.Granularity
 ORDER = [
     'activity-commits',
     'activity-contributors',
@@ -62,12 +61,6 @@ def keys_in(value: object) -> set[str]:
     return set()
 
 
-def with_partial(
-    result: wambatic.stats.base.StatsResult, labels: str
-) -> wambatic.stats.base.StatsResult:
-    return dataclasses.replace(result, provenance={**result.provenance, 'partial_buckets': labels})
-
-
 def test_the_figures_come_in_the_specs_order(org_result: wambatic.stats.base.StatsResult) -> None:
     assert [f.key for f in wambatic.reports.figures.build_figures(org_result)] == ORDER
 
@@ -85,7 +78,7 @@ def test_the_count_traces_equal_the_hand_worked_months(
     org_result: wambatic.stats.base.StatsResult,
 ) -> None:
     figures = wambatic.reports.figures.build_figures(org_result)
-    months = list(fixture.LABELS)
+    months = list(tests.fixtures.stats.LABELS)
     for key, name, metric in (
         ('activity-commits', 'Commits', 'commits'),
         ('activity-contributors', 'Contributors', 'contributors'),
@@ -95,7 +88,7 @@ def test_the_count_traces_equal_the_hand_worked_months(
     ):
         trace = traces(figures, key)[name]
         assert trace['x'] == months
-        assert trace['y'] == [fixture.ORG_BY_MONTH_UTC[m][metric] for m in months]
+        assert trace['y'] == [tests.fixtures.stats.ORG_BY_MONTH_UTC[m][metric] for m in months]
     for key, name, metric in (
         ('flow-pull-requests', 'Opened', 'prs_opened'),
         ('flow-pull-requests', 'Merged', 'prs_merged'),
@@ -103,7 +96,7 @@ def test_the_count_traces_equal_the_hand_worked_months(
         ('flow-issues', 'Closed', 'issues_closed'),
     ):
         trace = traces(figures, key)[name]
-        assert trace['y'] == [fixture.ORG_FLOW_BY_MONTH_UTC[metric][m] for m in months]
+        assert trace['y'] == [tests.fixtures.stats.ORG_FLOW_BY_MONTH_UTC[metric][m] for m in months]
 
 
 def test_deleted_lines_are_plotted_below_zero_beside_added_lines(
@@ -111,7 +104,10 @@ def test_deleted_lines_are_plotted_below_zero_beside_added_lines(
 ) -> None:
     figures = wambatic.reports.figures.build_figures(org_result)
     deleted = traces(figures, 'activity-lines')['Deleted']
-    assert deleted['y'] == [-fixture.ORG_BY_MONTH_UTC[m]['lines_deleted'] for m in fixture.LABELS]
+    assert deleted['y'] == [
+        -tests.fixtures.stats.ORG_BY_MONTH_UTC[m]['lines_deleted']
+        for m in tests.fixtures.stats.LABELS
+    ]
     assert deleted['type'] == 'bar'
     assert traces(figures, 'activity-lines')['Net']['type'] == 'scatter'
     layout = next(f for f in figures if f.key == 'activity-lines').layout
@@ -129,8 +125,8 @@ def test_a_duration_bucket_with_no_value_is_none_so_the_line_has_a_gap(
     ):
         for name in ('p50', 'p90'):
             trace = traces(figures, key)[name]
-            expected = fixture.ORG_FLOW_BY_MONTH_UTC[f'{base}_{name}']
-            assert trace['y'] == [expected.get(m) for m in fixture.LABELS]
+            expected = tests.fixtures.stats.ORG_FLOW_BY_MONTH_UTC[f'{base}_{name}']
+            assert trace['y'] == [expected.get(m) for m in tests.fixtures.stats.LABELS]
             assert trace['connectgaps'] is False
     assert traces(figures, 'flow-merge-time')['p50']['y'] == [48.0, None, 37.5, 24.0]
     assert traces(figures, 'flow-pr-size')['p50']['y'] == [15, None, 5, 15]
@@ -139,7 +135,11 @@ def test_a_duration_bucket_with_no_value_is_none_so_the_line_has_a_gap(
 def test_only_the_buckets_the_provenance_names_are_hatched_or_open(
     org_result: wambatic.stats.base.StatsResult,
 ) -> None:
-    figures = wambatic.reports.figures.build_figures(with_partial(org_result, '2026-10,2027-01'))
+    figures = wambatic.reports.figures.build_figures(
+        dataclasses.replace(
+            org_result, provenance={**org_result.provenance, 'partial_buckets': '2026-10,2027-01'}
+        )
+    )
     shapes = traces(figures, 'activity-commits')['Commits']['marker']
     assert shapes == {'pattern': {'shape': ['/', '', '', '/']}}
     symbols = traces(figures, 'flow-merge-time')['p50']['marker']
@@ -162,7 +162,11 @@ def test_a_figure_with_a_partial_bucket_says_so_in_its_caption(
         ]
 
     assert captions(org_result) == []
-    partial = captions(with_partial(org_result, '2027-01'))
+    partial = captions(
+        dataclasses.replace(
+            org_result, provenance={**org_result.provenance, 'partial_buckets': '2027-01'}
+        )
+    )
     assert partial == ['hatched or open: partial period'] * len(ORDER)
 
 
@@ -246,7 +250,11 @@ def test_no_figure_carries_a_colour(org_result: wambatic.stats.base.StatsResult)
 def test_every_figure_is_valid_plotly_and_plain_json(
     org_result: wambatic.stats.base.StatsResult,
 ) -> None:
-    for figure in wambatic.reports.figures.build_figures(with_partial(org_result, '2027-01')):
+    for figure in wambatic.reports.figures.build_figures(
+        dataclasses.replace(
+            org_result, provenance={**org_result.provenance, 'partial_buckets': '2027-01'}
+        )
+    ):
         plotly.graph_objects.Figure(data=figure.data, layout=figure.layout)
         assert json.loads(json.dumps(figure.data)) == figure.data
         assert json.loads(json.dumps(figure.layout)) == figure.layout
@@ -285,9 +293,12 @@ def test_the_range_figures_are_the_top_contributors_and_the_breakdowns(
         'activity-by-author',
     ]
     top, repos, authors = (f.data[0] for f in figures)
-    assert top['y'] == [row['login'] for row in fixture.ORG_TOP_CONTRIBUTORS]
-    assert top['x'] == [row['commits'] for row in fixture.ORG_TOP_CONTRIBUTORS]
-    assert dict(zip(repos['y'], repos['x'], strict=True)) == {fixture.ALPHA: 6, fixture.BETA: 4}  # type: ignore[call-overload]
+    assert top['y'] == [row['login'] for row in tests.fixtures.stats.ORG_TOP_CONTRIBUTORS]
+    assert top['x'] == [row['commits'] for row in tests.fixtures.stats.ORG_TOP_CONTRIBUTORS]
+    assert dict(zip(repos['y'], repos['x'], strict=True)) == {  # type: ignore[call-overload]
+        tests.fixtures.stats.ALPHA: 6,
+        tests.fixtures.stats.BETA: 4,
+    }
     assert list(zip(authors['y'], authors['x'], strict=True)) == [  # type: ignore[call-overload]
         ('Octocat', 4),
         ('hubot', 3),
@@ -322,7 +333,10 @@ def test_a_repo_has_no_by_repository_figure(
 def test_twenty_five_top_contributors_give_twenty_bars(
     org_total_result: wambatic.stats.base.StatsResult,
 ) -> None:
-    many = [{**fixture.ORG_TOP_CONTRIBUTORS[0], 'login': f'person{n:02d}'} for n in range(25)]
+    many = [
+        {**tests.fixtures.stats.ORG_TOP_CONTRIBUTORS[0], 'login': f'person{n:02d}'}
+        for n in range(25)
+    ]
     result = dataclasses.replace(
         org_total_result, tables={**org_total_result.tables, 'top_contributors': many}
     )
@@ -392,7 +406,7 @@ def test_the_calendars_cells_sum_to_the_commits_total(
     figure = wambatic.reports.figures.build_calendar(org_day_result)
     assert figure is not None
     total = sum(value for value in calendar_cells(figure).values() if value is not None)
-    assert total == fixture.ORG_TOTAL_UTC['commits']
+    assert total == tests.fixtures.stats.ORG_TOTAL_UTC['commits']
 
 
 def test_days_outside_the_range_are_blank(org_day_result: wambatic.stats.base.StatsResult) -> None:
@@ -408,7 +422,7 @@ def test_days_outside_the_range_are_blank(org_day_result: wambatic.stats.base.St
 
 
 def test_days_after_until_are_blank(org_day_result: wambatic.stats.base.StatsResult) -> None:
-    short = dataclasses.replace(org_day_result, until=fixture.UNTIL.replace(day=29))
+    short = dataclasses.replace(org_day_result, until=tests.fixtures.stats.UNTIL.replace(day=29))
     figure = wambatic.reports.figures.build_calendar(short)
     assert figure is not None
     cells = calendar_cells(figure)
@@ -443,16 +457,10 @@ def test_the_range_and_calendar_figures_are_valid_plotly_and_colourless(
         assert not {key for key in found if 'color' in key.lower() and key != 'colorbar'}
 
 
-def delivery_figures(
-    result: wambatic.stats.base.StatsResult,
-) -> list[wambatic.reports.figures.Figure]:
-    return wambatic.reports.figures.build_figures(result)
-
-
 def test_the_delivery_figures_come_in_the_specs_order_and_belong_to_delivery(
     delivery_result: wambatic.stats.base.StatsResult,
 ) -> None:
-    figures = delivery_figures(delivery_result)
+    figures = wambatic.reports.figures.build_figures(delivery_result)
     assert [f.key for f in figures] == DELIVERY_ORDER
     assert {f.group for f in figures} == {'delivery'}
     assert all(f.description.endswith('.') for f in figures)
@@ -461,7 +469,11 @@ def test_the_delivery_figures_come_in_the_specs_order_and_belong_to_delivery(
 def test_every_delivery_figure_is_valid_plotly_plain_json_and_colourless(
     delivery_result: wambatic.stats.base.StatsResult,
 ) -> None:
-    for figure in delivery_figures(with_partial(delivery_result, '2027-01')):
+    for figure in wambatic.reports.figures.build_figures(
+        dataclasses.replace(
+            delivery_result, provenance={**delivery_result.provenance, 'partial_buckets': '2027-01'}
+        )
+    ):
         plotly.graph_objects.Figure(data=figure.data, layout=figure.layout)
         assert json.loads(json.dumps(figure.data)) == figure.data
         assert json.loads(json.dumps(figure.layout)) == figure.layout
@@ -471,7 +483,7 @@ def test_every_delivery_figure_is_valid_plotly_plain_json_and_colourless(
 def test_the_ratios_are_plotted_as_per_cent_on_a_fixed_axis(
     delivery_result: wambatic.stats.base.StatsResult,
 ) -> None:
-    figures = {f.key: f for f in delivery_figures(delivery_result)}
+    figures = {f.key: f for f in wambatic.reports.figures.build_figures(delivery_result)}
     success = figures['delivery-success-rate']
     (trace,) = success.data
     # 4 / 5 in October and 2 / 4 in January; November and December have no completed run
@@ -487,7 +499,7 @@ def test_the_ratios_are_plotted_as_per_cent_on_a_fixed_axis(
 def test_the_counts_and_days_of_the_delivery_figures_are_whole_numbers(
     delivery_result: wambatic.stats.base.StatsResult,
 ) -> None:
-    figures = {f.key: f for f in delivery_figures(delivery_result)}
+    figures = {f.key: f for f in wambatic.reports.figures.build_figures(delivery_result)}
     assert figures['delivery-runs'].data[0]['y'] == [7, 0, 1, 5]
     assert figures['delivery-releases'].data[0]['y'] == [4, 0, 1, 1]
     assert figures['delivery-deployments'].data[0]['y'] == [3, 0, 1, 1]
@@ -498,7 +510,9 @@ def test_a_chart_of_a_proxy_that_is_not_emitted_is_left_out(
     delivery_result: wambatic.stats.base.StatsResult,
 ) -> None:
     kept = [s for s in delivery_result.series if not s.metric.startswith(PROXY_METRICS)]
-    figures = delivery_figures(dataclasses.replace(delivery_result, series=kept))
+    figures = wambatic.reports.figures.build_figures(
+        dataclasses.replace(delivery_result, series=kept)
+    )
     assert [f.key for f in figures] == [
         'delivery-runs',
         'delivery-success-rate',
@@ -511,7 +525,9 @@ def test_a_chart_of_a_proxy_that_is_not_emitted_is_left_out(
 def test_a_result_without_delivery_series_has_no_delivery_figure(
     org_result: wambatic.stats.base.StatsResult,
 ) -> None:
-    assert not any(f.group == 'delivery' for f in delivery_figures(org_result))
+    assert not any(
+        f.group == 'delivery' for f in wambatic.reports.figures.build_figures(org_result)
+    )
 
 
 POPULARITY_ORDER = [
@@ -535,7 +551,7 @@ def test_the_popularity_traces_equal_the_hand_worked_months(
     popularity_result: wambatic.stats.base.StatsResult,
 ) -> None:
     figures = {f.key: f for f in wambatic.reports.figures.build_figures(popularity_result)}
-    months = sorted(fixture.ORG_POPULARITY_BY_MONTH_UTC)
+    months = sorted(tests.fixtures.stats.ORG_POPULARITY_BY_MONTH_UTC)
     for key, metric, kind in (
         ('popularity-stars-added', 'stars_added', 'bar'),
         ('popularity-stars-total', 'stars_total', 'scatter'),
@@ -545,7 +561,9 @@ def test_the_popularity_traces_equal_the_hand_worked_months(
         (trace,) = figures[key].data
         assert trace['type'] == kind
         assert trace['x'] == months
-        assert trace['y'] == [int(fixture.ORG_POPULARITY_BY_MONTH_UTC[m][metric]) for m in months]
+        assert trace['y'] == [
+            int(tests.fixtures.stats.ORG_POPULARITY_BY_MONTH_UTC[m][metric]) for m in months
+        ]
 
 
 def test_every_popularity_figure_is_valid_plotly_plain_json_and_colourless(
@@ -564,8 +582,8 @@ def test_the_languages_figure_plots_each_share_in_per_cent_first_row_at_the_top(
     assert (figure.key, figure.group) == ('popularity-languages', 'popularity')
     (trace,) = figure.data
     assert trace['orientation'] == 'h'
-    assert trace['y'] == [row['language'] for row in fixture.ORG_LANGUAGES_TABLE]
-    assert trace['x'] == [row['share'] * 100 for row in fixture.ORG_LANGUAGES_TABLE]
+    assert trace['y'] == [row['language'] for row in tests.fixtures.stats.ORG_LANGUAGES_TABLE]
+    assert trace['x'] == [row['share'] * 100 for row in tests.fixtures.stats.ORG_LANGUAGES_TABLE]
     assert trace['y'][-1] == 'Other'
     assert figure.layout['yaxis']['autorange'] == 'reversed'  # type: ignore[index]
     plotly.graph_objects.Figure(data=figure.data, layout=figure.layout)

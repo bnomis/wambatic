@@ -17,8 +17,6 @@ RESET = NOW + datetime.timedelta(hours=1)
 RESET_EPOCH = str(int(RESET.timestamp()))
 RESET_ISO = RESET.strftime('%Y-%m-%dT%H:%M:%SZ')
 
-Canned = tests.fixtures.fetch.server.Canned
-
 RATE_HEADERS = {'x-ratelimit-remaining': '4990', 'x-ratelimit-reset': RESET_EPOCH}
 
 
@@ -379,20 +377,6 @@ def compare_response(
 HELLO_PUSHED_AT = datetime.datetime(2026, 10, 20, 9, 0, tzinfo=datetime.UTC)
 HELLO_UPDATED_AT = datetime.datetime(2026, 10, 21, 9, 0, tzinfo=datetime.UTC)
 
-Recorded = tests.fixtures.fetch.recorded
-OWNER_REPOSITORIES_OK = Recorded.OWNER_REPOSITORIES_OK
-REPOSITORY_OK = Recorded.REPOSITORY_OK
-COMMIT_HISTORY_OK = Recorded.COMMIT_HISTORY_OK
-COMPARE_AHEAD = Recorded.COMPARE_AHEAD
-COMMIT_COUNTS_OK = Recorded.COMMIT_COUNTS_OK
-PULL_REQUESTS_OK = Recorded.PULL_REQUESTS_OK
-ISSUES_OK = Recorded.ISSUES_OK
-RELEASES_OK = Recorded.RELEASES_OK
-WORKFLOW_RUNS_OK = Recorded.WORKFLOW_RUNS_OK
-WORKFLOW_RUN_OK = Recorded.WORKFLOW_RUN_OK
-STARGAZERS_OK = Recorded.STARGAZERS_OK
-FORKS_OK = Recorded.FORKS_OK
-BOT_REVIEWS_OK = Recorded.BOT_REVIEWS_OK
 GRAPHQL_NOT_FOUND = {
     'data': {
         'repositoryOwner': None,
@@ -451,11 +435,6 @@ SECONDARY_LIMIT = {
     )
 }
 
-REPO = Recorded.REPO
-REPO_ETAG = Recorded.REPO_ETAG
 
 # https://docs.github.com/en/rest/metrics/statistics#a-word-about-caching
-STATS_PENDING = Canned(202)
-
-USER_OK = Recorded.USER_OK
-ORGANIZATION_OK = Recorded.ORGANIZATION_OK
+STATS_PENDING = tests.fixtures.fetch.server.Canned(202)

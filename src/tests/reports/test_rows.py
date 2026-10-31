@@ -3,7 +3,7 @@ import dataclasses
 import pytest
 
 import tests.conftest
-import tests.fixtures.stats as fixture
+import tests.fixtures.stats
 import wambatic.fetch.base
 import wambatic.reports.rows
 import wambatic.stats.base
@@ -21,7 +21,7 @@ def test_the_activity_rows_are_the_hand_worked_months(
 ) -> None:
     table = wambatic.reports.rows.activity_table(org_result)
     assert table is not None
-    assert table_by_label(table) == fixture.ORG_BY_MONTH_UTC
+    assert table_by_label(table) == tests.fixtures.stats.ORG_BY_MONTH_UTC
     assert table.headers == wambatic.reports.rows.ACTIVITY_HEADERS
 
 
@@ -31,7 +31,7 @@ def test_the_activity_total_row_adds_up_and_counts_contributors_once(
     table = wambatic.reports.rows.activity_table(org_result)
     assert table is not None
     assert table.total is not None
-    assert dict(zip(table.metrics, table.total, strict=True)) == fixture.ORG_TOTAL_UTC
+    assert dict(zip(table.metrics, table.total, strict=True)) == tests.fixtures.stats.ORG_TOTAL_UTC
 
 
 def test_the_buckets_the_provenance_names_are_marked_partial_on_their_rows_only(
@@ -55,13 +55,16 @@ def test_the_flow_rows_are_the_hand_worked_months(
     table = wambatic.reports.rows.flow_table(org_result)
     assert table is not None
     expected = {
-        label: {metric: fixture.ORG_FLOW_BY_MONTH_UTC[metric][label] for metric in FLOW_METRICS}
-        for label in fixture.LABELS
+        label: {
+            metric: tests.fixtures.stats.ORG_FLOW_BY_MONTH_UTC[metric][label]
+            for metric in FLOW_METRICS
+        }
+        for label in tests.fixtures.stats.LABELS
     }
     assert table_by_label(table) == expected
     assert table.total is not None
     assert table.total == tuple(
-        sum(fixture.ORG_FLOW_BY_MONTH_UTC[metric].values()) for metric in FLOW_METRICS
+        sum(tests.fixtures.stats.ORG_FLOW_BY_MONTH_UTC[metric].values()) for metric in FLOW_METRICS
     )
 
 
@@ -74,9 +77,11 @@ def test_a_flow_times_bucket_with_no_value_is_none_and_there_is_no_total(
     rows = table_by_label(table)
     assert rows['2026-11']['time_to_merge_p50'] is None
     assert rows['2026-11']['time_to_close_p50'] == 12.0
-    for label in fixture.LABELS:
+    for label in tests.fixtures.stats.LABELS:
         for metric in wambatic.reports.rows.FLOW_TIMES_METRICS:
-            assert rows[label][metric] == fixture.ORG_FLOW_BY_MONTH_UTC[metric].get(label)
+            assert rows[label][metric] == tests.fixtures.stats.ORG_FLOW_BY_MONTH_UTC[metric].get(
+                label
+            )
 
 
 def test_the_breakdown_rows_add_up_to_the_total_row(
@@ -110,8 +115,8 @@ def test_the_breakdown_rows_are_ordered_by_commits_then_name(
     repos = wambatic.reports.rows.breakdown_rows(org_result, 'repo')
     assert repos is not None
     assert [(row.name, row.commits) for row in repos] == [
-        (fixture.ALPHA, 6),
-        (fixture.BETA, 4),
+        (tests.fixtures.stats.ALPHA, 6),
+        (tests.fixtures.stats.BETA, 4),
     ]
 
 
@@ -172,7 +177,7 @@ def test_the_top_contributors_come_in_the_tables_order_and_can_be_limited(
     org_result: wambatic.stats.base.StatsResult,
 ) -> None:
     rows = wambatic.reports.rows.top_contributors(org_result)
-    assert [dataclasses.asdict(row) for row in rows] == fixture.ORG_TOP_CONTRIBUTORS
+    assert [dataclasses.asdict(row) for row in rows] == tests.fixtures.stats.ORG_TOP_CONTRIBUTORS
     assert wambatic.reports.rows.top_contributors(org_result, 2) == rows[:2]
     assert wambatic.reports.rows.contributor_count(org_result) == 3
 
@@ -204,7 +209,8 @@ def delivery_expected(
     """The hand-worked values by month for `metrics`, `None` where no source has one."""
     merged = {metric: values for source in sources for metric, values in source.items()}
     return {
-        label: {metric: merged[metric].get(label) for metric in metrics} for label in fixture.LABELS
+        label: {metric: merged[metric].get(label) for metric in metrics}
+        for label in tests.fixtures.stats.LABELS
     }
 
 
@@ -237,7 +243,8 @@ def test_the_delivery_rows_are_the_hand_worked_months_with_no_value_as_none(
         'Release interval p50',
     )
     assert_cells_match(
-        table_by_label(table), delivery_expected(table.metrics, fixture.ORG_DELIVERY_BY_MONTH_UTC)
+        table_by_label(table),
+        delivery_expected(table.metrics, tests.fixtures.stats.ORG_DELIVERY_BY_MONTH_UTC),
     )
     assert table_by_label(table)['2026-11']['workflow_success_rate'] is None
 
@@ -250,11 +257,15 @@ def test_the_delivery_total_row_adds_runs_and_releases_only(
     assert table.total is not None
     total = dict(zip(table.metrics, table.total, strict=True))
     assert total == {
-        'workflow_runs': sum(fixture.ORG_DELIVERY_BY_MONTH_UTC['workflow_runs'].values()),
+        'workflow_runs': sum(
+            tests.fixtures.stats.ORG_DELIVERY_BY_MONTH_UTC['workflow_runs'].values()
+        ),
         'workflow_success_rate': None,
         'workflow_duration_p50': None,
         'workflow_duration_p90': None,
-        'release_count': sum(fixture.ORG_DELIVERY_BY_MONTH_UTC['release_count'].values()),
+        'release_count': sum(
+            tests.fixtures.stats.ORG_DELIVERY_BY_MONTH_UTC['release_count'].values()
+        ),
         'release_interval_p50': None,
     }
 
@@ -276,10 +287,12 @@ def test_the_dora_rows_are_the_hand_worked_months_of_the_release_deployments(
     )
     assert_cells_match(
         table_by_label(table),
-        delivery_expected(table.metrics, fixture.ORG_DORA_RELEASES_BY_MONTH_UTC),
+        delivery_expected(table.metrics, tests.fixtures.stats.ORG_DORA_RELEASES_BY_MONTH_UTC),
     )
     assert table.total is not None
-    assert table.total[0] == sum(fixture.ORG_DORA_RELEASES_BY_MONTH_UTC['deployments'].values())
+    assert table.total[0] == sum(
+        tests.fixtures.stats.ORG_DORA_RELEASES_BY_MONTH_UTC['deployments'].values()
+    )
     assert all(value is None for value in table.total[1:])
 
 
@@ -324,9 +337,12 @@ def test_the_popularity_rows_are_the_hand_worked_months_with_cumulative_totals_i
     table = wambatic.reports.rows.popularity_table(popularity_result)
     assert table is not None
     assert table.headers == wambatic.reports.rows.POPULARITY_HEADERS
-    assert table_by_label(table) == fixture.ORG_POPULARITY_BY_MONTH_UTC
+    assert table_by_label(table) == tests.fixtures.stats.ORG_POPULARITY_BY_MONTH_UTC
     assert table.total is not None
-    assert dict(zip(table.metrics, table.total, strict=True)) == fixture.ORG_POPULARITY_TOTAL
+    assert (
+        dict(zip(table.metrics, table.total, strict=True))
+        == tests.fixtures.stats.ORG_POPULARITY_TOTAL
+    )
 
 
 def test_a_single_popularity_bucket_has_no_footer(
@@ -334,15 +350,15 @@ def test_a_single_popularity_bucket_has_no_footer(
 ) -> None:
     request = wambatic.stats.base.StatsRequest(
         granularity=wambatic.stats.base.Granularity.TOTAL,
-        since=fixture.SINCE,
-        until=fixture.UNTIL,
+        since=tests.fixtures.stats.SINCE,
+        until=tests.fixtures.stats.UNTIL,
         groups=frozenset({'popularity'}),
     )
-    result = tests.conftest.compute_stats(stats_fetcher, fixture.ORG, request)
+    result = tests.conftest.run_stats(stats_fetcher, tests.fixtures.stats.ORG, request)
     table = wambatic.reports.rows.popularity_table(result)
     assert table is not None
     assert table.total is None
-    assert table_by_label(table) == {'total': fixture.ORG_POPULARITY_TOTAL}
+    assert table_by_label(table) == {'total': tests.fixtures.stats.ORG_POPULARITY_TOTAL}
 
 
 def test_popularity_now_lists_the_repositories_by_stars_with_a_total_when_there_are_several(
@@ -352,7 +368,7 @@ def test_popularity_now_lists_the_repositories_by_stars_with_a_total_when_there_
     assert now is not None
     assert [(r.repo, r.stars, r.forks, r.watchers) for r in now.rows] == [
         (row['repo'], row['stars'], row['forks'], row['watchers'])
-        for row in fixture.ORG_POPULARITY_TABLE
+        for row in tests.fixtures.stats.ORG_POPULARITY_TABLE
     ]
     assert now.total == wambatic.reports.rows.PopularityRow(
         'Total', 10, 5, 6
@@ -363,10 +379,12 @@ def test_popularity_now_of_one_repository_has_no_total(
     stats_fetcher: wambatic.fetch.base.Fetcher,
 ) -> None:
     request = wambatic.stats.base.StatsRequest(
-        since=fixture.SINCE, until=fixture.UNTIL, groups=frozenset({'popularity'})
+        since=tests.fixtures.stats.SINCE,
+        until=tests.fixtures.stats.UNTIL,
+        groups=frozenset({'popularity'}),
     )
     subject = wambatic.fetch.base.Subject('repo', 'octo-org', 'alpha')
-    result = tests.conftest.compute_stats(stats_fetcher, subject, request)
+    result = tests.conftest.run_stats(stats_fetcher, subject, request)
     now = wambatic.reports.rows.popularity_now(result)
     assert now is not None
     assert len(now.rows) == 1

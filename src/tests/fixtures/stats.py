@@ -13,13 +13,13 @@ import datetime
 import typing
 
 import wambatic.fetch.base
+import wambatic.stats.base
 
-UTC = datetime.UTC
-NOW = datetime.datetime(2027, 1, 20, 12, 0, tzinfo=UTC)
-AFTER_FIXTURE_RANGES = datetime.datetime(2027, 2, 1, 12, 0, tzinfo=UTC)
-ALPHA_SYNCED_AT = datetime.datetime(2027, 2, 1, 10, 0, tzinfo=UTC)
-BETA_SYNCED_AT = datetime.datetime(2027, 2, 1, 12, 0, tzinfo=UTC)
-GAMMA_SYNCED_AT = datetime.datetime(2027, 2, 1, 11, 0, tzinfo=UTC)
+NOW = datetime.datetime(2027, 1, 20, 12, 0, tzinfo=datetime.UTC)
+AFTER_FIXTURE_RANGES = datetime.datetime(2027, 2, 1, 12, 0, tzinfo=datetime.UTC)
+ALPHA_SYNCED_AT = datetime.datetime(2027, 2, 1, 10, 0, tzinfo=datetime.UTC)
+BETA_SYNCED_AT = datetime.datetime(2027, 2, 1, 12, 0, tzinfo=datetime.UTC)
+GAMMA_SYNCED_AT = datetime.datetime(2027, 2, 1, 11, 0, tzinfo=datetime.UTC)
 
 ORG = wambatic.fetch.base.Subject('org', 'octo-org')
 USER = wambatic.fetch.base.Subject('user', 'octocat')
@@ -43,7 +43,7 @@ def repo(
     languages: tuple[tuple[str, int], ...] = (),
     languages_size: int = 0,
 ) -> wambatic.fetch.base.Repo:
-    pushed = datetime.datetime(2027, 1, 16, hours, 0, tzinfo=UTC)
+    pushed = datetime.datetime(2027, 1, 16, hours, 0, tzinfo=datetime.UTC)
     return wambatic.fetch.base.Repo(
         name_with_owner=name,
         default_branch='main',
@@ -99,7 +99,7 @@ def commit(
     return wambatic.fetch.base.Commit(
         repo=repo_name,
         oid=oid,
-        authored_at=datetime.datetime.fromisoformat(when).replace(tzinfo=UTC),
+        authored_at=datetime.datetime.fromisoformat(when).replace(tzinfo=datetime.UTC),
         author_login=login,
         additions=additions,
         deletions=deletions,
@@ -288,7 +288,7 @@ ORG_TOP_CONTRIBUTORS: list[dict[str, typing.Any]] = [
 
 
 def moment(when: str) -> datetime.datetime:
-    return datetime.datetime.fromisoformat(when).replace(tzinfo=UTC)
+    return datetime.datetime.fromisoformat(when).replace(tzinfo=datetime.UTC)
 
 
 def pull(
@@ -752,7 +752,7 @@ def star(repo_name: str, user_id: str, when: str) -> wambatic.fetch.base.StarEve
     return wambatic.fetch.base.StarEvent(
         repo=repo_name,
         user_id=user_id,
-        starred_at=datetime.datetime.fromisoformat(when).replace(tzinfo=UTC),
+        starred_at=datetime.datetime.fromisoformat(when).replace(tzinfo=datetime.UTC),
     )
 
 
@@ -760,7 +760,7 @@ def fork(repo_name: str, fork_id: int, when: str) -> wambatic.fetch.base.Fork:
     return wambatic.fetch.base.Fork(
         repo=repo_name,
         id=fork_id,
-        created_at=datetime.datetime.fromisoformat(when).replace(tzinfo=UTC),
+        created_at=datetime.datetime.fromisoformat(when).replace(tzinfo=datetime.UTC),
     )
 
 
@@ -873,3 +873,8 @@ ORG_LANGUAGES_TABLE: list[dict[str, typing.Any]] = [
     {'language': 'Shell', 'bytes': 1000, 'share': 1000 / 14500},
     {'language': 'Other', 'bytes': 500, 'share': 500 / 14500},
 ]
+
+
+def pick(series: list[wambatic.stats.base.Series], metric: str) -> dict[str, float]:
+    (found,) = [s for s in series if s.metric == metric]
+    return {bucket.label: value for bucket, value in found.points.items()}

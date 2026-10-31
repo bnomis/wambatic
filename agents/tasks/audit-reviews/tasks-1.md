@@ -388,7 +388,7 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 ## Task 10: Clear the test-tree script hits other than literals and ordering
 
-**Status:** todo
+**Status:** done
 **Priority:** low
 **Complexity:** medium
 **Source Reference:** Decision 1 (B): `aliased-imports`, `typing-deprecated-alias`, `reexport-in-non-init`, `in-function-import`, `except-interpolation`, `build-name-has-side-effect`, `passthrough-shim`, `paired-sibling-helpers`, `duplicate-call-sequence` under `src/tests/`
@@ -397,23 +397,23 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 **Subtasks:**
 
-- [ ] `aliased-imports` (25): `import tests.fixtures.fetch.responses` and full paths at each use
-- [ ] `typing-deprecated-alias` (18): `collections.abc` forms
-- [ ] `reexport-in-non-init` (69): `datetime.UTC`, `wambatic.stats.base.Granularity` and so on at each use
-- [ ] `in-function-import` (`src/tests/reports/test_html.py:197`): move to the top of the module
-- [ ] `except-interpolation` (2), `build-name-has-side-effect` (2), `passthrough-shim` (9): fix in code (rename `compute_stats`/`build_with` to `run_*`; call the wrapped function directly)
-- [ ] `paired-sibling-helpers` (6), `duplicate-call-sequence` (2): one shared helper each (the Playwright page opener into `src/tests/reports/conftest.py`)
+- [x] `aliased-imports` (25): `import tests.fixtures.fetch.responses` and full paths at each use
+- [x] `typing-deprecated-alias` (18): `collections.abc` forms
+- [x] `reexport-in-non-init` (69): `datetime.UTC`, `wambatic.stats.base.Granularity` and so on at each use
+- [x] `in-function-import` (`src/tests/reports/test_html.py:197`): move to the top of the module
+- [x] `except-interpolation` (2), `build-name-has-side-effect` (2), `passthrough-shim` (9): fix in code (rename `compute_stats`/`build_with` to `run_*`; call the wrapped function directly)
+- [x] `paired-sibling-helpers` (6), `duplicate-call-sequence` (2): one shared helper each (the Playwright page opener into `src/tests/reports/conftest.py`)
 
 **Acceptance Criteria:**
 
-- [ ] `bin/audit-check.sh --path src/tests --rule aliased-imports --rule typing-deprecated-alias --rule reexport-in-non-init --rule in-function-import --rule except-interpolation --rule build-name-has-side-effect --rule passthrough-shim --rule paired-sibling-helpers --rule duplicate-call-sequence` exits 0
-- [ ] No `# auditme: accept` marker is added under `src/tests/`
+- [x] `bin/audit-check.sh --path src/tests --rule aliased-imports --rule typing-deprecated-alias --rule reexport-in-non-init --rule in-function-import --rule except-interpolation --rule build-name-has-side-effect --rule passthrough-shim --rule paired-sibling-helpers --rule duplicate-call-sequence` exits 0
+- [x] No `# auditme: accept` marker is added under `src/tests/`
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest` on every test module the task edits passes, and `pytest -m browser src/tests/reports` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest` on every test module the task edits passes, and `pytest -m browser src/tests/reports` passes
 
 **Notes:**
 

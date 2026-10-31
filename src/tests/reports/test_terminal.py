@@ -5,13 +5,13 @@ import re
 import string
 
 import hypothesis
-import hypothesis.strategies as st
+import hypothesis.strategies
 import pytest
 import rich.console
 
 import tests.conftest
 import tests.fixtures.reports
-import tests.fixtures.stats as fixture
+import tests.fixtures.stats
 import wambatic.fetch.base
 import wambatic.fetch.cache
 import wambatic.reports.rows
@@ -19,7 +19,6 @@ import wambatic.reports.terminal
 import wambatic.stats.base
 
 METRICS = ('commits', 'contributors', 'active_days', 'lines_added', 'lines_deleted', 'lines_net')
-Granularity = wambatic.stats.base.Granularity
 
 
 def render(result: wambatic.stats.base.StatsResult, width: int = 120) -> str:
@@ -51,10 +50,13 @@ def period_rows(output: str) -> dict[str, dict[str, int]]:
 def recompute(
     fetcher: wambatic.fetch.base.Fetcher, **changes: object
 ) -> wambatic.stats.base.StatsResult:
-    fields: dict[str, object] = {'since': fixture.SINCE, 'until': fixture.UNTIL}
+    fields: dict[str, object] = {
+        'since': tests.fixtures.stats.SINCE,
+        'until': tests.fixtures.stats.UNTIL,
+    }
     fields.update(changes)
     request = wambatic.stats.base.StatsRequest(**fields)  # type: ignore[arg-type]
-    return tests.conftest.compute_stats(fetcher, fixture.ORG, request)
+    return tests.conftest.run_stats(fetcher, tests.fixtures.stats.ORG, request)
 
 
 def test_sparkline_known_cases() -> None:
@@ -67,7 +69,11 @@ def test_sparkline_known_cases() -> None:
 
 
 @hypothesis.settings(max_examples=20, deadline=10000)
-@hypothesis.given(st.lists(st.floats(min_value=-1e6, max_value=1e6), max_size=40))
+@hypothesis.given(
+    hypothesis.strategies.lists(
+        hypothesis.strategies.floats(min_value=-1e6, max_value=1e6), max_size=40
+    )
+)
 def test_sparkline_has_one_block_per_value(values: list[float]) -> None:
     line = wambatic.reports.terminal.sparkline(values)
     assert len(line) == len(values)
@@ -109,9 +115,9 @@ def test_the_period_table_and_total_row_equal_the_hand_checked_monthly_totals(
     org_result: wambatic.stats.base.StatsResult,
 ) -> None:
     rows = period_rows(render(org_result))
-    for label, expected in fixture.ORG_BY_MONTH_UTC.items():
+    for label, expected in tests.fixtures.stats.ORG_BY_MONTH_UTC.items():
         assert rows[label] == expected
-    assert rows['Total'] == fixture.ORG_TOTAL_UTC
+    assert rows['Total'] == tests.fixtures.stats.ORG_TOTAL_UTC
 
 
 def test_partial_periods_are_marked_and_the_caption_says_so(
@@ -159,7 +165,7 @@ def test_trends_show_one_line_per_metric_with_its_range(
 def test_narrow_trends_keep_the_latest_periods_and_fit_the_width(
     stats_fetcher: wambatic.fetch.base.Fetcher,
 ) -> None:
-    result = recompute(stats_fetcher, granularity=Granularity.DAY)
+    result = recompute(stats_fetcher, granularity=wambatic.stats.base.Granularity.DAY)
     lines = render(result, width=40).splitlines()
     trends = lines[lines.index('Trends') + 1 : lines.index('Trends') + 7]
     assert len(trends) == len(METRICS)
@@ -233,7 +239,7 @@ def test_the_repository_rows_add_up_to_the_total_row(
 ) -> None:
     output = render(org_result)
     rows = table_rows(output, 'By repository')
-    assert set(rows) == {fixture.ALPHA, fixture.BETA}
+    assert set(rows) == {tests.fixtures.stats.ALPHA, tests.fixtures.stats.BETA}
     total = period_rows(output)['Total']
     sums = [sum(column) for column in zip(*rows.values(), strict=True)]
     assert sums == [
@@ -288,14 +294,17 @@ def test_top_contributors_follow_the_table_order(
     org_result: wambatic.stats.base.StatsResult,
 ) -> None:
     rows = table_rows(render(org_result), 'Top contributors')
-    assert list(rows) == [row['login'] for row in fixture.ORG_TOP_CONTRIBUTORS]
+    assert list(rows) == [row['login'] for row in tests.fixtures.stats.ORG_TOP_CONTRIBUTORS]
     assert rows['hubot'] == [3, 35, 12, 23, 3]
 
 
 def test_at_most_twenty_top_contributors_are_shown_then_a_count_of_the_rest(
     org_result: wambatic.stats.base.StatsResult,
 ) -> None:
-    many = [{**fixture.ORG_TOP_CONTRIBUTORS[0], 'login': f'person{n:02d}'} for n in range(25)]
+    many = [
+        {**tests.fixtures.stats.ORG_TOP_CONTRIBUTORS[0], 'login': f'person{n:02d}'}
+        for n in range(25)
+    ]
     output = render(
         dataclasses.replace(org_result, tables={**org_result.tables, 'top_contributors': many})
     )
@@ -308,7 +317,10 @@ def test_at_most_twenty_top_contributors_are_shown_then_a_count_of_the_rest(
 def test_exactly_twenty_top_contributors_have_no_more_line(
     org_result: wambatic.stats.base.StatsResult,
 ) -> None:
-    twenty = [{**fixture.ORG_TOP_CONTRIBUTORS[0], 'login': f'person{n:02d}'} for n in range(20)]
+    twenty = [
+        {**tests.fixtures.stats.ORG_TOP_CONTRIBUTORS[0], 'login': f'person{n:02d}'}
+        for n in range(20)
+    ]
     output = render(
         dataclasses.replace(org_result, tables={**org_result.tables, 'top_contributors': twenty})
     )
@@ -336,7 +348,7 @@ def test_unavailable_lists_each_row_with_its_reason(
 def test_hidden_stargazers_are_listed_as_unavailable_with_the_star_count_still_shown(
     stats_fetcher: wambatic.fetch.base.Fetcher, stats_cache: wambatic.fetch.cache.Cache
 ) -> None:
-    alpha = fixture.REPOS[0]
+    alpha = tests.fixtures.stats.REPOS[0]
     state = stats_cache.sync_state(alpha.name_with_owner, 'star_events')
     assert state is not None
     stats_cache.write_state(
@@ -349,12 +361,6 @@ def test_hidden_stargazers_are_listed_as_unavailable_with_the_star_count_still_s
 
 
 # Flow tables
-
-
-def flow_only_result(
-    fetcher: wambatic.fetch.base.Fetcher, **changes: object
-) -> wambatic.stats.base.StatsResult:
-    return recompute(fetcher, groups=frozenset({'flow'}), **changes)
 
 
 def table_lines(output: str, title: str) -> list[str]:
@@ -374,7 +380,7 @@ def table_lines(output: str, title: str) -> list[str]:
 def test_a_flow_only_result_prints_the_flow_tables_and_trends_but_no_activity_tables(
     stats_fetcher: wambatic.fetch.base.Fetcher,
 ) -> None:
-    output = render(flow_only_result(stats_fetcher))
+    output = render(recompute(stats_fetcher, groups=frozenset({'flow'})))
     for title in ('Flow by period', 'Flow times by period', 'Trends'):
         assert title in [line.rstrip() for line in output.splitlines()], title
     for title in ('Activity by period', 'By repository', 'By author', 'Top contributors'):
@@ -433,7 +439,7 @@ def test_a_single_bucket_has_no_total_row_in_flow_by_period(
 def test_a_partial_bucket_is_marked_in_both_flow_tables_and_the_caption_says_so(
     stats_fetcher: wambatic.fetch.base.Fetcher,
 ) -> None:
-    result = flow_only_result(stats_fetcher, since=datetime.date(2026, 10, 15))
+    result = recompute(stats_fetcher, groups=frozenset({'flow'}), since=datetime.date(2026, 10, 15))
     output = render(result)
     for title in ('Flow by period', 'Flow times by period'):
         assert any(line.split()[:2] == ['2026-10', '*'] for line in table_lines(output, title))
@@ -443,7 +449,7 @@ def test_a_partial_bucket_is_marked_in_both_flow_tables_and_the_caption_says_so(
 def test_the_flow_trend_lines_fit_at_width_40(
     stats_fetcher: wambatic.fetch.base.Fetcher,
 ) -> None:
-    output = render(flow_only_result(stats_fetcher), width=40)
+    output = render(recompute(stats_fetcher, groups=frozenset({'flow'})), width=40)
     trend = output.split('Trends')[1].split('\n\n')[0].strip().splitlines()
     assert len(trend) == 4
     assert all(len(line) <= 40 for line in trend)

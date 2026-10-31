@@ -6,13 +6,13 @@ import typing
 import playwright.sync_api
 import pytest
 
+import tests.reports.conftest
 import wambatic.reports.figures
 import wambatic.reports.html
 import wambatic.stats.base
 
 pytestmark = pytest.mark.browser
 
-Granularity = wambatic.stats.base.Granularity
 FIRST_CHART = 'activity-commits'
 DARK_SURFACE = wambatic.reports.figures.PALETTE['dark'].surface
 LIGHT_SURFACE = wambatic.reports.figures.PALETTE['light'].surface
@@ -30,7 +30,7 @@ def open_report(
     org_report: wambatic.reports.html.HtmlReport,
     tmp_path: pathlib.Path,
     chromium: playwright.sync_api.Browser,
-) -> collections.abc.Iterator[typing.Callable[..., Opened]]:
+) -> collections.abc.Iterator[collections.abc.Callable[..., Opened]]:
     contexts: list[playwright.sync_api.BrowserContext] = []
 
     def open_page(
@@ -42,19 +42,9 @@ def open_report(
         context = chromium.new_context(color_scheme=scheme)
         contexts.append(context)
         page = context.new_page()
-        requests: list[str] = []
-        problems: list[str] = []
-
-        def route(route: playwright.sync_api.Route) -> None:
-            if route.request.url == out.as_uri():
-                route.continue_()
-            else:
-                requests.append(route.request.url)
-                route.abort()
-
-        page.route('**/*', route)
-        page.on('console', lambda m: problems.append(m.text) if m.type == 'error' else None)
-        page.on('pageerror', lambda e: problems.append(str(e)))
+        requests, problems = tests.reports.conftest.watch_page(
+            page, lambda url: url == out.as_uri()
+        )
         page.goto(out.as_uri())
         page.wait_for_selector(f'#{FIRST_CHART} .main-svg')
         return Opened(page, requests, problems)
@@ -70,14 +60,16 @@ def keys(report: wambatic.reports.html.HtmlReport) -> list[str]:
         for result in report.periods.values()
         for figure in wambatic.reports.figures.build_figures(result)
     ]
-    calendar = wambatic.reports.figures.build_calendar(report.periods[Granularity.DAY])
+    calendar = wambatic.reports.figures.build_calendar(
+        report.periods[wambatic.stats.base.Granularity.DAY]
+    )
     assert calendar is not None
     figures += wambatic.reports.figures.build_range_figures(report.total) + [calendar]
     return sorted({figure.key for figure in figures})
 
 
 def test_the_file_opens_offline_without_errors_and_every_chart_is_drawn(
-    open_report: typing.Callable[..., Opened], org_report: wambatic.reports.html.HtmlReport
+    open_report: collections.abc.Callable[..., Opened], org_report: wambatic.reports.html.HtmlReport
 ) -> None:
     opened = open_report()
     expected = keys(org_report)
@@ -90,7 +82,7 @@ def test_the_file_opens_offline_without_errors_and_every_chart_is_drawn(
 
 def test_a_delivery_report_draws_every_chart_with_no_request_or_error(
     delivery_report: wambatic.reports.html.HtmlReport,
-    open_report: typing.Callable[..., Opened],
+    open_report: collections.abc.Callable[..., Opened],
 ) -> None:
     opened = open_report(report=delivery_report)
     expected = keys(delivery_report)
@@ -106,7 +98,7 @@ def test_a_delivery_report_draws_every_chart_with_no_request_or_error(
 
 def test_a_popularity_report_draws_every_chart_with_no_request_or_error(
     popularity_report: wambatic.reports.html.HtmlReport,
-    open_report: typing.Callable[..., Opened],
+    open_report: collections.abc.Callable[..., Opened],
 ) -> None:
     opened = open_report(report=popularity_report)
     expected = keys(popularity_report)
@@ -129,7 +121,7 @@ def visible_tables(page: playwright.sync_api.Page) -> set[str]:
 
 
 def test_each_granularity_shows_its_own_buckets_and_tables(
-    open_report: typing.Callable[..., Opened], org_report: wambatic.reports.html.HtmlReport
+    open_report: collections.abc.Callable[..., Opened], org_report: wambatic.reports.html.HtmlReport
 ) -> None:
     opened = open_report()
     page = opened.page
@@ -154,7 +146,7 @@ def surface(page: playwright.sync_api.Page) -> str:
 
 
 def test_auto_follows_the_system_scheme_and_a_change_of_it(
-    open_report: typing.Callable[..., Opened],
+    open_report: collections.abc.Callable[..., Opened],
 ) -> None:
     dark = open_report('auto', 'dark')
     assert surface(dark.page) == DARK_SURFACE
@@ -168,7 +160,7 @@ def test_auto_follows_the_system_scheme_and_a_change_of_it(
 
 
 def test_a_fixed_theme_ignores_the_system_scheme(
-    open_report: typing.Callable[..., Opened],
+    open_report: collections.abc.Callable[..., Opened],
 ) -> None:
     opened = open_report('light', 'dark')
     assert surface(opened.page) == LIGHT_SURFACE
@@ -180,7 +172,7 @@ def test_a_fixed_theme_ignores_the_system_scheme(
 
 
 def test_the_series_take_the_themes_colours(
-    open_report: typing.Callable[..., Opened],
+    open_report: collections.abc.Callable[..., Opened],
 ) -> None:
     opened = open_report('auto', 'dark')
     colour: str = opened.page.evaluate(

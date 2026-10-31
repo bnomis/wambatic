@@ -1,4 +1,5 @@
 import asyncio
+import collections.abc
 import dataclasses
 import datetime
 import errno
@@ -23,6 +24,7 @@ import rich.console
 import uvicorn
 
 import tests.conftest
+import tests.fixtures.fetch.recorded
 import tests.fixtures.fetch.responses
 import tests.fixtures.fetch.server
 import tests.fixtures.fetch.upstream
@@ -41,9 +43,6 @@ import wambatic.stats.base
 import wambatic.stats.engine
 import wambatic.stats.errors
 
-Subject = wambatic.fetch.base.Subject
-UsageError = wambatic.reports.errors.UsageError
-SettingsError = wambatic.settings.SettingsError
 COMMITS = frozenset({'commits'})
 BUILT = frozenset({'commits', 'issues', 'pull_requests'})
 DELIVERY_RESOURCES = frozenset({'pull_requests', 'releases', 'workflow_runs'})
@@ -74,7 +73,7 @@ def test_the_overrides_reach_the_settings() -> None:
 
 
 def test_a_malformed_max_age_is_a_settings_error_naming_the_setting() -> None:
-    with pytest.raises(SettingsError, match='fetch.max_age'):
+    with pytest.raises(wambatic.settings.SettingsError, match='fetch.max_age'):
         settings_for(report(max_age='1x'))
 
 
@@ -131,7 +130,7 @@ def test_an_unknown_group_is_passed_through_for_compute_to_reject() -> None:
 def test_no_group_at_all_is_a_usage_error() -> None:
     flags = report(groups=' , ')
     settings = settings_for(flags)
-    with pytest.raises(UsageError, match='--groups'):
+    with pytest.raises(wambatic.reports.errors.UsageError, match='--groups'):
         wambatic.cli.build_request(
             flags,
             settings,
@@ -143,7 +142,7 @@ def test_no_group_at_all_is_a_usage_error() -> None:
 def test_a_bad_date_flag_is_a_usage_error(since: str | None, until: str | None) -> None:
     flags = report(since=since, until=until)
     settings = settings_for(flags)
-    with pytest.raises(UsageError, match='YYYY-MM-DD'):
+    with pytest.raises(wambatic.reports.errors.UsageError, match='YYYY-MM-DD'):
         wambatic.cli.build_request(
             flags,
             settings,
@@ -153,7 +152,7 @@ def test_a_bad_date_flag_is_a_usage_error(since: str | None, until: str | None) 
 
 def test_full_refresh_with_no_fetch_is_a_usage_error() -> None:
     flags = report(full_refresh=True, no_fetch=True)
-    with pytest.raises(UsageError, match='--full-refresh and --no-fetch'):
+    with pytest.raises(wambatic.reports.errors.UsageError, match='--full-refresh and --no-fetch'):
         wambatic.cli.check_report(flags, settings_for(flags))
 
 
@@ -169,7 +168,7 @@ def test_the_html_format_passes_the_checks_from_a_flag_or_the_config() -> None:
 
 def test_out_is_a_usage_error_unless_the_effective_format_is_html() -> None:
     for flags in (report(out='x.html'), report(out='x.html', format='json')):
-        with pytest.raises(UsageError, match='--out is for --format html'):
+        with pytest.raises(wambatic.reports.errors.UsageError, match='--out is for --format html'):
             wambatic.cli.check_report(flags, settings_for(flags))
     html_flags = report(out='x.html', format='html')
     wambatic.cli.check_report(html_flags, settings_for(html_flags))
@@ -182,20 +181,20 @@ def test_out_is_a_usage_error_unless_the_effective_format_is_html() -> None:
 
 def test_by_total_is_a_usage_error_with_html() -> None:
     flags = report(format='html', by='total')
-    with pytest.raises(UsageError, match='--by total'):
+    with pytest.raises(wambatic.reports.errors.UsageError, match='--by total'):
         wambatic.cli.check_report(flags, settings_for(flags))
     wambatic.cli.check_report(report(format='json', by='total'), settings_for(report()))
 
 
 def test_a_bare_name_with_no_fetch_asks_for_a_prefix() -> None:
     flags = wambatic.cli.Report(target='octocat', no_fetch=True)
-    with pytest.raises(UsageError, match='user:NAME or org:NAME'):
+    with pytest.raises(wambatic.reports.errors.UsageError, match='user:NAME or org:NAME'):
         wambatic.cli.check_report(flags, settings_for(flags))
 
 
 def test_by_author_with_an_explicit_user_is_a_usage_error() -> None:
     flags = wambatic.cli.Report(target='user:octocat', by_author=True)
-    with pytest.raises(UsageError, match='--by-author'):
+    with pytest.raises(wambatic.reports.errors.UsageError, match='--by-author'):
         wambatic.cli.check_report(flags, settings_for(flags))
 
 
@@ -219,7 +218,7 @@ def test_verbose_and_quiet_together_are_a_usage_error() -> None:
     command = wambatic.cli.CacheCommand(action='info')
     wambatic.cli.check_verbosity(wambatic.cli.Wambatic(command, verbose=True))
     wambatic.cli.check_verbosity(wambatic.cli.Wambatic(command, quiet=True))
-    with pytest.raises(UsageError, match='-v and -q'):
+    with pytest.raises(wambatic.reports.errors.UsageError, match='-v and -q'):
         wambatic.cli.check_verbosity(wambatic.cli.Wambatic(command, verbose=True, quiet=True))
 
 
@@ -286,7 +285,6 @@ def test_cappa_rejects_what_it_cannot_parse_with_exit_status_2(argv: list[str]) 
     assert caught.value.code == 2
 
 
-UTC = datetime.UTC
 SYNCED = tests.fixtures.stats.ALPHA_SYNCED_AT
 ALPHA_FLAGS = ['--since', '2026-10-01', '--until', '2027-01-31']
 
@@ -447,7 +445,7 @@ def test_a_cache_older_than_max_age_syncs_through_the_server(
         clock=SYNCED + datetime.timedelta(days=31),
         upstream=upstream,
     )
-    assert ran.syncs == [(Subject('repo', 'octo-org', 'alpha'), BUILT, False)]
+    assert ran.syncs == [(wambatic.fetch.base.Subject('repo', 'octo-org', 'alpha'), BUILT, False)]
     assert ran.paths == ['/graphql']
     assert 'Activity by period' in ran.console
 
@@ -505,7 +503,7 @@ def test_full_refresh_syncs_a_fresh_cache_and_reads_the_history_again(
         ['repo:octo-org/alpha', '--max-age', '30d', '--full-refresh', *ALPHA_FLAGS],
         upstream=upstream,
     )
-    assert ran.syncs == [(Subject('repo', 'octo-org', 'alpha'), BUILT, True)]
+    assert ran.syncs == [(wambatic.fetch.base.Subject('repo', 'octo-org', 'alpha'), BUILT, True)]
     assert ran.queries == ['repository', 'history', 'issues', 'pull_requests']
     assert 'Activity by period' in ran.console
 
@@ -528,7 +526,7 @@ def test_the_default_groups_sync_commits_issues_and_pull_requests_and_list_nothi
         ['repo:octo-org/alpha', *ALPHA_FLAGS],
         upstream=upstream,
     )
-    assert ran.syncs == [(Subject('repo', 'octo-org', 'alpha'), BUILT, False)]
+    assert ran.syncs == [(wambatic.fetch.base.Subject('repo', 'octo-org', 'alpha'), BUILT, False)]
     assert ran.queries == ['repository', 'issues', 'pull_requests']
     assert wambatic.stats.base.StatsRequest().groups == frozenset({'activity', 'flow'})
     assert 'Unavailable' not in ran.console
@@ -559,7 +557,7 @@ def test_a_bare_name_is_resolved_through_the_users_endpoint(
     monkeypatch.setenv('GITHUB_TOKEN', 'test-token')
     routes = {
         ('GET', '/users/octocat'): [
-            tests.fixtures.fetch.server.Canned(200, tests.fixtures.fetch.responses.USER_OK)
+            tests.fixtures.fetch.server.Canned(200, tests.fixtures.fetch.recorded.USER_OK)
         ]
     }
     ran = run_report(
@@ -570,7 +568,7 @@ def test_a_bare_name_is_resolved_through_the_users_endpoint(
         routes=routes,
     )
     assert ran.paths[0] == '/users/octocat'
-    assert ran.syncs == [(Subject('user', 'octocat'), BUILT, False)]
+    assert ran.syncs == [(wambatic.fetch.base.Subject('user', 'octocat'), BUILT, False)]
     assert ran.console.startswith('user octocat, 2026-10-01 to 2027-01-31, total, UTC')
 
 
@@ -603,10 +601,10 @@ def test_by_author_with_a_name_that_resolves_to_a_user_is_a_usage_error(
     monkeypatch.setenv('GITHUB_TOKEN', 'test-token')
     routes = {
         ('GET', '/users/octocat'): [
-            tests.fixtures.fetch.server.Canned(200, tests.fixtures.fetch.responses.USER_OK)
+            tests.fixtures.fetch.server.Canned(200, tests.fixtures.fetch.recorded.USER_OK)
         ]
     }
-    with pytest.raises(UsageError, match='--by-author'):
+    with pytest.raises(wambatic.reports.errors.UsageError, match='--by-author'):
         run_report(
             monkeypatch,
             make_client,
@@ -622,7 +620,7 @@ def test_by_author_with_an_explicit_user_is_rejected_before_the_cache_is_opened(
     tmp_path: pathlib.Path,
 ) -> None:
     path = tmp_path / 'never' / 'cache.sqlite3'
-    with pytest.raises(UsageError, match='--by-author'):
+    with pytest.raises(wambatic.reports.errors.UsageError, match='--by-author'):
         run_report(
             monkeypatch,
             make_client,
@@ -853,14 +851,14 @@ def config_for(
     monkeypatch.setenv('WAMBATIC_CONFIG', str(config))
 
 
-def raising(error: BaseException) -> typing.Callable[..., typing.Awaitable[None]]:
+def raising(error: BaseException) -> collections.abc.Callable[..., collections.abc.Awaitable[None]]:
     async def run(*args: object, **kwargs: object) -> None:
         raise error
 
     return run
 
 
-RESET = datetime.datetime(2027, 3, 1, 13, 0, tzinfo=UTC)
+RESET = datetime.datetime(2027, 3, 1, 13, 0, tzinfo=datetime.UTC)
 ERROR_STATUSES = [
     (wambatic.fetch.errors.AuthError('No GitHub token found: set GITHUB_TOKEN'), 1),
     (
@@ -877,8 +875,8 @@ ERROR_STATUSES = [
     (wambatic.stats.errors.InvalidRangeError('since is after until'), 1),
     (wambatic.stats.errors.InvalidRequestError('by_author is not meaningful for a user'), 1),
     (wambatic.stats.errors.UnknownGroupError('unknown groups: bogus'), 1),
-    (UsageError('flags clash'), 2),
-    (SettingsError('fetch.max_age is wrong'), 2),
+    (wambatic.reports.errors.UsageError('flags clash'), 2),
+    (wambatic.settings.SettingsError('fetch.max_age is wrong'), 2),
 ]
 
 
@@ -1368,7 +1366,7 @@ DELIVERY_FLAGS = ['--groups', 'delivery', '--since', '2026-10-01', '--until', '2
 
 def delivery_upstream() -> tests.fixtures.fetch.upstream.Upstream:
     """A fake GitHub with one repository that has a merged pull request, a release and runs."""
-    at = datetime.datetime(2026, 10, 5, 10, 0, tzinfo=UTC)
+    at = datetime.datetime(2026, 10, 5, 10, 0, tzinfo=datetime.UTC)
     repo = tests.fixtures.fetch.upstream.FakeRepo(
         'octo-org/alpha',
         [tests.fixtures.fetch.upstream.FakeCommit('c0ffee', at)],
@@ -1430,7 +1428,7 @@ def run_delivery_report(
             make_client,
             cache_path,
             ['repo:octo-org/alpha', *DELIVERY_FLAGS, *argv],
-            clock=datetime.datetime(2026, 11, 1, tzinfo=UTC),
+            clock=datetime.datetime(2026, 11, 1, tzinfo=datetime.UTC),
             upstream=upstream,
             online=online,
         )
@@ -1447,7 +1445,9 @@ def test_a_delivery_report_syncs_the_three_resources_logs_their_rows_and_prints_
     ran, messages = run_delivery_report(
         monkeypatch, make_client, tmp_path / 'cache.sqlite3', delivery_upstream()
     )
-    assert ran.syncs == [(Subject('repo', 'octo-org', 'alpha'), DELIVERY_RESOURCES, False)]
+    assert ran.syncs == [
+        (wambatic.fetch.base.Subject('repo', 'octo-org', 'alpha'), DELIVERY_RESOURCES, False)
+    ]
     (message,) = [m for m in messages if m.startswith('Synced')]
     assert 'pull_requests 1' in message
     assert 'releases 1' in message
@@ -1546,7 +1546,7 @@ def serve_main(
     argv: list[str],
     *,
     cache: pathlib.Path | None = None,
-    run: typing.Callable[[uvicorn.Server], None] | None = None,
+    run: collections.abc.Callable[[uvicorn.Server], None] | None = None,
     bind_error: OSError | None = None,
 ) -> Served:
     config_for(tmp_path, monkeypatch, cache or tmp_path / 'serve' / 'cache.sqlite3')
@@ -1747,7 +1747,9 @@ def test_a_popularity_report_syncs_stars_and_forks_logs_their_rows_and_prints_th
         )
     finally:
         loguru.logger.remove(sink)
-    assert ran.syncs == [(Subject('repo', 'octo-org', 'alpha'), POPULARITY_RESOURCES, False)]
+    assert ran.syncs == [
+        (wambatic.fetch.base.Subject('repo', 'octo-org', 'alpha'), POPULARITY_RESOURCES, False)
+    ]
     assert ran.queries == ['repository', 'stargazers']
     assert any('forks 3, star_events 5' in message for message in messages)
     assert 'Popularity by period' in ran.console

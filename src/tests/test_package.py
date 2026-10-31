@@ -59,9 +59,5 @@ def test_the_command_line_entry_points_are_callable() -> None:
     assert callable(wambatic.cli.run)
 
 
-def test_the_built_resources_include_every_resource() -> None:
-    assert wambatic.fetch.base.BUILT_RESOURCES == wambatic.fetch.base.RESOURCES
-
-
 def test_popularity_is_a_group() -> None:
     assert 'popularity' in wambatic.stats.base.GROUPS

@@ -101,7 +101,7 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 ## Task 3: Bring the spec text in line with the code
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** small
 **Source Reference:** G15 (Doc4)
@@ -110,21 +110,21 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 **Subtasks:**
 
-- [ ] `fetch-and-cache/spec.md:409-410`: exhausted retries raise `FetchError` (with the cause chained) for connection errors, timeouts and 500/502/503/504; any other non-2xx raises `FetchError` naming the status; other `aiohttp.ClientError`s become `FetchError`; add the non-JSON 200 of Task 2
-- [ ] `system/spec.md:48`: `cli` opens the `Cache`; `reports/service.py` builds the `Fetcher`, syncs and calls `compute_all`
-- [ ] `system/spec.md:88`: the runtime libraries are declared (drop "proposals pending a maintenance check")
-- [ ] `stats/spec.md:19-28`: add `percentile.py` to the module table; `:215`: the workflow file name strips a trailing `@ref` first; `:257`, `:261`: write the defaults as tuples
-- [ ] `reports/spec.md:221`: `inspect_cache`, not `Cache.inspect`; `:234` and `:315`: `OutputError` for `--out` and `ServeError` for binding, exit 1 through `ReportsError`; `:200-201`: the 2008-01-01 floor, the tomorrow ceiling and the empty `--groups` refusal; `:27`: `redact_error` in the `service.py` row
-- [ ] Bump each changed spec's minor version, citing review-2 G15
+- [x] `fetch-and-cache/spec.md:409-410`: exhausted retries raise `FetchError` (with the cause chained) for connection errors, timeouts and 500/502/503/504; any other non-2xx raises `FetchError` naming the status; other `aiohttp.ClientError`s become `FetchError`; add the non-JSON 200 of Task 2
+- [x] `system/spec.md:48`: `cli` opens the `Cache`; `reports/service.py` builds the `Fetcher`, syncs and calls `compute_all`
+- [x] `system/spec.md:88`: the runtime libraries are declared (drop "proposals pending a maintenance check")
+- [x] `stats/spec.md:19-28`: add `percentile.py` to the module table; `:215`: the workflow file name strips a trailing `@ref` first; `:257`, `:261`: write the defaults as tuples
+- [x] `reports/spec.md:221`: `inspect_cache`, not `Cache.inspect`; `:234` and `:315`: `OutputError` for `--out` and `ServeError` for binding, exit 1 through `ReportsError`; `:200-201`: the 2008-01-01 floor, the tomorrow ceiling and the empty `--groups` refusal; `:27`: `redact_error` in the `service.py` row
+- [x] Bump each changed spec's minor version, citing review-2 G15
 
 **Acceptance Criteria:**
 
-- [ ] Each Doc4 row of review-2 is fixed, checked one by one against the code
+- [x] Each Doc4 row of review-2 is fixed, checked one by one against the code
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
 
 **Notes:**
 

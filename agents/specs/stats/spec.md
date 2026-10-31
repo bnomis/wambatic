@@ -1,6 +1,6 @@
 # Stats
 
-**Version:** 1.8
+**Version:** 1.9
 **Status:** implemented
 **Date:** 2026-10-31
 
@@ -10,7 +10,7 @@ Turns the raw records from [Fetch and cache](../fetch-and-cache/spec.md) into st
 
 Version 1.1 settles what step 4 of the [implementation order](../implementation-order.md) needed; the gaps and the choices made are in [review-1.md](review-1.md). Version 1.2 settles what step 6 needed for the `flow` group: what each flow metric counts and its series names, how the range and an empty result are found when several groups are read, and the user-subject rule for pull requests and issues; the choices are in [review-2.md](review-2.md). Version 1.3 settles what step 8 needed for the `delivery` group: what each delivery metric and DORA proxy counts, its series names and units, when a proxy counts as configured, and which resources the group reads; stars, forks, watchers and languages move to step 10. The choices are in [review-3.md](review-3.md). Version 1.4 settles what step 10 needed: stars, forks, watchers and languages leave `activity` for a `popularity` group of their own, asked for with `--groups`, with what each metric and table counts and which resources the group reads; the choices are in [review-4.md](review-4.md). Version 1.5 settles what `popularity` does for a repository whose stargazers the token could not see (fetch spec 1.9): its stars are left out of the star series and the report says so. Version 1.6 splits `compute` into a cache read (`read_records`) and a pure aggregation (`aggregate`), and adds `compute_all`, which reads the cache once for several requests that differ only in granularity, so an HTML report reads each record once rather than five times; the choice is Decision 3 (option B) of the [audit review 1](../../audit-reviews/review-1.md), answered 2026-10-31.
 
-Version 1.8 corrects the text to the code after [audit review 1](../../audit-reviews/review-1.md) (F9): `EmptySubjectError` for no requested group, delivery's pull-request read, the contents of `tables['unavailable']`, the failure window measured to the end of the range (chosen 2026-10-31) and the list settings typed as tuples. Version 1.7 makes every error `wambatic.stats` raises itself a `StatsError`: `bucket_for` and `bucket_start` raise `InvalidRequestError` for `Granularity.TOTAL` or a naive datetime, and `bucket_range` and `locate` raise `InvalidRangeError`, where they raised `ValueError`; the choice is [audit review 1](../../audit-reviews/review-1.md), Decision 2 (option B), answered 2026-10-31.
+Version 1.8 corrects the text to the code after [audit review 1](../../audit-reviews/review-1.md) (F9): `EmptySubjectError` for no requested group, delivery's pull-request read, the contents of `tables['unavailable']`, the failure window measured to the end of the range (chosen 2026-10-31) and the list settings typed as tuples. Version 1.9 corrects the text to the code after [audit review 2](../../audit-reviews/review-2.md) (G15): `percentile.py` in the module table, the `@ref` strip in the workflow file name, and the tuple defaults. Version 1.7 makes every error `wambatic.stats` raises itself a `StatsError`: `bucket_for` and `bucket_start` raise `InvalidRequestError` for `Granularity.TOTAL` or a naive datetime, and `bucket_range` and `locate` raise `InvalidRangeError`, where they raised `ValueError`; the choice is [audit review 1](../../audit-reviews/review-1.md), Decision 2 (option B), answered 2026-10-31.
 
 ## Module location
 
@@ -26,6 +26,7 @@ Version 1.8 corrects the text to the code after [audit review 1](../../audit-rev
 | `flow.py` | the pure `flow` aggregation | 6 |
 | `delivery.py` | the pure `delivery` aggregation | 8 |
 | `popularity.py` | the pure `popularity` aggregation | 10 |
+| `percentile.py` | `p90`, `summary`, `hours`, `minutes`, used by `flow` and `delivery` | 6 |
 
 `compute` lives in its own module, `engine.py`, rather than `compute.py`, because a package attribute `compute` would hide a submodule of that name, and because it imports every group's aggregation, and each aggregation imports the records in `base.py`.
 
@@ -212,7 +213,7 @@ Built in step 8; total series only. Percentiles are computed as in `flow` (`stat
   - `release_count` (unit `count`).
   - `release_interval_p50` (unit `days`): `statistics.median_low` of the whole days (`(later - earlier).days`) between each release and the previous release of the same repository by `published_at`, bucketed by the later one, so the value is one real interval and an integer, as the JSON output requires of `days`. A repository's first release has no interval.
 - **DORA proxies**, following the [four keys](https://dora.dev/guides/dora-metrics-four-keys/). They lean on conventions GitHub does not enforce, so each is emitted only when its inputs exist and is otherwise a row in `tables['unavailable']` naming what is missing:
-  - *Deployments.* With `stats.deploy_workflow` set, a deployment is a completed run with `conclusion` `success` whose workflow file name (`workflow_path` after its last `/`, such as `deploy.yml`) or `name` equals the setting, at its `updated_at` (when it finished). Without the setting, a deployment is a release that is not a prerelease, at its `published_at`. Deployments are per repository.
+  - *Deployments.* With `stats.deploy_workflow` set, a deployment is a completed run with `conclusion` `success` whose workflow file name (`workflow_path` with any trailing `@ref` removed, then taken after its last `/`, such as `deploy.yml`) or `name` equals the setting, at its `updated_at` (when it finished). Without the setting, a deployment is a release that is not a prerelease, at its `published_at`. Deployments are per repository.
   - `deployments` (unit `count`): deployments in the bucket. Emitted when the subject has at least one deployment in the cache (at any time); otherwise unavailable with `no releases in the cache and stats.deploy_workflow is not set`, or `no successful run of the workflow named by stats.deploy_workflow`.
   - `lead_time_p50` and `lead_time_p90` (unit `hours`): for each merged pull request, from its `first_commit_at` (its `created_at` when that is `None`) to the first deployment of the same repository at or after its `merged_at`, bucketed by that deployment's local date. A pull request with no deployment after its merge yet is not counted. Emitted with `deployments`, under the same condition.
   - `change_failure_rate` (unit `ratio`): of the bucket's deployments, the share followed by a hotfix pull request of the same repository whose `created_at` is after the deployment and no later than `stats.failure_window` after it. A hotfix pull request is one with a label in `stats.hotfix_labels`, compared case-insensitively. Emitted when `deployments` is and the subject has at least one hotfix pull request in the cache; otherwise unavailable, naming whichever is missing. A deployment within `stats.failure_window` of the end of the range (`until`, not the current time) is counted as not failed, since its window is still open; measuring against the end of the range means a report of a closed range never changes when it is run again.
@@ -254,11 +255,11 @@ Every result records what produced it, so a saved report can be traced and a mis
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `stats.bot_logins` | `tuple[str, ...]` | `['dependabot[bot]', 'renovate[bot]']` | Authors excluded from contributor counts and the top-contributors table |
+| `stats.bot_logins` | `tuple[str, ...]` | `('dependabot[bot]', 'renovate[bot]')` | Authors excluded from contributor counts and the top-contributors table |
 | `stats.deploy_workflow` | `str \| None` | `None` | Workflow counted as a deployment, matched against a run's workflow file name (`deploy.yml`) or its name; unset, non-prerelease releases are the deployments |
 | `stats.exclude_merge_commits` | `bool` | `True` | Skip merge commits in line counts |
 | `stats.failure_window` | `timedelta` | `7 days` | How long after a deployment a hotfix pull request marks it as failed |
-| `stats.hotfix_labels` | `tuple[str, ...]` | `['hotfix']` | Pull request labels marking a failure fix, compared case-insensitively |
+| `stats.hotfix_labels` | `tuple[str, ...]` | `('hotfix',)` | Pull request labels marking a failure fix, compared case-insensitively |
 | `stats.timezone` | `str` | `'UTC'` | IANA zone the CLI uses for `StatsRequest.tz` when `--tz` is absent |
 
 `compute` takes the settings from `StatsRequest.settings`, so a result records the settings it was computed with.

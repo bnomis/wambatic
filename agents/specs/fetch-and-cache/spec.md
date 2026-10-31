@@ -1,6 +1,6 @@
 # Fetch and cache
 
-**Version:** 1.13
+**Version:** 1.14
 **Status:** implemented
 **Date:** 2026-10-31
 
@@ -40,7 +40,7 @@ Version 1.10 records a change to the Testing paragraph that was made after 1.8 w
 
 Version 1.11 stops sending GraphQL global node ids. The REST compare returns each commit's `node_id` in the legacy format for a repository created before late 2021, and `nodes(ids:)` then answers with a `DEPRECATION` warning for every commit. The line counts of compare commits are now read by object id with `commit_counts(n)`, one aliased `object(oid:)` field per commit, and the compare's `node_id` is no longer parsed or kept. `COMMIT_NODES` becomes `COMMIT_COUNTS`, so a cache written before 1.11 is refused once, like any changed query. `SCHEMA_VERSION` does not change.
 
-Version 1.13 corrects the text to the code after [audit review 1](../../audit-reviews/review-1.md) (F9): the `GitHubClient` `clock` default, the `sync_state` column list, the `AuthError` messages, the hidden-stargazers rule (a `FORBIDDEN` on any page, chosen 2026-10-31) and the Testing paragraph's account of the recordings. Version 1.13 also lists `CacheError`. Version 1.12 adds `InvalidRequestError(FetchError)` for a caller mistake (an unknown resource, a malformed `Subject`, records of another repository, a naive time), which the fetch layer raised as `ValueError`, and raises `FetchError` for a `GitHubClient` used outside `async with`, which it raised as `RuntimeError`; the choice is [audit review 1](../../audit-reviews/review-1.md), Decision 2 (option B), answered 2026-10-31.
+Version 1.13 corrects the text to the code after [audit review 1](../../audit-reviews/review-1.md) (F9): the `GitHubClient` `clock` default, the `sync_state` column list, the `AuthError` messages, the hidden-stargazers rule (a `FORBIDDEN` on any page, chosen 2026-10-31) and the Testing paragraph's account of the recordings. Version 1.13 also lists `CacheError`. Version 1.14 corrects the Errors text to the code after [audit review 2](../../audit-reviews/review-2.md) (G15): exhausted retries, other non-2xx statuses and other `aiohttp.ClientError`s raise `FetchError`, as does a non-JSON 2xx body. Version 1.12 adds `InvalidRequestError(FetchError)` for a caller mistake (an unknown resource, a malformed `Subject`, records of another repository, a naive time), which the fetch layer raised as `ValueError`, and raises `FetchError` for a `GitHubClient` used outside `async with`, which it raised as `RuntimeError`; the choice is [audit review 1](../../audit-reviews/review-1.md), Decision 2 (option B), answered 2026-10-31.
 
 ## API
 
@@ -406,8 +406,9 @@ class GitHubClient:
 - `NotFoundError`: user, org or repo does not exist or is not visible to the token: REST 404, or a GraphQL error of type `NOT_FOUND`.
 - `CacheVersionError`: the cache was written under a different schema or query version (see Cache). It names both versions and tells the user to run `wambatic cache clear` or pass `--ignore-cache-version`. It never warns and carries on, per the shared versions rule.
 - REST `stats/*` returning 202 (still computing) is retried with backoff up to `fetch.stats_retries`, then raised as `StatsPendingError`.
-- Transient failures (HTTP 500, 502, 503 and 504, `aiohttp.ClientConnectionError` and `TimeoutError`) are retried up to `fetch.max_retries` with the same backoff; when the retries run out the last exception propagates unchanged.
-- Any other non-2xx status propagates as `aiohttp.ClientResponseError`.
+- Transient failures (HTTP 500, 502, 503 and 504, `aiohttp.ClientConnectionError` and `TimeoutError`) are retried up to `fetch.max_retries` with the same backoff; when the retries run out `FetchError` is raised, with the last exception chained as its cause.
+- Any other non-2xx status raises `FetchError` naming the status. Any other `aiohttp.ClientError` becomes a `FetchError` too.
+- A 2xx response whose body is not JSON raises `FetchError` naming the endpoint, chained from the `ValueError`.
 - Unexpected exceptions propagate; only the above are caught.
 
 ## Implementation

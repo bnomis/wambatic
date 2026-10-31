@@ -1,8 +1,8 @@
 # System
 
-**Version:** 1.8
+**Version:** 1.9
 **Status:** implemented
-**Date:** 2026-10-30
+**Date:** 2026-10-31
 
 wambatic reports statistics from github.com for a user, a repository or an organisation, as a terminal report, a static HTML report or a local web app, with the numbers bucketed by year, month, week or day. This spec is the top of the set: it fixes the architecture, the boundaries between components, the data flow, the stack and the build order. The detail of each component is in its own spec; where this spec and a component spec differ, the component spec wins and this one is amended.
 
@@ -45,7 +45,7 @@ def load_settings(config_path: pathlib.Path | None, overrides: dict[str, object]
 
 ## Architecture
 
-Three layers with one-way dependencies: `reports` imports `stats`, `stats` imports `fetch`, and `fetch` imports nothing from wambatic except `settings` and `version`. `settings` and `version` are leaves: they import nothing from wambatic, and any layer may import them. `reports` may also import `fetch` directly, for the `Fetcher`, the cache and the fetch errors it presents (reports spec, review 3 choice 2); `stats` never imports `reports`, and `fetch` never imports `stats` or `reports`. `wambatic.cli` sits above the three as the composition root: it builds the `Cache` and `Fetcher`, syncs, calls `compute` and a renderer (and uses `wambatic.logs`).
+Three layers with one-way dependencies: `reports` imports `stats`, `stats` imports `fetch`, and `fetch` imports nothing from wambatic except `settings` and `version`. `settings` and `version` are leaves: they import nothing from wambatic, and any layer may import them. `reports` may also import `fetch` directly, for the `Fetcher`, the cache and the fetch errors it presents (reports spec, review 3 choice 2); `stats` never imports `reports`, and `fetch` never imports `stats` or `reports`. `wambatic.cli` sits above the three as the composition root: it opens the `Cache` and hands it to `wambatic.reports.service`, which builds the `Fetcher`, syncs and calls `compute_all`, and then calls a renderer (and uses `wambatic.logs`).
 
 ```text
 GitHub GraphQL / REST
@@ -85,7 +85,7 @@ Errors are typed in the layer that detects them and presented only at the edge:
 
 ## Implementation
 
-**Stack.** Python 3.14 (as in the shared Python rules), managed with [uv](https://docs.astral.sh/uv/) and a committed `uv.lock`; ruff and pre-commit as in the shared rules; pytest and hypothesis for tests; mypy for type checking. Runtime libraries are proposals pending a maintenance check before each `uv add`: [aiohttp](https://docs.aiohttp.org/en/stable/), [loguru](https://loguru.readthedocs.io/), [Rich](https://rich.readthedocs.io/), [Plotly](https://plotly.com/python/), [FastAPI](https://fastapi.tiangolo.com/) with [uvicorn](https://www.uvicorn.org/), [cappa](https://cappa.readthedocs.io/). The local web app is FastAPI on uvicorn, chosen over aiohttp's own server (reports review 3, decision 1, answered 2026-10-30). The stdlib covers `sqlite3`, `datetime`, `zoneinfo`, `statistics` and `json`.
+**Stack.** Python 3.14 (as in the shared Python rules), managed with [uv](https://docs.astral.sh/uv/) and a committed `uv.lock`; ruff and pre-commit as in the shared rules; pytest and hypothesis for tests; mypy for type checking. Runtime libraries, declared in `pyproject.toml`: [aiohttp](https://docs.aiohttp.org/en/stable/), [loguru](https://loguru.readthedocs.io/), [Rich](https://rich.readthedocs.io/), [Plotly](https://plotly.com/python/), [FastAPI](https://fastapi.tiangolo.com/) with [uvicorn](https://www.uvicorn.org/), [cappa](https://cappa.readthedocs.io/). The local web app is FastAPI on uvicorn, chosen over aiohttp's own server (reports review 3, decision 1, answered 2026-10-30). The stdlib covers `sqlite3`, `datetime`, `zoneinfo`, `statistics` and `json`.
 
 **Build order.** The sequence of steps, with deliverables, dependencies and done criteria, is in [Implementation order](../implementation-order.md).
 

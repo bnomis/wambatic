@@ -1,6 +1,6 @@
 # Reports
 
-**Version:** 1.11
+**Version:** 1.12
 **Status:** implemented
 **Date:** 2026-10-31
 
@@ -10,7 +10,7 @@ The three ways a user sees a `StatsResult`: a terminal report, a self-contained 
 
 Version 1.2 settles what step 5 of the [implementation order](../implementation-order.md) (terminal report and CLI) needed; the gaps and the choices made are in [review-1.md](review-1.md). Version 1.3 adds the terminal's flow sections for step 6 (flow data and stats); the choices are in the [stats review 2](../stats/review-2.md). Version 1.4 settles what step 7 (static HTML report) needed: the figure type, the results the page is built from, the page layout, themes and palette, the output path and the browser test; the choices are in [review-2.md](review-2.md). Version 1.5 adds the delivery sections of the terminal and the HTML page, and the release and workflow-run counts of `cache info`, for step 8 (delivery data and stats); the choices are in the [stats review 3](../stats/review-3.md). Version 1.6 settles what step 9 (local web app) needed: the server library (FastAPI with uvicorn, chosen 2026-10-30), the sync jobs and progress page that keep a large org from blocking the page, the query parameters and statuses, `serve`'s flags, the loopback and `Host` checks, and the move of the CLI's sync-then-compute code to `service.py` so the web app can share it; the choices are in [review-3.md](review-3.md). Version 1.7 adds the popularity sections of the terminal and the HTML page (the languages chart among them), the star and fork counts of `cache info`, and `popularity` in the `--groups` help, for step 10 (popularity data and stats); the choices are in the [stats review 4](../stats/review-4.md). Version 1.8 states that a repository whose star history is not visible to the token appears in Unavailable in every front end. Version 1.9 builds an HTML report from one read of the cache (`sync_and_compute` calls the stats `compute_all`) and builds each figure, table and series list of the page once; the choice is Decision 3 (option B) of the [audit review 1](../../audit-reviews/review-1.md), answered 2026-10-31.
 
-Version 1.11 brings the spec in line with the code after [audit review 1](../../audit-reviews/review-1.md) (F9, F10): the Languages table and chart end in one `Other` row, `SyncJob` stores `phase`, and `redact_error` is listed. Version 1.10 makes every error `wambatic.reports` raises itself a `ReportsError` (`UsageError`, `OutputError` and `ServeError`): `build_range_figures`, `build_calendar` and `html_document` raise `UsageError` where they raised `ValueError`; the choice is [audit review 1](../../audit-reviews/review-1.md), Decision 2 (option B), answered 2026-10-31.
+Version 1.11 brings the spec in line with the code after [audit review 1](../../audit-reviews/review-1.md) (F9, F10): the Languages table and chart end in one `Other` row, `SyncJob` stores `phase`, and `redact_error` is listed. Version 1.12 corrects the text to the code after [audit review 2](../../audit-reviews/review-2.md) (G15): `inspect_cache`, `OutputError` and `ServeError` in the error table and the binding paragraph, the `--since`, `--until` and `--groups` refusals, and `redact_error` in the module table. Version 1.10 makes every error `wambatic.reports` raises itself a `ReportsError` (`UsageError`, `OutputError` and `ServeError`): `build_range_figures`, `build_calendar` and `html_document` raise `UsageError` where they raised `ValueError`; the choice is [audit review 1](../../audit-reviews/review-1.md), Decision 2 (option B), answered 2026-10-31.
 
 ## Module location
 
@@ -24,7 +24,7 @@ Version 1.11 brings the spec in line with the code after [audit review 1](../../
 | `rows.py` | the table rows both the terminal and the HTML page show (moved out of `terminal.py`) | 7 |
 | `figures.py` | `Figure`, `build_figures`, `build_range_figures`, `build_calendar`, `PALETTE` | 7 |
 | `html.py`, `templates/` (`report.html`, `report.css`, `report.js`) | `HtmlReport`, `html_document`, `render_html`, `report_filename` | 7 |
-| `service.py` | `parse_target`, `parse_date`, `make_request`, `resolve_tz`, `check_by_author`, `make_fetcher`, `needs_sync`, `log_sync`, `sync_and_compute`, `redact_environment_token` (moved out of `cli.py`) | 9 |
+| `service.py` | `parse_target`, `parse_date`, `make_request`, `resolve_tz`, `check_by_author`, `make_fetcher`, `needs_sync`, `log_sync`, `sync_and_compute`, `redact_environment_token` (moved out of `cli.py`), `redact_error` | 9 |
 | `web.py`, `templates/` (`form.html`, `progress.html`, `progress.js`, `message.html`) | `SyncJob`, `Jobs`, `make_app`, `is_loopback`, `warn_on_bind`, `serve` | 9 |
 
 `wambatic.cli` is the composition root: it is the one module that imports every layer (settings, logs, fetch, stats, reports). `wambatic.reports` imports `wambatic.stats`, `wambatic.settings` and `wambatic.version`; only `wambatic.reports.service` and `wambatic.reports.web`, which sync on the CLI's and the web app's behalf, also import `wambatic.fetch` (review-3.md choice 2), and no reports module imports `wambatic.cli`; renderers read `result.subject` through `StatsResult` without importing it. Of the third-party libraries, only `html.py` imports `plotly`, and only for the plotly.js it bundles (`plotly.offline.get_plotlyjs()`); figures are plain Plotly JSON built by wambatic's own typed code (review-2.md decision 1).
@@ -197,8 +197,8 @@ The CLI is defined with [cappa](https://cappa.readthedocs.io/) dataclasses, as t
 
 - `<target>` is `user:NAME`, `org:NAME` or `repo:OWNER/NAME`. Bare `OWNER/NAME` means a repo, and bare `NAME` is resolved with `Fetcher.owner_kind`, which asks GitHub whether the login is a user or an organisation (user and organisation logins share one namespace on GitHub, so a name is never both). A `NAME` or `OWNER` is 1 to 39 characters of ASCII letters, digits and `-`; a repo `NAME` is 1 to 100 characters of ASCII letters, digits, `.`, `_` and `-`. Anything else, including an empty part, an unknown prefix or more than one `/`, is a `UsageError`. Bare `NAME` with `--no-fetch` is a `UsageError` asking for `user:NAME` or `org:NAME`, since resolving it needs the network.
 - `--by` maps to `StatsRequest.granularity` (`total` is `Granularity.TOTAL`); default `month`. With `--format html` it picks the granularity the page shows on load, and `total` is a `UsageError` (the page's summary tiles are the totals; its switch offers year, month, week and day).
-- `--since` and `--until` are local dates `YYYY-MM-DD` exactly (no other ISO forms), both inclusive, in the report timezone; anything else is a `UsageError`.
-- `--groups` is a comma-separated list of `activity`, `flow`, `delivery` and `popularity`; default `activity,flow`, as `StatsRequest`. Its help text, the web app's `groups` parameter description and the form's hint name every group. An unknown name is passed through to `compute`, which raises `UnknownGroupError`.
+- `--since` and `--until` are local dates `YYYY-MM-DD` exactly (no other ISO forms), both inclusive, in the report timezone; anything else is a `UsageError`. `--since` before 2008-01-01 and `--until` after tomorrow in the report timezone are also a `UsageError`.
+- `--groups` is a comma-separated list of `activity`, `flow`, `delivery` and `popularity`; default `activity,flow`, as `StatsRequest`. An empty list is a `UsageError`. Its help text, the web app's `groups` parameter description and the form's hint name every group. An unknown name is passed through to `compute`, which raises `UnknownGroupError`.
 - `--by-author` sets `StatsRequest.by_author`; with a user target, after any bare-`NAME` resolution, it is a `UsageError`.
 - `--tz` overrides `stats.timezone`; the zone is resolved with `zoneinfo.ZoneInfo`, and an unknown zone from either source is a `SettingsError` naming `stats.timezone`.
 - `--out PATH` is where `--format html` writes: a file path, or an existing directory to write `report_filename(subject)` into. Without it the file is `report.out_dir / report_filename(subject)`. Missing parent directories are created and an existing file is replaced. `--out` with a format other than `html` (after the config file) is a `UsageError`.
@@ -218,7 +218,7 @@ The CLI is defined with [cappa](https://cappa.readthedocs.io/) dataclasses, as t
 5. Sync, logging one `info` line from the `SyncReport`: repositories listed, unchanged, the rows written for each resource synced (`commits 12, issues 3, pull_requests 5`) and any full refetches.
 6. `compute`, then render to stdout with the selected format. For `html`, `compute_all` computes five requests from one read of the synced cache, with the request's granularity set to `TOTAL`, `YEAR`, `MONTH`, `WEEK` and `DAY` and everything else unchanged, giving the `HtmlReport`; `render_html` writes the file with `report.html_theme`, and the path written is printed to stdout as one line (the report itself is the file).
 
-**`cache info`** prints, for `fetch.cache_path`, what `Cache.inspect` (fetch spec) returns: the path and size, the recorded identity and every key that differs from the running code (with both values), `version_override_at` when set, the number of repositories, commits, pull requests, issues, releases, workflow runs, star events and forks, and the latest sync time. It opens the file read-only and never creates, migrates or stamps it, so it works on a cache that `report` refuses. A missing file prints that there is no cache at the path and exits 0.
+**`cache info`** prints, for `fetch.cache_path`, what `inspect_cache` (fetch spec) returns: the path and size, the recorded identity and every key that differs from the running code (with both values), `version_override_at` when set, the number of repositories, commits, pull requests, issues, releases, workflow runs, star events and forks, and the latest sync time. It opens the file read-only and never creates, migrates or stamps it, so it works on a cache that `report` refuses. A missing file prints that there is no cache at the path and exits 0.
 
 **`cache clear`** deletes the cache file and its `-wal` and `-shm` files with `clear_cache` (fetch spec), logs each path removed at `info`, and exits 0 when there was nothing to remove. It does not prompt: the cache is derived data that the next `report` refetches.
 
@@ -231,7 +231,7 @@ The CLI is defined with [cappa](https://cappa.readthedocs.io/) dataclasses, as t
 | success, and `--help` | 0 |
 | any `FetchError` (`AuthError`, `CacheVersionError`, `GraphQLError`, `NotFoundError`, `RateLimitError`, `StatsPendingError`) | 1 |
 | any `StatsError` (`EmptySubjectError`, `InvalidRangeError`, `InvalidRequestError`, `UnknownGroupError`) | 1 |
-| `OSError` writing `--out` (step 7), or binding `serve`'s port (step 9) | 1 |
+| `OutputError` writing `--out` (step 7), or `ServeError` binding `serve`'s port (step 9); both are `ReportsError`s | 1 |
 | `BrokenPipeError` (the reader of stdout went away): no message | 1 |
 | any other exception: logged with `loguru.logger.exception` (traceback included) | 1 |
 | `UsageError`, `SettingsError`, and a command line cappa cannot parse (cappa prints its own message) | 2 |
@@ -312,7 +312,7 @@ The CLI is defined with [cappa](https://cappa.readthedocs.io/) dataclasses, as t
 
 *Errors.* One HTTP middleware converts every exception a route raises with the Error handling mapping, and a handler for FastAPI's `RequestValidationError` answers 400 instead of 422, so the app has no 422 response.
 
-*Binding.* `serve` binds the socket itself (`socket.create_server`) and passes it to `uvicorn.Server.run(sockets=[...])`: uvicorn logs a bind failure and calls `sys.exit(1)` itself, which would skip `main`'s error conversion, so binding first makes a busy port an ordinary `OSError` (exit 1, with the reason) (review-3.md choice 19).
+*Binding.* `serve` binds the socket itself (`socket.create_server`) and passes it to `uvicorn.Server.run(sockets=[...])`: uvicorn logs a bind failure and calls `sys.exit(1)` itself, which would skip `main`'s error conversion, so binding first makes a busy port an ordinary `ServeError` (exit 1, `cannot listen on HOST:PORT` with the reason) (review-3.md choice 19).
 
 *Stopping.* On Ctrl-C uvicorn shuts down gracefully: the app's lifespan cancels the running and queued jobs with `Jobs.close`, `serve` closes the socket and the cache in a `finally`, and uvicorn re-raises the captured interrupt, so the exit status is 130, as for `report`. A sync cancelled part-way resumes on the next sync, since its state advances per repository (fetch spec). A `CacheVersionError` from opening the cache stops `serve` before it listens (review-3.md choice 13).
 

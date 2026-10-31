@@ -565,7 +565,7 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 ## Task 15: Turn on the audit gates and close the audit
 
-**Status:** in-progress
+**Status:** done
 **Priority:** high
 **Complexity:** medium
 **Source Reference:** user request of 2026-10-31 (gates: pre-push and CI with a deploy key); review-1 steps 8b and the audit's convergence rule
@@ -605,4 +605,4 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 - Depends on Task 14
 - Blocked on the operator (checked 2026-10-31: `gh secret list` returns 403 for the available token, so the secret cannot be confirmed). Steps: run `ssh-keygen -t ed25519 -N '' -f agents_deploy_key`; add `agents_deploy_key.pub` to `bnomis/agents` as a read-only deploy key; store `agents_deploy_key` in `bnomis/wambatic` as the Actions secret `AGENTS_DEPLOY_KEY`; delete both key files; confirm with `gh secret list -R bnomis/wambatic`. Then re-run this task for the remaining subtasks.
 - The deploy key is the user's step on GitHub; this task never creates or reads a secret itself
-- Checked 2026-10-31: `bin/audit-check.sh` exits 0. `pytest -m browser` skips all browser tests because no Chromium is installed (`playwright install chromium` is needed). Still open: review-2 (`/auditme`, whose Phase B findings go to the user), and the CI `audit` job passing on a pull request, which needs the branch pushed and a PR opened.
+- Checked 2026-10-31 after tasks-2 Task 10: `bin/audit-check.sh` exits 0 against agents `f7d5fcd` (the newer checker, with `raises-section-drift`, that had broken the earlier zero-hit result)

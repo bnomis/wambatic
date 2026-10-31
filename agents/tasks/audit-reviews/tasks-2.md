@@ -371,7 +371,7 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 ## Task 11: Close review-2, tasks-1 and the TODO item
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** small
 **Source Reference:** G13 (no change), tasks-1 Task 15, `TODO.md` item, audit skill step 8b
@@ -380,25 +380,25 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 **Subtasks:**
 
-- [ ] G13: no change (dev tools declared for `uv sync`, as review-1 F18 chose)
-- [ ] Run `bin/audit-check.sh`: it must exit 0. Then in `tasks-1.md` Task 15 replace the old note on `bin/audit-check.sh` with a dated line that it exits 0 against agents `108559d`, and set Task 15's `**Status:**` to `done`
-- [ ] Move the `TODO.md` item "The auditme checker's 2026-10-31 rules report hits here" to a new `DONE.md`: append its heading and body unchanged, then `Done: 2026-MM-DD - fixed by review-2 G2 (tasks-2 Task 1); the UNITS hit was already fixed by tasks-1 Task 7. Source: agents/audit-reviews/review-2.md; tasks: agents/tasks/audit-reviews/tasks-2.md.` with the real date; `TODO.md` keeps its title and preamble
-- [ ] `agents/audit-reviews/summary.md`: move review-2's resolved findings to Recently resolved, and record the checker version the gates now run
-- [ ] Set `**Status:**` of every spec this list changed back to `implemented` where it was `proposed`
+- [x] G13: no change (dev tools declared for `uv sync`, as review-1 F18 chose)
+- [x] Run `bin/audit-check.sh`: it must exit 0. Then in `tasks-1.md` Task 15 replace the old note on `bin/audit-check.sh` with a dated line that it exits 0 against agents `108559d`, and set Task 15's `**Status:**` to `done`
+- [x] Move the `TODO.md` item "The auditme checker's 2026-10-31 rules report hits here" to a new `DONE.md`: append its heading and body unchanged, then `Done: 2026-MM-DD - fixed by review-2 G2 (tasks-2 Task 1); the UNITS hit was already fixed by tasks-1 Task 7. Source: agents/audit-reviews/review-2.md; tasks: agents/tasks/audit-reviews/tasks-2.md.` with the real date; `TODO.md` keeps its title and preamble
+- [x] `agents/audit-reviews/summary.md`: move review-2's resolved findings to Recently resolved, and record the checker version the gates now run
+- [x] Set `**Status:**` of every spec this list changed back to `implemented` where it was `proposed`
 
 **Acceptance Criteria:**
 
-- [ ] `bin/audit-check.sh` exits 0
-- [ ] `git log --diff-filter=A --format=%H -- agents/tasks/audit-reviews/tasks-2.md` gives the baseline commit, and `git show <that commit>:TODO.md > /tmp/todo-before.md && python3 .agents/claude/skills/todo-review/verify_bodies.py /tmp/todo-before.md TODO.md DONE.md` exits 0
+- [x] `bin/audit-check.sh` exits 0
+- [x] `git log --diff-filter=A --format=%H -- agents/tasks/audit-reviews/tasks-2.md` gives the baseline commit, and `git show <that commit>:TODO.md > /tmp/todo-before.md && python3 .agents/claude/skills/todo-review/verify_bodies.py /tmp/todo-before.md TODO.md DONE.md` exits 0
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] `pre-commit run --all-files` passes
-- [ ] `pre-commit run --hook-stage pre-push --all-files` passes
-- [ ] `pytest -m 'not slow and not live and not browser'` passes: the list changes every source package, so every test module imports a changed module (the importer set, not a routine full run)
-- [ ] `pytest -m browser` passes
-- [ ] The `verify_bodies.py` check above exits 0
+- [x] `source bin/activate.sh` succeeds
+- [x] `pre-commit run --all-files` passes
+- [x] `pre-commit run --hook-stage pre-push --all-files` passes
+- [x] `pytest -m 'not slow and not live and not browser'` passes: the list changes every source package, so every test module imports a changed module (the importer set, not a routine full run)
+- [x] `pytest -m browser` passes
+- [x] The `verify_bodies.py` check above exits 0
 
 **Notes:**
 

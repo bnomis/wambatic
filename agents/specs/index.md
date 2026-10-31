@@ -3,7 +3,8 @@
 | Spec | Path | Description |
 |------|------|-------------|
 | [System](system/spec.md) | `src/wambatic/` | Architecture, data flow, stack, build order and settings across components |
-| [Fetch and cache](fetch-and-cache/spec.md) | `src/wambatic/fetch/` | GitHub GraphQL/REST clients, auth, rate limits, SQLite cache |
+| [Fetch](fetch/spec.md) | `src/wambatic/fetch/` | GitHub GraphQL/REST clients, auth, rate limits, incremental sync |
+| [Cache](cache/spec.md) | `src/wambatic/fetch/cache.py` | SQLite cache: schema, sync state, ETags, identity checks |
 | [Stats](stats/spec.md) | `src/wambatic/stats/` | Metric computation, time bucketing, subjects (user, repo, org) |
 | [Reports](reports/spec.md) | `src/wambatic/reports/`, `src/wambatic/cli.py` | Terminal, static HTML and local web app front ends |
 

@@ -4,7 +4,7 @@ import subprocess
 import wambatic.fetch.errors
 
 
-def resolve_token() -> str:
+def fetch_token() -> str:
     """GITHUB_TOKEN from the environment, else `gh auth token`; raises AuthError if neither.
 
     Raises:

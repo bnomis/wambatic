@@ -149,9 +149,10 @@ class Contributor:
     active_days: int
 
 
-def total_series(
-    result: wambatic.stats.base.StatsResult,
-) -> dict[str, list[tuple[wambatic.stats.base.Bucket, float]]]:
+TotalSeries = dict[str, list[tuple[wambatic.stats.base.Bucket, float]]]
+
+
+def total_series(result: wambatic.stats.base.StatsResult) -> TotalSeries:
     """Each total series' points (the ones with no breakdown) in bucket order, by metric."""
     return {
         series.metric: sorted(series.points.items())
@@ -185,9 +186,7 @@ def has_dora(result: wambatic.stats.base.StatsResult) -> bool:
     return any(s.metric in DORA_TABLE_METRICS and s.by is None for s in result.series)
 
 
-def buckets_from(
-    series: dict[str, list[tuple[wambatic.stats.base.Bucket, float]]],
-) -> list[wambatic.stats.base.Bucket]:
+def buckets_from(series: TotalSeries) -> list[wambatic.stats.base.Bucket]:
     """The buckets of `total_series` output, from whichever total series is present."""
     for metric in (*TOTAL_METRICS, *FLOW_COUNTS, *DELIVERY_COUNTS, *POPULARITY_TABLE_METRICS):
         if metric in series:
@@ -226,46 +225,68 @@ def period_row(
     return PeriodRow(label, label in partial, tuple(values))
 
 
-def activity_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | None:
+def period_table(
+    title: str,
+    headers: tuple[str, ...],
+    metrics: tuple[str, ...],
+    rows: tuple[PeriodRow, ...],
+    make_total: collections.abc.Callable[[], tuple[float | None, ...]] | None = None,
+) -> PeriodTable:
+    """A table whose footer is `make_total()` when there is more than one row, else None."""
+    total = make_total() if make_total is not None and len(rows) > 1 else None
+    return PeriodTable(title, headers, metrics, rows, total)
+
+
+def activity_table(
+    result: wambatic.stats.base.StatsResult, series: TotalSeries | None = None
+) -> PeriodTable | None:
     """Activity by period; None without activity series."""
     if not has_activity(result):
         return None
-    series = total_series(result)
+    series = total_series(result) if series is None else series
     partial = partial_labels(result)
     rows = tuple(
         period_row(bucket.label, partial, (series[metric][index][1] for metric in TOTAL_METRICS))
         for index, (bucket, _) in enumerate(series['commits'])
     )
-    total: tuple[float | None, ...] | None = None
-    if len(rows) > 1:
+
+    def make_total() -> tuple[float | None, ...]:
         sums = {metric: sum(value for _, value in series[metric]) for metric in TOTAL_METRICS}
         sums['contributors'] = contributor_count(result)
-        total = tuple(sums[metric] for metric in TOTAL_METRICS)
-    return PeriodTable('Activity by period', ACTIVITY_HEADERS, TOTAL_METRICS, rows, total)
+        return tuple(sums[metric] for metric in TOTAL_METRICS)
+
+    return period_table('Activity by period', ACTIVITY_HEADERS, TOTAL_METRICS, rows, make_total)
 
 
-def flow_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | None:
+def flow_table(
+    result: wambatic.stats.base.StatsResult, series: TotalSeries | None = None
+) -> PeriodTable | None:
     """Flow by period; None without flow series."""
     if not has_flow(result):
         return None
-    series = total_series(result)
+    series = total_series(result) if series is None else series
     partial = partial_labels(result)
     rows = tuple(
         period_row(bucket.label, partial, (series[metric][index][1] for metric in FLOW_COUNTS))
         for index, bucket in enumerate(buckets_from(series))
     )
-    total: tuple[float | None, ...] | None = None
-    if len(rows) > 1:
-        total = tuple(sum(value for _, value in series[metric]) for metric in FLOW_COUNTS)
-    return PeriodTable('Flow by period', FLOW_HEADERS, FLOW_COUNTS, rows, total)
+    return period_table(
+        'Flow by period',
+        FLOW_HEADERS,
+        FLOW_COUNTS,
+        rows,
+        lambda: tuple(sum(value for _, value in series[metric]) for metric in FLOW_COUNTS),
+    )
 
 
-def flow_times_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | None:
+def flow_times_table(
+    result: wambatic.stats.base.StatsResult, series: TotalSeries | None = None
+) -> PeriodTable | None:
     """Flow times by period, a bucket with no value `None`; there is no total, because medians
     do not add up over buckets. None without flow series."""
     if not has_flow(result):
         return None
-    series = total_series(result)
+    series = total_series(result) if series is None else series
     partial = partial_labels(result)
     points = {metric: dict(series[metric]) for metric in FLOW_TIMES_METRICS}
     rows = tuple(
@@ -274,15 +295,18 @@ def flow_times_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | N
         )
         for bucket in buckets_from(series)
     )
-    return PeriodTable('Flow times by period', FLOW_TIMES_HEADERS, FLOW_TIMES_METRICS, rows, None)
+    return period_table('Flow times by period', FLOW_TIMES_HEADERS, FLOW_TIMES_METRICS, rows)
 
 
 def delivery_period_table(
-    result: wambatic.stats.base.StatsResult, title: str, wanted: tuple[str, ...]
+    result: wambatic.stats.base.StatsResult,
+    title: str,
+    wanted: tuple[str, ...],
+    series: TotalSeries | None = None,
 ) -> PeriodTable | None:
     """A table of the delivery series in `wanted` that the result has, a bucket with no value
     `None`; the footer adds up the counts and is `None` in the other columns."""
-    series = total_series(result)
+    series = total_series(result) if series is None else series
     metrics = tuple(metric for metric in wanted if metric in series)
     if not metrics:
         return None
@@ -292,35 +316,44 @@ def delivery_period_table(
         period_row(bucket.label, partial, (points[metric].get(bucket) for metric in metrics))
         for bucket in buckets_from(series)
     )
-    total: tuple[float | None, ...] | None = None
-    if len(rows) > 1:
-        total = tuple(
+    return period_table(
+        title,
+        tuple(DELIVERY_HEADERS[m] for m in metrics),
+        metrics,
+        rows,
+        lambda: tuple(
             sum(points[metric].values()) if metric in DELIVERY_TOTALS else None
             for metric in metrics
-        )
-    return PeriodTable(title, tuple(DELIVERY_HEADERS[m] for m in metrics), metrics, rows, total)
+        ),
+    )
 
 
-def delivery_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | None:
+def delivery_table(
+    result: wambatic.stats.base.StatsResult, series: TotalSeries | None = None
+) -> PeriodTable | None:
     """Delivery by period; None without delivery series."""
     if not has_delivery(result):
         return None
-    return delivery_period_table(result, 'Delivery by period', DELIVERY_TABLE_METRICS)
+    return delivery_period_table(result, 'Delivery by period', DELIVERY_TABLE_METRICS, series)
 
 
-def dora_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | None:
+def dora_table(
+    result: wambatic.stats.base.StatsResult, series: TotalSeries | None = None
+) -> PeriodTable | None:
     """DORA proxies by period, with the columns of the proxies the result has; None without any."""
     if not has_dora(result):
         return None
-    return delivery_period_table(result, 'DORA proxies by period', DORA_TABLE_METRICS)
+    return delivery_period_table(result, 'DORA proxies by period', DORA_TABLE_METRICS, series)
 
 
-def popularity_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | None:
+def popularity_table(
+    result: wambatic.stats.base.StatsResult, series: TotalSeries | None = None
+) -> PeriodTable | None:
     """Popularity by period; the footer adds up the stars and forks added and gives the last
     bucket's cumulative totals. None without popularity series."""
     if not has_popularity(result):
         return None
-    series = total_series(result)
+    series = total_series(result) if series is None else series
     partial = partial_labels(result)
     rows = tuple(
         period_row(
@@ -328,16 +361,17 @@ def popularity_table(result: wambatic.stats.base.StatsResult) -> PeriodTable | N
         )
         for index, bucket in enumerate(buckets_from(series))
     )
-    total: tuple[float | None, ...] | None = None
-    if len(rows) > 1:
-        total = tuple(
+    return period_table(
+        'Popularity by period',
+        POPULARITY_HEADERS,
+        POPULARITY_TABLE_METRICS,
+        rows,
+        lambda: tuple(
             sum(value for _, value in series[metric])
             if metric in POPULARITY_ADDED
             else series[metric][-1][1]
             for metric in POPULARITY_TABLE_METRICS
-        )
-    return PeriodTable(
-        'Popularity by period', POPULARITY_HEADERS, POPULARITY_TABLE_METRICS, rows, total
+        ),
     )
 
 

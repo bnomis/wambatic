@@ -141,6 +141,8 @@ class Jobs:
         job: SyncJob,
         run: collections.abc.Callable[[SyncJob], collections.abc.Awaitable[None]],
     ) -> None:
+        # Error boundary (review-2 Decision 1): a failed job would otherwise
+        # leave its progress page hanging.
         try:
             async with self.lock:
                 job.phase = 'running'
@@ -320,6 +322,8 @@ def make_app(
     default_target: str | None = None,
     clock: collections.abc.Callable[[], datetime.datetime] = wambatic.fetch.ratelimit.utc_now,
 ) -> fastapi.FastAPI:
+    for name in wambatic.reports.html.TEMPLATE_NAMES:
+        wambatic.reports.html.read_template(name)
     jobs = Jobs()
     theme = settings.report.html_theme
 
@@ -344,7 +348,7 @@ def make_app(
         reader = wambatic.reports.service.make_fetcher('', cache, settings.fetch)
         provenance = await reader.provenance(subject, resources)
         return wambatic.reports.service.needs_sync(
-            provenance, resources, settings.fetch, False, False, clock()
+            provenance, resources, settings.fetch, full_refresh=False, no_fetch=False, now=clock()
         )
 
     async def compute(
@@ -388,6 +392,11 @@ def make_app(
 
         Raises:
             JobError: the finished job for the request failed.
+            EmptySubjectError: there is nothing to report.
+            UnknownGroupError: a group is outside `GROUPS`.
+            InvalidRequestError: the request is invalid for the subject.
+            InvalidRangeError: `since` is after `until`.
+            CacheError: the cache cannot be read.
         """
         job = jobs.get(query.job) if query.job is not None else None
         if job is not None and job.key == query.key:
@@ -416,6 +425,8 @@ def make_app(
         request: fastapi.Request,
         call_next: CallNext,
     ) -> fastapi.Response:
+        # Error boundary (review-2 Decision 1): an unexpected error would
+        # otherwise reach the client unredacted.
         try:
             return await call_next(request)
         # auditme: accept[silent-broad-except] logged by error_response()
@@ -574,6 +585,8 @@ def serve(
     Raises:
         UsageError: the bind address is refused.
         ServeError: the address cannot be listened on.
+        CacheError: the cache cannot be opened or closed.
+        CacheVersionError: the cache was written by another version and the check is not ignored.
     """
     report = settings.report
     warn_on_bind(report.web_host, report.allow_remote)

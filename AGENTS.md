@@ -33,15 +33,21 @@ After cloning: `git submodule update --init`. It must run before the pre-commit 
 `git submodule update --remote .agents`, then commit the new pointer.
 
 Project-specific rules and skills go in this repository's own `claude/`
-directory, not in agents (see `.agents/claude/rules/rule-scope.md`).
+directory, not in agents (see `.agents/claude/rules/rule-scope.md`). That directory is created with the first project rule.
+
+The web server keeps two deliberate error boundaries, `Jobs.execute` and the `convert_errors` middleware in `reports/web.py`: without them a failed job would hang its progress page and an unexpected error would reach the client unredacted (review-2 Decision 1).
+
+Logins and repository names are logged by design: they are public identifiers the user typed, and the only sink is local stderr.
 
 ## Tests
 
 `src/tests/fetch/test_fetcher.py` is deliberately separate from `test_base.py`: it holds the `Fetcher` sync tests and is too long to merge into the module-level tests of `fetch/base.py` (audit review 1, F16).
 
+Other deliberate test-layout exceptions: property tests, browser tests, live tests, `test_layering.py`, `test_package.py`, the bin-script tests and the fixtures of the fake GitHub do not mirror a source module.
+
 ## Checks
 
-- On commit (pre-commit): ruff with the rules in `pyproject.toml`, ruff format, mypy.
+- On commit (pre-commit): ruff with the rules in `pyproject.toml`, ruff format, mypy, and the end-of-file and trailing-whitespace hooks.
 - On push (pre-push): `bin/audit-check.sh`, the whole-tree audit script; any unaccepted hit refuses the push.
 - In CI: all of the above, plus the tests, in the `check`, `browser`, `live` and `audit` jobs.
 - `--no-verify` is never used; fix the hit or record the accepted exception.

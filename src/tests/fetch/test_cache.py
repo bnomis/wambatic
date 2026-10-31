@@ -1464,3 +1464,38 @@ def test_every_record_type_round_trips(
     ):
         stored = table.values(record)  # type: ignore[arg-type]
         assert table.record(HELLO, stored[1:]) == record
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(INSTANTS)
+def test_to_text_and_from_text_round_trip(instant: datetime.datetime) -> None:
+    assert wambatic.fetch.cache.from_text(wambatic.fetch.cache.to_text(instant)) == instant
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(INSTANTS, INSTANTS)
+def test_text_order_is_time_order(a: datetime.datetime, b: datetime.datetime) -> None:
+    text_a, text_b = wambatic.fetch.cache.to_text(a), wambatic.fetch.cache.to_text(b)
+    assert (text_a < text_b) == (a < b)
+    assert len(text_a) == len(text_b)
+
+
+IDENTITIES = hypothesis.strategies.dictionaries(
+    hypothesis.strategies.sampled_from(['python', 'schema', 'wambatic']),
+    hypothesis.strategies.sampled_from(['old', 'new']),
+)
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(IDENTITIES, IDENTITIES)
+def test_identity_differences_names_exactly_the_keys_that_differ(
+    recorded: dict[str, str], expected: dict[str, str]
+) -> None:
+    differences = wambatic.fetch.cache.identity_differences(recorded, expected)
+    assert list(differences) == sorted(differences)
+    for key in recorded.keys() | expected.keys():
+        if recorded.get(key) == expected.get(key):
+            assert key not in differences
+        else:
+            assert differences[key] == (recorded.get(key), expected.get(key))
+    assert not wambatic.fetch.cache.identity_differences(recorded, recorded)

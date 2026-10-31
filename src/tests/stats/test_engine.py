@@ -1,4 +1,6 @@
 import asyncio
+import collections
+import collections.abc
 import dataclasses
 import datetime
 import pathlib
@@ -39,6 +41,9 @@ def request(**changes: object) -> Request:
         'groups': ACTIVITY,
     }
     fields.update(changes)
+    tz = fields.get('tz')
+    if tz is not None and 'settings' not in fields:
+        fields['settings'] = wambatic.settings.StatsSettings(timezone=str(tz))
     return Request(**fields)  # type: ignore[arg-type]
 
 
@@ -900,6 +905,36 @@ def test_compute_all_gives_every_result_the_same_computed_at(
 ) -> None:
     results = run_all_of(stats_fetcher, list(wambatic.stats.base.Granularity))
     assert len({r.provenance['computed_at'] for r in results}) == 1
+
+
+def test_a_report_of_every_group_and_granularity_reads_each_cache_row_set_once(
+    stats_fetcher: wambatic.fetch.base.Fetcher,
+) -> None:
+    calls: list[tuple[object, ...]] = []
+    read = stats_fetcher.db
+
+    async def counting(
+        function: collections.abc.Callable[..., typing.Any], *args: object
+    ) -> object:
+        calls.append((function.__name__, *args))
+        return await read(function, *args)
+
+    repos = asyncio.run(stats_fetcher.repos(tests.fixtures.stats.ORG))
+    stats_fetcher.db = counting  # type: ignore[assignment]
+    requests = [
+        request(granularity=granularity, groups=wambatic.stats.base.GROUPS)
+        for granularity in wambatic.stats.base.Granularity
+    ]
+    asyncio.run(
+        wambatic.stats.engine.compute_all(
+            tests.fixtures.stats.ORG, stats_fetcher, requests, clock=clock
+        )
+    )
+    repeated = {call: count for call, count in collections.Counter(calls).items() if count > 1}
+    assert repeated == {}
+    assert {call[0] for call in calls} >= {'read_repos', 'read_commits', 'sync_state', 'identity'}
+    for repo in repos:
+        assert ('sync_state', repo.name_with_owner, 'star_events') in calls
 
 
 def test_compute_all_rejects_an_empty_list_before_reading() -> None:

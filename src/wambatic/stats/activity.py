@@ -21,6 +21,13 @@ BREAKDOWN_METRICS = ('commits', 'lines_added', 'lines_deleted', 'lines_net')
 Tables = dict[str, list[dict[str, typing.Any]]]
 
 
+class DatedCommit(typing.NamedTuple):
+    """A commit with its local date in the request's timezone, derived once where it is read."""
+
+    commit: wambatic.fetch.base.Commit
+    day: datetime.date
+
+
 @dataclasses.dataclass(slots=True)
 class Tally:
     """What the commits of one group add up to, in one bucket or over the whole range.
@@ -66,16 +73,13 @@ def series_of(
     by_kind: wambatic.stats.base.ByKind | None = None,
 ) -> wambatic.stats.base.Series:
     empty = Tally()
-    points = {
-        bucket: tallies.get(index, empty).value(metric) for index, bucket in enumerate(buckets)
-    }
-    return wambatic.stats.base.Series(metric, unit, points, by, by_kind)
+    values = [tallies.get(index, empty).value(metric) for index in range(len(buckets))]
+    return wambatic.stats.base.series_of(metric, unit, buckets, values, by, by_kind)
 
 
 def aggregate(
-    commits: collections.abc.Iterable[wambatic.fetch.base.Commit],
+    commits: collections.abc.Iterable[DatedCommit],
     buckets: list[wambatic.stats.base.Bucket],
-    tz: datetime.tzinfo,
     settings: wambatic.settings.StatsSettings,
     *,
     by_author: bool,
@@ -91,8 +95,7 @@ def aggregate(
     spellings: dict[str | None, str] = {}
     repos: dict[str, dict[int, Tally]] = {}
     overall: dict[str | None, Tally] = {}
-    for commit in commits:
-        day = commit.authored_at.astimezone(tz).date()
+    for commit, day in commits:
         index = wambatic.stats.buckets.locate(day, starts, end)
         lines = not (settings.exclude_merge_commits and commit.is_merge)
         key = None if commit.author_login is None else commit.author_login.casefold()

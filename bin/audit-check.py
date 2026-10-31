@@ -111,7 +111,12 @@ def main(
     if message is not None:
         loguru.logger.error(message)
         return 2
-    result = run_checker(root)
+    try:
+        result = run_checker(root)
+    except OSError as error:
+        # auditme: accept[except-interpolation] the OS reason says what to fix
+        loguru.logger.error(f'cannot run {CHECKER}: {error.strerror or error}')
+        return 2
     if result.returncode != 0:
         loguru.logger.error(f'{CHECKER} exited with status {result.returncode}')
         return 2

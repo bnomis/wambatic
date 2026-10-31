@@ -1,3 +1,4 @@
+import collections.abc
 import dataclasses
 import datetime
 import enum
@@ -42,6 +43,21 @@ class Series:
             )
 
 
+def series_of(
+    name: str,
+    unit: str,
+    buckets: collections.abc.Iterable[Bucket],
+    values: collections.abc.Iterable[float | None],
+    by: str | None = None,
+    by_kind: ByKind | None = None,
+) -> Series:
+    """A series with one point per bucket that has a value; a `None` value leaves the bucket out."""
+    points = {
+        bucket: value for bucket, value in zip(buckets, values, strict=True) if value is not None
+    }
+    return Series(name, unit, points, by, by_kind)
+
+
 @dataclasses.dataclass(frozen=True, slots=True)
 class StatsRequest:
     granularity: Granularity = Granularity.MONTH
@@ -53,6 +69,12 @@ class StatsRequest:
     settings: wambatic.settings.StatsSettings = dataclasses.field(
         default_factory=wambatic.settings.StatsSettings
     )
+
+    def __post_init__(self) -> None:
+        if str(self.tz) != self.settings.timezone:
+            raise wambatic.stats.errors.InvalidRequestError(
+                f'tz {str(self.tz)!r} differs from settings.timezone {self.settings.timezone!r}'
+            )
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

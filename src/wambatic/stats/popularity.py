@@ -120,7 +120,7 @@ def aggregate(
         'forks_total': total_forks,
     }
     series = [
-        wambatic.stats.base.Series(name, unit, dict(zip(buckets, found[name], strict=True)))
+        wambatic.stats.base.series_of(name, unit, buckets, found[name])
         for name, unit in POPULARITY_METRICS
     ]
     tables: Tables = {'popularity': popularity_table(repos), 'languages': languages_table(repos)}

@@ -172,10 +172,6 @@ def to_text(value: datetime.datetime) -> str:
     return value.astimezone(datetime.UTC).isoformat(timespec='microseconds')
 
 
-def optional_to_text(value: datetime.datetime | None) -> str | None:
-    return None if value is None else to_text(value)
-
-
 # auditme: accept[passthrough-shim] the inverse of to_text
 def from_text(value: str) -> datetime.datetime:
     return datetime.datetime.fromisoformat(value)
@@ -251,7 +247,7 @@ class Table[T: Record]:
         return cls(name, record_type, column_names(record_type), converters, key)
 
     def values(self, record: T) -> tuple[object, ...]:
-        return record_values(record)
+        return tuple(to_column(getattr(record, name)) for name in self.columns)
 
     def record(self, repo: str, row: tuple[typing.Any, ...]) -> T:
         """Build a record from a row of the columns after `repo`."""
@@ -300,13 +296,13 @@ class Tables:
 @functools.cache
 def tables() -> Tables:
     """Built on first use: `wambatic.fetch.base` is not yet reachable while this module loads."""
-    COMMITS = Table.of(
+    commits = Table.of(
         'commits',
         wambatic.fetch.base.Commit,
         {'authored_at': from_text, 'is_merge': bool},
         ('repo', 'oid'),
     )
-    PULL_REQUESTS = Table.of(
+    pull_requests = Table.of(
         'pull_requests',
         wambatic.fetch.base.PullRequest,
         {
@@ -320,19 +316,19 @@ def tables() -> Tables:
         },
         REPO_NUMBER,
     )
-    ISSUES = Table.of(
+    issues = Table.of(
         'issues',
         wambatic.fetch.base.Issue,
         {'closed_at': optional_from_text, 'created_at': from_text, 'updated_at': from_text},
         REPO_NUMBER,
     )
-    RELEASES = Table.of(
+    releases = Table.of(
         'releases',
         wambatic.fetch.base.Release,
         {'created_at': from_text, 'is_prerelease': bool, 'published_at': from_text},
         ('repo', 'tag_name'),
     )
-    WORKFLOW_RUNS = Table.of(
+    workflow_runs = Table.of(
         'workflow_runs',
         wambatic.fetch.base.WorkflowRun,
         {
@@ -342,26 +338,26 @@ def tables() -> Tables:
         },
         REPO_ID,
     )
-    STAR_EVENTS = Table.of(
+    star_events = Table.of(
         'star_events',
         wambatic.fetch.base.StarEvent,
         {'starred_at': from_text},
         ('repo', 'user_id'),
     )
-    FORKS = Table.of(
+    forks = Table.of(
         'forks',
         wambatic.fetch.base.Fork,
         {'created_at': from_text},
         REPO_ID,
     )
     return Tables(
-        commits=COMMITS,
-        forks=FORKS,
-        issues=ISSUES,
-        pull_requests=PULL_REQUESTS,
-        releases=RELEASES,
-        star_events=STAR_EVENTS,
-        workflow_runs=WORKFLOW_RUNS,
+        commits=commits,
+        forks=forks,
+        issues=issues,
+        pull_requests=pull_requests,
+        releases=releases,
+        star_events=star_events,
+        workflow_runs=workflow_runs,
         repo_columns=column_names(wambatic.fetch.base.Repo),
         sync_state_columns=column_names(wambatic.fetch.base.SyncState),
     )
@@ -419,7 +415,7 @@ class Cache:
                 connection.execute('PRAGMA foreign_keys=ON')
                 connection.executescript(SCHEMA)
                 cache = cls(connection, path)
-                cache.check_identity(ignore_version)
+                cache.record_identity(ignore_version)
             except BaseException:
                 # Cleans up the half-opened connection, then re-raises the original error.
                 connection.close()
@@ -440,7 +436,7 @@ class Cache:
         with self.locked():
             self.connection.close()
 
-    def check_identity(self, ignore_version: bool) -> None:
+    def record_identity(self, ignore_version: bool) -> None:
         expected = expected_identity()
         with self.locked(), self.connection:
             recorded = self.recorded_identity()

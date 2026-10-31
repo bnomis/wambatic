@@ -3,6 +3,7 @@ import datetime
 import io
 import json
 import typing
+import zoneinfo
 
 import hypothesis
 import hypothesis.strategies
@@ -209,15 +210,16 @@ WORDS = hypothesis.strategies.lists(hypothesis.strategies.text(max_size=12), max
         exclude_merge_commits=hypothesis.strategies.booleans(),
         failure_window=DURATIONS,
         hotfix_labels=WORDS,
-        timezone=hypothesis.strategies.text(max_size=12),
+        timezone=hypothesis.strategies.sampled_from(['UTC', 'Europe/Berlin', 'Asia/Kolkata']),
     )
 )
 def test_any_stats_settings_survive_json_and_durations_parse_back(
     org_result: wambatic.stats.base.StatsResult, settings: wambatic.settings.StatsSettings
 ) -> None:
-    result = dataclasses.replace(
-        org_result, request=dataclasses.replace(org_result.request, settings=settings)
+    request = dataclasses.replace(
+        org_result.request, tz=zoneinfo.ZoneInfo(settings.timezone), settings=settings
     )
+    result = dataclasses.replace(org_result, request=request)
     full: dict[str, typing.Any] = wambatic.reports.base.result_to_dict(result)
     written = full['request']['settings']
     assert json.loads(json.dumps(written)) == written

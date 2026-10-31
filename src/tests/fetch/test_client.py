@@ -320,6 +320,15 @@ def test_other_status_raises_without_retry(
     assert sleeps == []
 
 
+def test_a_non_json_ok_response_is_a_fetch_error_naming_the_endpoint(
+    make_client: tests.conftest.MakeClient,
+) -> None:
+    html = tests.fixtures.fetch.server.Canned(200, raw=b'<html>bad gateway</html>')
+    with pytest.raises(wambatic.fetch.errors.FetchError, match='not JSON for GET /repos') as info:
+        run_rest({REPO: [html]}, make_client)
+    assert isinstance(info.value.__cause__, ValueError)
+
+
 # GraphQL
 
 
@@ -878,3 +887,38 @@ def test_header_date_is_utc_or_none(value: str) -> None:
     response = wambatic.fetch.client.Response(200, {'Date': value}, None, None)  # type: ignore[arg-type]
     result = wambatic.fetch.client.header_date(response)
     assert result is None or result.utcoffset() == datetime.timedelta(0)
+
+
+LIMIT_KINDS = {'retry-after', 'primary', 'secondary', None}
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(
+    endpoint=hypothesis.strategies.sampled_from(ROUTES),
+    status=hypothesis.strategies.sampled_from([200, 401, 403, 404, 429, 500]),
+    headers=hypothesis.strategies.dictionaries(
+        hypothesis.strategies.sampled_from(['retry-after', 'x-ratelimit-remaining']),
+        hypothesis.strategies.sampled_from(['0', '5', '30']),
+    ),
+    data=hypothesis.strategies.one_of(
+        hypothesis.strategies.none(),
+        hypothesis.strategies.builds(
+            lambda message: {'message': message},
+            hypothesis.strategies.sampled_from(['Secondary Rate Limit hit', 'Not Found']),
+        ),
+    ),
+)
+def test_limit_kind_signals_only_on_403_and_429(
+    endpoint: str,
+    status: int,
+    headers: dict[str, str],
+    data: object,
+) -> None:
+    client = wambatic.fetch.client.GitHubClient('test-token', wambatic.settings.FetchSettings())
+    response = wambatic.fetch.client.Response(status, headers, data, None)  # type: ignore[arg-type]
+    kind = client.limit_kind(endpoint, response)
+    assert kind in LIMIT_KINDS
+    if status not in (403, 429):
+        assert kind is None
+    elif 'retry-after' in headers:
+        assert kind == 'retry-after'

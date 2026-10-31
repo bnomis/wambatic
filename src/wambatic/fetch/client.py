@@ -5,6 +5,7 @@ import datetime
 import email.utils
 import random
 import re
+import typing
 
 import aiohttp
 import loguru
@@ -160,7 +161,8 @@ class GitHubClient:
         self, query: str, variables: collections.abc.Mapping[str, object]
     ) -> dict[str, object]:
         """POST `{api_url}/graphql`; returns `data`; raises the typed errors."""
-        return (await self.graphql_dated(query, variables))[0]
+        data, response_date = await self.graphql_dated(query, variables)
+        return data
 
     async def graphql_dated(
         self, query: str, variables: collections.abc.Mapping[str, object]
@@ -217,19 +219,12 @@ class GitHubClient:
                 )
             await self.sleep(wambatic.fetch.ratelimit.backoff_delay(pending, self.rng))
             pending += 1
-        if response.status == 304:
-            return RestResponse(
-                status=304,
-                data=None,
-                etag=etag,
-                next_url=None,
-                date=header_date(response),
-            )
+        not_modified = response.status == 304
         return RestResponse(
             status=response.status,
-            data=response.data,
-            etag=response.headers.get('ETag'),
-            next_url=next_link(response.headers.get('Link')),
+            data=None if not_modified else response.data,
+            etag=etag if not_modified else response.headers.get('ETag'),
+            next_url=None if not_modified else next_link(response.headers.get('Link')),
             date=header_date(response),
         )
 
@@ -245,7 +240,8 @@ class GitHubClient:
         """One request; no classification.
 
         Raises:
-            FetchError: the client is used outside `async with`.
+            FetchError: the client is used outside `async with`, or GitHub sent an OK response
+                that is not JSON.
         """
         if self.session is None:
             raise wambatic.fetch.errors.FetchError('GitHubClient must be used inside `async with`')
@@ -259,9 +255,11 @@ class GitHubClient:
             if body:
                 try:
                     data = await raw.json(content_type=None)
-                except ValueError:
+                except ValueError as error:
                     if raw.ok:
-                        raise
+                        raise wambatic.fetch.errors.FetchError(
+                            f'GitHub sent a response that is not JSON for {method} {path}'
+                        ) from error
             return Response(raw.status, raw.headers, data, raw.request_info)
 
     def update_limits(self, endpoint: str, response: Response) -> None:
@@ -299,6 +297,8 @@ class GitHubClient:
         """
         if self.settings.on_rate_limit == 'fail':
             raise wambatic.fetch.errors.RateLimitError(reset_at)
+        if self.settings.on_rate_limit != 'wait':
+            typing.assert_never(self.settings.on_rate_limit)
         wait = (reset_at - self.clock()).total_seconds() + 1
         self.logger.info(
             f'ETA: GitHub rate limit resets in {datetime.timedelta(seconds=round(wait))}'

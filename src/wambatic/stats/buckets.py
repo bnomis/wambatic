@@ -67,8 +67,10 @@ def label(start: datetime.date, granularity: wambatic.stats.base.Granularity) ->
             return f'{iso.year:04d}-W{iso.week:02d}'
         case wambatic.stats.base.Granularity.DAY:
             return start.isoformat()
-        case _:
+        case wambatic.stats.base.Granularity.TOTAL:
             return 'total'
+        case _:
+            typing.assert_never(granularity)
 
 
 def bucket_for(
@@ -83,6 +85,12 @@ def bucket_for(
     if when.tzinfo is None:
         raise wambatic.stats.errors.InvalidRequestError('when must be timezone-aware')
     start = bucket_start(when.astimezone(tz).date(), granularity)
+    return bucket_at(start, granularity)
+
+
+def bucket_at(
+    start: datetime.date, granularity: wambatic.stats.base.Granularity
+) -> wambatic.stats.base.Bucket:
     return wambatic.stats.base.Bucket(start, label(start, granularity))
 
 
@@ -103,7 +111,7 @@ def bucket_range(
     buckets: list[wambatic.stats.base.Bucket] = []
     start = bucket_start(since, granularity)
     while start <= until:
-        buckets.append(wambatic.stats.base.Bucket(start, label(start, granularity)))
+        buckets.append(bucket_at(start, granularity))
         start = next_start(start, granularity)
     return buckets
 

@@ -478,21 +478,33 @@ def parse_fork(repo: str, node: object) -> Fork:
     )
 
 
+def commit_of(repo: str, found: NewCommit, additions: int, deletions: int) -> Commit:
+    return Commit(
+        repo=repo,
+        oid=found.oid,
+        authored_at=found.authored_at,
+        author_login=found.author_login,
+        additions=additions,
+        deletions=deletions,
+        is_merge=found.is_merge,
+    )
+
+
 def parse_history_node(repo: str, node: object) -> Commit:
     fields = mapping(node, 'history node')
     author = fields.get('author')
     user = mapping(author, 'author').get('user') if author is not None else None
     login = mapping(user, 'author.user').get('login') if user is not None else None
     parents = mapping(fields.get('parents'), 'parents')
-    return Commit(
-        repo=repo,
+    found = NewCommit(
         oid=text(fields.get('oid'), 'oid'),
         authored_at=timestamp(fields.get('authoredDate'), 'authoredDate'),
         author_login=None if login is None else text(login, 'author.user.login'),
-        additions=integer(fields.get('additions'), 'additions'),
-        deletions=integer(fields.get('deletions'), 'deletions'),
         is_merge=integer(parents.get('totalCount'), 'parents.totalCount') > 1,
     )
+    additions = integer(fields.get('additions'), 'additions')
+    deletions = integer(fields.get('deletions'), 'deletions')
+    return commit_of(repo, found, additions, deletions)
 
 
 def parse_compare_commit(node: object) -> NewCommit:
@@ -533,6 +545,11 @@ def repository_connection(
 def split_name(name_with_owner: str) -> tuple[str, str]:
     owner, _, name = name_with_owner.partition('/')
     return owner, name
+
+
+def hides_stars(state: SyncState | None) -> bool:
+    """Whether a `star_events` sync state records the stargazers as not visible to the token."""
+    return state is not None and state.probe == STARS_HIDDEN
 
 
 class Fetcher:
@@ -597,7 +614,11 @@ class Fetcher:
         request, nothing cached.
 
         Raises:
-            NotFoundError: the login is neither a user nor an organisation.
+            NotFoundError: the login is neither a user nor an organisation, or GitHub answers 404.
+            StatsPendingError: GitHub is still computing the statistics.
+            AuthError: GitHub rejects the token.
+            RateLimitError: the rate limit is exhausted.
+            FetchError: another failure, or retries run out.
         """
         response = await self.client.rest_get(f'/users/{login}')
         body = response.data
@@ -635,6 +656,10 @@ class Fetcher:
 
         Raises:
             NotFoundError: the subject does not exist.
+            GraphQLError: GitHub reports errors, or a response is malformed.
+            AuthError: GitHub rejects the token.
+            RateLimitError: the rate limit is exhausted.
+            FetchError: another failure, or retries run out.
         """
         if subject.kind == 'repo':
             data = await self.client.graphql(
@@ -722,13 +747,39 @@ class Fetcher:
         for commit in await self.db(self.cache.read_commits, repo.name_with_owner, since, until):
             yield commit
 
-    async def provenance(self, subject: Subject, resources: frozenset[str]) -> dict[str, str]:
+    async def sync_states(
+        self, repos: collections.abc.Sequence[Repo], resources: collections.abc.Iterable[str]
+    ) -> dict[tuple[str, str], SyncState | None]:
+        """From the cache: the sync state of each (repo, resource), None where there is none.
+
+        Raises:
+            CacheError: the cache cannot be read.
+        """
+        return {
+            (repo.name_with_owner, resource): await self.db(
+                self.cache.sync_state, repo.name_with_owner, resource
+            )
+            for repo in repos
+            for resource in sorted(resources)
+        }
+
+    async def provenance(
+        self,
+        subject: Subject,
+        resources: frozenset[str],
+        repos: collections.abc.Sequence[Repo] | None = None,
+        states: collections.abc.Mapping[tuple[str, str], SyncState | None] | None = None,
+    ) -> dict[str, str]:
         """From the cache: the cache identity, `version_override_at` when recorded, and for each
         resource `fetched_at:<resource>`, the earliest `synced_at` over the subject's repos, or
         `never` when one of them has no sync state for it.
 
+        A caller that already holds the subject's `repos` and their `sync_states` for `resources`
+        passes them, so they are not read again.
+
         Raises:
             InvalidRequestError: `resources` names an unknown resource.
+            CacheError: the cache cannot be read.
         """
         unknown = sorted(resources - RESOURCES)
         if unknown:
@@ -739,13 +790,16 @@ class Fetcher:
         override = await self.db(self.cache.version_override_at)
         if override is not None:
             result['version_override_at'] = override
-        repos = await self.repos(subject)
+        if repos is None:
+            repos = await self.repos(subject)
+        if states is None:
+            states = await self.sync_states(repos, resources)
         for resource in sorted(resources):
-            synced: list[datetime.datetime] = []
-            for repo in repos:
-                state = await self.db(self.cache.sync_state, repo.name_with_owner, resource)
-                if state is not None:
-                    synced.append(state.synced_at)
+            synced = [
+                state.synced_at
+                for repo in repos
+                if (state := states[repo.name_with_owner, resource]) is not None
+            ]
             if len(synced) < len(repos) or not synced:
                 result[f'fetched_at:{resource}'] = 'never'
             else:
@@ -756,6 +810,8 @@ class Fetcher:
         self, repo: Repo, resource: str, full_synced_at: datetime.datetime | None
     ) -> SyncState:
         now = self.client.clock()
+        # A first full read (no earlier `full_synced_at`) starts the full-read clock now.
+        first_full_read = full_synced_at if full_synced_at is not None else now
         return SyncState(
             repo=repo.name_with_owner,
             resource=resource,
@@ -764,7 +820,7 @@ class Fetcher:
             pushed_at=repo.pushed_at,
             updated_at=repo.updated_at,
             synced_at=now,
-            full_synced_at=full_synced_at or now,
+            full_synced_at=first_full_read,
         )
 
     async def backfill_commits(self, repo: Repo) -> int:
@@ -828,7 +884,11 @@ class Fetcher:
 
 
         Raises:
-            GraphQLError: GitHub reports errors for the query.
+            GraphQLError: GitHub reports errors for the query, or a response is malformed.
+            NotFoundError: the queried object does not exist.
+            AuthError: GitHub rejects the token.
+            RateLimitError: the rate limit is exhausted.
+            FetchError: another failure, or retries run out.
         """
         counts: dict[str, tuple[int, int]] = {}
         owner, name = split_name(repo.name_with_owner)
@@ -857,17 +917,7 @@ class Fetcher:
                     [('MISSING', f'no line counts returned for commit {commit.oid}')]
                 )
             additions, deletions = counts[commit.oid]
-            commits.append(
-                Commit(
-                    repo=repo.name_with_owner,
-                    oid=commit.oid,
-                    authored_at=commit.authored_at,
-                    author_login=commit.author_login,
-                    additions=additions,
-                    deletions=deletions,
-                    is_merge=commit.is_merge,
-                )
-            )
+            commits.append(commit_of(repo.name_with_owner, commit, additions, deletions))
         return commits
 
     async def update_commits(self, repo: Repo, state: SyncState) -> int | None:
@@ -1270,7 +1320,7 @@ class Fetcher:
         """From the cache: whether the last star sync of the repo found its stargazers not visible
         to the token (`STARS_HIDDEN`), so it has no star history."""
         state = await self.db(self.cache.sync_state, repo.name_with_owner, 'star_events')
-        return state is not None and state.probe == STARS_HIDDEN
+        return hides_stars(state)
 
     async def forks(self, repo: Repo) -> collections.abc.AsyncIterator[Fork]:
         """From the cache: every direct fork of the repo, oldest first."""

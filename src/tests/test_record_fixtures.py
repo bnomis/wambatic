@@ -173,13 +173,13 @@ def test_graphql_refuses_an_error_body(
     monkeypatch: pytest.MonkeyPatch, record_fixtures: types.ModuleType, body: object
 ) -> None:
     monkeypatch.setattr(urllib.request, 'urlopen', lambda request, timeout: FakeResponse(body, {}))
-    with pytest.raises(RuntimeError, match='GraphQL error'):
+    with pytest.raises(record_fixtures.RecordingError, match='GraphQL error'):
         record_fixtures.Recorder(TOKEN).graphql('query X { x }')
 
 
 def test_pick_keeps_the_fields_present(record_fixtures: types.ModuleType) -> None:
     assert record_fixtures.pick({'a': 1, 'b': 2, 'c': 3}, ('c', 'a', 'z')) == {'c': 3, 'a': 1}
-    with pytest.raises(RuntimeError, match='Expected an object'):
+    with pytest.raises(record_fixtures.RecordingError, match='Expected an object'):
         record_fixtures.pick(['a'], ('a',))
 
 
@@ -215,7 +215,7 @@ def test_compare_commit_keeps_a_deleted_account_as_none(
 def test_compare_commit_refuses_an_unexpected_shape(
     record_fixtures: types.ModuleType, changes: dict[str, object]
 ) -> None:
-    with pytest.raises(RuntimeError, match='Unexpected compare commit'):
+    with pytest.raises(record_fixtures.RecordingError, match='Unexpected compare commit'):
         record_fixtures.compare_commit(compare_node(**changes))
 
 
@@ -303,6 +303,6 @@ def test_main_reports_a_failure_in_one_line(
     monkeypatch.setenv('GITHUB_TOKEN', TOKEN)
     assert record_fixtures.main(['--out', str(tmp_path / 'missing' / 'recorded.py')]) == 1
     captured = capsys.readouterr()
-    assert captured.err.startswith('record-fixtures: cannot write')
+    assert captured.err.startswith('ERROR: record-fixtures: cannot write')
     assert TOKEN not in captured.err
     assert captured.out == ''

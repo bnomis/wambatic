@@ -1963,3 +1963,48 @@ def test_the_report_help_names_every_group(capsys: pytest.CaptureFixture[str]) -
     assert wambatic.cli.main(['report', '--help']) == 0
     out = ' '.join(capsys.readouterr().out.split())
     assert 'activity, flow, delivery, popularity' in out
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(
+    full_refresh=hypothesis.strategies.booleans(),
+    no_fetch=hypothesis.strategies.booleans(),
+    by=hypothesis.strategies.sampled_from(['day', 'total']),
+    format=hypothesis.strategies.sampled_from([None, 'html', 'json']),
+    out=hypothesis.strategies.sampled_from([None, 'x.html']),
+    target=hypothesis.strategies.sampled_from(
+        ['user:octocat', 'org:acme', 'repo:acme/a', 'octocat']
+    ),
+    by_author=hypothesis.strategies.booleans(),
+)
+def test_check_report_rejects_exactly_the_conflicting_combinations(
+    full_refresh: bool,
+    no_fetch: bool,
+    by: str,
+    format: str | None,
+    out: str | None,
+    target: str,
+    by_author: bool,
+) -> None:
+    flags = wambatic.cli.Report(
+        target=target,
+        format=format,  # type: ignore[arg-type]
+        out=out,
+        by=by,  # type: ignore[arg-type]
+        full_refresh=full_refresh,
+        no_fetch=no_fetch,
+        by_author=by_author,
+    )
+    settings = settings_for(flags)
+    conflicts = (
+        (full_refresh and no_fetch)
+        or (out is not None and format != 'html')
+        or (format == 'html' and by == 'total')
+        or (no_fetch and target == 'octocat')
+        or (by_author and target.startswith('user:'))
+    )
+    if conflicts:
+        with pytest.raises(wambatic.reports.errors.UsageError):
+            wambatic.cli.check_report(flags, settings)
+    else:
+        wambatic.cli.check_report(flags, settings)

@@ -179,8 +179,8 @@ def test_non_ascii_logins_are_written_as_they_are(
     assert '\\u' not in text
 
 
-durations = st.integers(min_value=0, max_value=10**8).map(lambda n: datetime.timedelta(seconds=n))
-words = st.lists(st.text(max_size=12), max_size=4).map(tuple)
+DURATIONS = st.integers(min_value=0, max_value=10**8).map(lambda n: datetime.timedelta(seconds=n))
+WORDS = st.lists(st.text(max_size=12), max_size=4).map(tuple)
 
 
 @hypothesis.settings(
@@ -191,11 +191,11 @@ words = st.lists(st.text(max_size=12), max_size=4).map(tuple)
 @hypothesis.given(
     settings=st.builds(
         wambatic.settings.StatsSettings,
-        bot_logins=words,
+        bot_logins=WORDS,
         deploy_workflow=st.none() | st.text(max_size=12),
         exclude_merge_commits=st.booleans(),
-        failure_window=durations,
-        hotfix_labels=words,
+        failure_window=DURATIONS,
+        hotfix_labels=WORDS,
         timezone=st.text(max_size=12),
     )
 )

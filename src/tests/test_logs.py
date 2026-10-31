@@ -1,15 +1,7 @@
-import collections.abc
-
 import loguru
 import pytest
 
 import wambatic.logs
-
-
-@pytest.fixture(autouse=True)
-def restore_logger() -> collections.abc.Iterator[None]:
-    yield
-    loguru.logger.remove()
 
 
 def test_level_filters_messages(capsys: pytest.CaptureFixture[str]) -> None:

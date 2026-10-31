@@ -416,6 +416,7 @@ class Cache:
                 cache = cls(connection, path)
                 cache.check_identity(ignore_version)
             except BaseException:
+                # Cleans up the half-opened connection, then re-raises the original error.
                 connection.close()
                 raise
         return cache

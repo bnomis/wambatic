@@ -29,19 +29,20 @@ import wambatic.reports.errors
 import wambatic.reports.html
 import wambatic.reports.service
 import wambatic.settings
-import wambatic.stats
 import wambatic.stats.base
+import wambatic.stats.engine
+import wambatic.stats.errors
 import wambatic.version
 
 JobKey = tuple[str, frozenset[str]]
 INTERNAL_ERROR = 'internal error; see the server log'
 BAD_REQUEST = (
     wambatic.settings.SettingsError,
-    wambatic.stats.UnknownGroupError,
-    wambatic.stats.InvalidRangeError,
-    wambatic.stats.InvalidRequestError,
+    wambatic.stats.errors.UnknownGroupError,
+    wambatic.stats.errors.InvalidRangeError,
+    wambatic.stats.errors.InvalidRequestError,
 )
-NOT_FOUND = (wambatic.fetch.errors.NotFoundError, wambatic.stats.EmptySubjectError)
+NOT_FOUND = (wambatic.fetch.errors.NotFoundError, wambatic.stats.errors.EmptySubjectError)
 LOOPBACK_HOSTS = ('localhost', '127.0.0.1', '[::1]')
 PAGE_PATHS = frozenset({'/', '/report'})
 TRUE_VALUES = frozenset({'1', 'on', 'true'})
@@ -80,6 +81,7 @@ def error_response(error: BaseException) -> tuple[int, str]:
 
 @dataclasses.dataclass(slots=True)
 class SyncJob:
+    # Mutable by design: the background sync updates the phase and progress that the page polls.
     id: str
     key: JobKey
     phase: typing.Literal['queued', 'running', 'done', 'failed'] = 'queued'
@@ -274,7 +276,9 @@ def parse_query(
         effective,
         today,
     )
-    resources = wambatic.stats.resources_for(request.groups) & wambatic.fetch.base.BUILT_RESOURCES
+    resources = (
+        wambatic.stats.engine.resources_for(request.groups) & wambatic.fetch.base.BUILT_RESOURCES
+    )
     return Query(target, request, (text, resources), blank_to_none(raw.job))
 
 
@@ -343,7 +347,7 @@ def make_app(
         query: Query,
         requests: list[wambatic.stats.base.StatsRequest],
     ) -> list[wambatic.stats.base.StatsResult]:
-        _, results = await wambatic.reports.service.build_results(
+        _, results = await wambatic.reports.service.sync_and_compute(
             settings,
             cache,
             subject,
@@ -519,7 +523,7 @@ def is_loopback(host: str) -> bool:
         return False
 
 
-def check_bind(host: str, allow_remote: bool) -> None:
+def warn_on_bind(host: str, allow_remote: bool) -> None:
     """Refuse a host that other machines can reach unless remote access was asked for.
 
     Raises:
@@ -565,7 +569,7 @@ def serve(
         ServeError: the address cannot be listened on.
     """
     report = settings.report
-    check_bind(report.web_host, report.allow_remote)
+    warn_on_bind(report.web_host, report.allow_remote)
     if not 1 <= report.web_port <= 65535:
         raise wambatic.reports.errors.UsageError('the port must be from 1 to 65535')
     if default_target is not None:

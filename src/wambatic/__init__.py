@@ -1,6 +1,7 @@
-from .fetch import Fetcher, Subject
+from .fetch.base import Fetcher, Subject
 from .settings import Settings, load_settings
-from .stats import StatsRequest, StatsResult, compute
+from .stats.base import StatsRequest, StatsResult
+from .stats.engine import compute
 
 __all__ = (
     'Fetcher',

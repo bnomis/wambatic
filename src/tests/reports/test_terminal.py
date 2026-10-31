@@ -2,6 +2,7 @@ import dataclasses
 import datetime
 import io
 import re
+import string
 
 import hypothesis
 import hypothesis.strategies as st
@@ -12,6 +13,7 @@ import tests.conftest
 import tests.fixtures.reports
 import tests.fixtures.stats as fixture
 import wambatic.fetch.base
+import wambatic.fetch.cache
 import wambatic.reports.rows
 import wambatic.reports.terminal
 import wambatic.stats.base
@@ -206,7 +208,7 @@ def without_trailing_spaces(text: str) -> str:
 def test_the_org_by_month_rendering_matches_the_known_good_text(
     org_result: wambatic.stats.base.StatsResult,
 ) -> None:
-    expected = tests.fixtures.reports.ORG_MONTH_TERMINAL.format(
+    expected = string.Template(tests.fixtures.reports.ORG_MONTH_TERMINAL).substitute(
         wambatic_version=org_result.provenance['wambatic_version'],
         schema_version=org_result.provenance['schema_version'],
     )

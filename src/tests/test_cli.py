@@ -37,8 +37,9 @@ import wambatic.fetch.ratelimit
 import wambatic.reports.errors
 import wambatic.reports.service
 import wambatic.settings
-import wambatic.stats
 import wambatic.stats.base
+import wambatic.stats.engine
+import wambatic.stats.errors
 
 Subject = wambatic.fetch.base.Subject
 UsageError = wambatic.reports.errors.UsageError
@@ -697,7 +698,7 @@ def test_an_unknown_group_is_rejected_before_the_cache_is_opened(
     tmp_path: pathlib.Path,
 ) -> None:
     path = tmp_path / 'never' / 'cache.sqlite3'
-    with pytest.raises(wambatic.stats.UnknownGroupError, match='bogus'):
+    with pytest.raises(wambatic.stats.errors.UnknownGroupError, match='bogus'):
         run_report(monkeypatch, make_client, path, ['repo:a/b', '--groups', 'bogus'], online=False)
     assert not path.parent.exists()
 
@@ -707,7 +708,9 @@ def test_an_empty_cache_with_no_fetch_says_it_may_only_need_a_sync(
     make_client: tests.conftest.MakeClient,
     tmp_path: pathlib.Path,
 ) -> None:
-    with pytest.raises(wambatic.stats.EmptySubjectError, match='try again without --no-fetch'):
+    with pytest.raises(
+        wambatic.stats.errors.EmptySubjectError, match='try again without --no-fetch'
+    ):
         run_report(
             monkeypatch,
             make_client,
@@ -723,7 +726,7 @@ def test_an_empty_cache_without_no_fetch_gives_no_such_hint(
     tmp_path: pathlib.Path,
 ) -> None:
     monkeypatch.setenv('GITHUB_TOKEN', 'test-token')
-    with pytest.raises(wambatic.stats.EmptySubjectError) as caught:
+    with pytest.raises(wambatic.stats.errors.EmptySubjectError) as caught:
         run_report(
             monkeypatch,
             make_client,
@@ -834,12 +837,6 @@ def test_cache_clear_removes_the_files_then_reports_nothing_to_remove(
     assert again == [f'no cache at {stats_cache_path}']
 
 
-@pytest.fixture(autouse=True)
-def restore_logger() -> typing.Iterator[None]:
-    yield
-    loguru.logger.remove()
-
-
 @pytest.fixture
 def clock_after_fixtures(monkeypatch: pytest.MonkeyPatch) -> None:
     """The command line's clock, set after the fixtures' date ranges so `--until` is in bounds."""
@@ -876,10 +873,10 @@ ERROR_STATUSES = [
     (wambatic.fetch.errors.NotFoundError('octocat not found'), 1),
     (wambatic.fetch.errors.RateLimitError(RESET), 1),
     (wambatic.fetch.errors.StatsPendingError('still computing'), 1),
-    (wambatic.stats.EmptySubjectError('no commits in the cache for this range'), 1),
-    (wambatic.stats.InvalidRangeError('since is after until'), 1),
-    (wambatic.stats.InvalidRequestError('by_author is not meaningful for a user'), 1),
-    (wambatic.stats.UnknownGroupError('unknown groups: bogus'), 1),
+    (wambatic.stats.errors.EmptySubjectError('no commits in the cache for this range'), 1),
+    (wambatic.stats.errors.InvalidRangeError('since is after until'), 1),
+    (wambatic.stats.errors.InvalidRequestError('by_author is not meaningful for a user'), 1),
+    (wambatic.stats.errors.UnknownGroupError('unknown groups: bogus'), 1),
     (UsageError('flags clash'), 2),
     (SettingsError('fetch.max_age is wrong'), 2),
 ]
@@ -1317,7 +1314,7 @@ def test_html_syncs_once_and_computes_five_times_and_writes_one_file(
 ) -> None:
     monkeypatch.setenv('GITHUB_TOKEN', 'test-token')
     granularities: list[list[str]] = []
-    original = wambatic.stats.compute_all
+    original = wambatic.stats.engine.compute_all
 
     async def spy(
         subject: wambatic.fetch.base.Subject, reader: object, requests: object, **kwargs: object
@@ -1331,7 +1328,7 @@ def test_html_syncs_once_and_computes_five_times_and_writes_one_file(
         granularities.append([str(result.request.granularity) for result in results])
         return results
 
-    monkeypatch.setattr(wambatic.stats, 'compute_all', spy)
+    monkeypatch.setattr(wambatic.stats.engine, 'compute_all', spy)
     out = tmp_path / 'one' / 'report.html'
     ran = run_report(
         monkeypatch,

@@ -8,7 +8,7 @@ The three ways a user sees a `StatsResult`: a terminal report, a self-contained 
 
 **Prerequisites:** [Fetch and cache](../fetch-and-cache/spec.md) and [Stats](../stats/spec.md) are implemented (check: `python -c 'import wambatic.stats'`).
 
-Version 1.2 settles what step 5 of the [implementation order](../implementation-order.md) (terminal report and CLI) needed; the gaps and the choices made are in [review-1.md](review-1.md). Version 1.3 adds the terminal's flow sections for step 6 (flow data and stats); the choices are in the [stats review 2](../stats/review-2.md). Version 1.4 settles what step 7 (static HTML report) needed: the figure type, the results the page is built from, the page layout, themes and palette, the output path and the browser test; the choices are in [review-2.md](review-2.md). Version 1.5 adds the delivery sections of the terminal and the HTML page, and the release and workflow-run counts of `cache info`, for step 8 (delivery data and stats); the choices are in the [stats review 3](../stats/review-3.md). Version 1.6 settles what step 9 (local web app) needed: the server library (FastAPI with uvicorn, chosen 2026-10-30), the sync jobs and progress page that keep a large org from blocking the page, the query parameters and statuses, `serve`'s flags, the loopback and `Host` checks, and the move of the CLI's sync-then-compute code to `service.py` so the web app can share it; the choices are in [review-3.md](review-3.md). Version 1.7 adds the popularity sections of the terminal and the HTML page (the languages chart among them), the star and fork counts of `cache info`, and `popularity` in the `--groups` help, for step 10 (popularity data and stats); the choices are in the [stats review 4](../stats/review-4.md). Version 1.8 states that a repository whose star history is not visible to the token appears in Unavailable in every front end. Version 1.9 builds an HTML report from one read of the cache (`build_results` calls the stats `compute_all`) and builds each figure, table and series list of the page once; the choice is Decision 3 (option B) of the [audit review 1](../../audit-reviews/review-1.md), answered 2026-10-31.
+Version 1.2 settles what step 5 of the [implementation order](../implementation-order.md) (terminal report and CLI) needed; the gaps and the choices made are in [review-1.md](review-1.md). Version 1.3 adds the terminal's flow sections for step 6 (flow data and stats); the choices are in the [stats review 2](../stats/review-2.md). Version 1.4 settles what step 7 (static HTML report) needed: the figure type, the results the page is built from, the page layout, themes and palette, the output path and the browser test; the choices are in [review-2.md](review-2.md). Version 1.5 adds the delivery sections of the terminal and the HTML page, and the release and workflow-run counts of `cache info`, for step 8 (delivery data and stats); the choices are in the [stats review 3](../stats/review-3.md). Version 1.6 settles what step 9 (local web app) needed: the server library (FastAPI with uvicorn, chosen 2026-10-30), the sync jobs and progress page that keep a large org from blocking the page, the query parameters and statuses, `serve`'s flags, the loopback and `Host` checks, and the move of the CLI's sync-then-compute code to `service.py` so the web app can share it; the choices are in [review-3.md](review-3.md). Version 1.7 adds the popularity sections of the terminal and the HTML page (the languages chart among them), the star and fork counts of `cache info`, and `popularity` in the `--groups` help, for step 10 (popularity data and stats); the choices are in the [stats review 4](../stats/review-4.md). Version 1.8 states that a repository whose star history is not visible to the token appears in Unavailable in every front end. Version 1.9 builds an HTML report from one read of the cache (`sync_and_compute` calls the stats `compute_all`) and builds each figure, table and series list of the page once; the choice is Decision 3 (option B) of the [audit review 1](../../audit-reviews/review-1.md), answered 2026-10-31.
 
 Version 1.10 makes every error `wambatic.reports` raises itself a `ReportsError` (`UsageError`, `OutputError` and `ServeError`): `build_range_figures`, `build_calendar` and `html_document` raise `UsageError` where they raised `ValueError`; the choice is [audit review 1](../../audit-reviews/review-1.md), Decision 2 (option B), answered 2026-10-31.
 
@@ -24,8 +24,8 @@ Version 1.10 makes every error `wambatic.reports` raises itself a `ReportsError`
 | `rows.py` | the table rows both the terminal and the HTML page show (moved out of `terminal.py`) | 7 |
 | `figures.py` | `Figure`, `build_figures`, `build_range_figures`, `build_calendar`, `PALETTE` | 7 |
 | `html.py`, `templates/` (`report.html`, `report.css`, `report.js`) | `HtmlReport`, `html_document`, `render_html`, `report_filename` | 7 |
-| `service.py` | `parse_target`, `parse_date`, `make_request`, `resolve_tz`, `check_by_author`, `make_fetcher`, `needs_sync`, `log_sync`, `build_results`, `redact_environment_token` (moved out of `cli.py`) | 9 |
-| `web.py`, `templates/` (`form.html`, `progress.html`, `progress.js`, `message.html`) | `SyncJob`, `Jobs`, `make_app`, `is_loopback`, `check_bind`, `serve` | 9 |
+| `service.py` | `parse_target`, `parse_date`, `make_request`, `resolve_tz`, `check_by_author`, `make_fetcher`, `needs_sync`, `log_sync`, `sync_and_compute`, `redact_environment_token` (moved out of `cli.py`) | 9 |
+| `web.py`, `templates/` (`form.html`, `progress.html`, `progress.js`, `message.html`) | `SyncJob`, `Jobs`, `make_app`, `is_loopback`, `warn_on_bind`, `serve` | 9 |
 
 `wambatic.cli` is the composition root: it is the one module that imports every layer (settings, logs, fetch, stats, reports). `wambatic.reports` imports `wambatic.stats`, `wambatic.settings` and `wambatic.version`; only `wambatic.reports.service` and `wambatic.reports.web`, which sync on the CLI's and the web app's behalf, also import `wambatic.fetch` (review-3.md choice 2), and no reports module imports `wambatic.cli`; renderers read `result.subject` through `StatsResult` without importing it. Of the third-party libraries, only `html.py` imports `plotly`, and only for the plotly.js it bundles (`plotly.offline.get_plotlyjs()`); figures are plain Plotly JSON built by wambatic's own typed code (review-2.md decision 1).
 
@@ -88,7 +88,7 @@ def html_report(results: list[StatsResult], initial: Granularity) -> HtmlReport:
 
 # service.py: the sync-then-compute pipeline the CLI and the web app share
 def parse_target(text: str) -> Subject | str:
-    """A `Subject`, or a bare NAME's login for `build_results` to resolve; UsageError otherwise."""
+    """A `Subject`, or a bare NAME's login for `sync_and_compute` to resolve; UsageError otherwise."""
 def parse_date(text: str, flag: str = 'a date') -> datetime.date: ...
 def make_request(
     by: str, since: str | None, until: str | None, groups: str | None, by_author: bool,
@@ -103,7 +103,7 @@ def make_fetcher(token: str, cache: Cache, settings: FetchSettings) -> Fetcher: 
 def needs_sync(provenance: dict[str, str], resources: frozenset[str], settings: FetchSettings,
                full_refresh: bool, no_fetch: bool, now: datetime.datetime) -> bool: ...
 def log_sync(report: SyncReport) -> None: ...
-async def build_results(
+async def sync_and_compute(
     settings: Settings, cache: Cache, target: Subject | str, requests: list[StatsRequest], *,
     full_refresh: bool, no_fetch: bool, sync: bool | None = None,
     progress: SyncProgress | None = None,
@@ -139,7 +139,7 @@ def make_app(settings: Settings, cache: Cache, *, default_target: str | None = N
              clock: Callable[[], datetime.datetime] = utc_now) -> fastapi.FastAPI: ...
 def is_loopback(host: str) -> bool:
     """Exactly 'localhost', or an IP address (IPv6 in brackets or not) that is loopback."""
-def check_bind(host: str, allow_remote: bool) -> None:
+def warn_on_bind(host: str, allow_remote: bool) -> None:
     """UsageError for a non-loopback host without `allow_remote`; a warning with it."""
 def serve(settings: Settings, *, default_target: str | None, ignore_cache_version: bool) -> None:
     """Open the cache, bind `report.web_host:report.web_port`, then run the app on uvicorn until

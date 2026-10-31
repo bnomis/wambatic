@@ -24,18 +24,6 @@ CURRENT_SCHEMA_VERSION = wambatic.fetch.cache.SCHEMA_VERSION
 NEXT_SCHEMA_VERSION = CURRENT_SCHEMA_VERSION + 1
 
 
-@pytest.fixture
-def cache_path(tmp_path: pathlib.Path) -> pathlib.Path:
-    return tmp_path / 'nested' / 'cache.sqlite3'
-
-
-@pytest.fixture
-def cache(cache_path: pathlib.Path) -> typing.Iterator[wambatic.fetch.cache.Cache]:
-    opened = wambatic.fetch.cache.Cache.open(cache_path)
-    yield opened
-    opened.close()
-
-
 def repo(name: str = HELLO, **changes: object) -> wambatic.fetch.base.Repo:
     fields: dict[str, object] = {
         'name_with_owner': name,
@@ -496,17 +484,17 @@ def test_commit_without_an_account_and_merge_flag_round_trip(
     assert cache.read_commits(HELLO, None, None) == [stored]
 
 
-instants = hypothesis.strategies.datetimes(
+INSTANTS = hypothesis.strategies.datetimes(
     min_value=datetime.datetime(2000, 1, 1),
     max_value=datetime.datetime(2100, 1, 1),
     timezones=hypothesis.strategies.just(UTC),
 )
-commit_lists = hypothesis.strategies.lists(
+COMMIT_LISTS = hypothesis.strategies.lists(
     hypothesis.strategies.builds(
         wambatic.fetch.base.Commit,
         repo=hypothesis.strategies.just(HELLO),
         oid=hypothesis.strategies.sampled_from(['a', 'b', 'c', 'd']),
-        authored_at=instants,
+        authored_at=INSTANTS,
         author_login=hypothesis.strategies.none() | hypothesis.strategies.just('octocat'),
         additions=hypothesis.strategies.integers(0, 10_000),
         deletions=hypothesis.strategies.integers(0, 10_000),
@@ -517,7 +505,7 @@ commit_lists = hypothesis.strategies.lists(
 
 
 @hypothesis.settings(max_examples=20, deadline=10000)
-@hypothesis.given(commits=commit_lists)
+@hypothesis.given(commits=COMMIT_LISTS)
 def test_write_then_read_keeps_the_last_commit_per_oid(
     commits: list[wambatic.fetch.base.Commit], tmp_path_factory: pytest.TempPathFactory
 ) -> None:

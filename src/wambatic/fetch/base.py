@@ -800,6 +800,9 @@ class Fetcher:
                     path, {'per_page': str(PAGE_SIZE), 'page': str(page)}
                 )
             except wambatic.fetch.errors.NotFoundError:
+                loguru.logger.info(
+                    f'Reading the commits of {repo.name_with_owner} again: compare returned 404'
+                )
                 return None
             fields = mapping(body, 'compare')
             if page == 1:
@@ -1002,9 +1005,12 @@ class Fetcher:
         """Whether this read is a full one, logging why, and the `full_synced_at` the new state
         keeps (None: now)."""
         reason = self.full_read_reason(state, full_refresh, listed)
+        self.log_full_read(repo, resource, reason)
+        return bool(reason), None if reason or state is None else state.full_synced_at
+
+    def log_full_read(self, repo: Repo, resource: str, reason: str) -> None:
         if reason:
             loguru.logger.info(f'Reading all {resource} of {repo.name_with_owner}: {reason}')
-        return bool(reason), None if reason or state is None else state.full_synced_at
 
     def flow_state(
         self,
@@ -1034,7 +1040,7 @@ class Fetcher:
         """Read every published release of the repo and replace its cached ones, in one
         transaction with the listing's release probe. Every read is a full read."""
         state = await self.stored_state(repo, 'releases', state)
-        self.plan_full_read(repo, 'releases', state, full_refresh)
+        self.log_full_read(repo, 'releases', self.full_read_reason(state, full_refresh))
         owner, name = split_name(repo.name_with_owner)
         releases: list[Release] = []
         async with contextlib.aclosing(

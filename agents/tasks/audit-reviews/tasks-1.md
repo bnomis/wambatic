@@ -309,7 +309,7 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 ## Task 8: Smaller architecture, naming and package-surface fixes
 
-**Status:** todo
+**Status:** done
 **Priority:** low
 **Complexity:** medium
 **Source Reference:** F15 (A8, A9, A17, A19, A22, A23), F16 (S2, S4), Decision 4 (B)
@@ -318,26 +318,27 @@ There is no `TODO.md` in this repository, so no item moves to `DONE.md`.
 
 **Subtasks:**
 
-- [ ] A9: rename `reports/service.build_results` to `sync_and_compute` and `reports/web.check_bind` to `warn_on_bind`, with every caller, test and spec mention
-- [ ] A8: add a comment at `stats/activity.py` `Tally` and `reports/web.py` `SyncJob` saying they are mutable accumulators by design
-- [ ] A19: add a comment at `fetch/cache.py:380` and `reports/html.py:617` saying the handler cleans up and re-raises (no audit marker is needed: the script has no hit there)
-- [ ] A22: `fetch/base.py:757` logs the 404 as the reason (`compare returned 404`) before the full re-read
-- [ ] A23: replace `self.plan_full_read(...)` in `sync_releases` (`fetch/base.py:978`) with a `log_full_read` that returns nothing
-- [ ] Decision 4 (B): cut `fetch/__init__.py`, `stats/__init__.py` and `reports/__init__.py` `__all__` to the names `system/spec.md:23` lists for them (none for a subpackage that the spec does not list); keep `wambatic/__init__.py`; update `src/tests/test_package.py`
-- [ ] S2: rename `cli.py:32` `GRANULARITIES` to `Granularities` and `:33` `FORMATS` to `Formats`; `src/tests/fetch/test_cache.py:497` `instants`, `:502` `commit_lists`, `src/tests/reports/test_base.py:174` `durations`, `:175` `words` to UPPER_SNAKE
-- [ ] S4: move `restore_logger` (`src/tests/test_cli.py:821`, `src/tests/test_logs.py:10`) and `cache_path`/`cache` (`src/tests/fetch/test_cache.py:26`, `:31`) into `src/tests/conftest.py`; `src/tests/reports/test_terminal.py:209` fills its template with `string.Template` instead of `.format()`; add `src/tests/reports/test_errors.py` for the error hierarchy; move the `Fetcher` sync tests of `src/tests/fetch/test_fetcher.py` into `src/tests/fetch/test_base.py` or name the module in AGENTS.md as the deliberate exception (it is 1000+ lines; keep it separate and record that)
-- [ ] S4 (`cli.py:385`, `:393`): keep `loguru.logger.error` for expected domain errors, with a comment citing review-1 F16
+- [x] A9: rename `reports/service.build_results` to `sync_and_compute` and `reports/web.check_bind` to `warn_on_bind`, with every caller, test and spec mention
+- [x] A8: add a comment at `stats/activity.py` `Tally` and `reports/web.py` `SyncJob` saying they are mutable accumulators by design
+- [x] A19: add a comment at `fetch/cache.py:380` and `reports/html.py:617` saying the handler cleans up and re-raises (no audit marker is needed: the script has no hit there)
+- [x] A22: `fetch/base.py:757` logs the 404 as the reason (`compare returned 404`) before the full re-read
+- [x] A23: replace `self.plan_full_read(...)` in `sync_releases` (`fetch/base.py:978`) with a `log_full_read` that returns nothing
+- [x] Decision 4 (B): cut `fetch/__init__.py`, `stats/__init__.py` and `reports/__init__.py` `__all__` to the names `system/spec.md:23` lists for them (none for a subpackage that the spec does not list); keep `wambatic/__init__.py`; update `src/tests/test_package.py`
+  - Unblocked 2026-10-31 (operator answer): the function `compute` hides the module `stats/compute.py` on the package, so first rename `src/wambatic/stats/compute.py` to `src/wambatic/stats/engine.py` (with `git mv`), and its tests to match (`src/tests/stats/test_compute.py` to `test_engine.py`, if present). Then every caller uses full submodule paths: `wambatic.stats.engine.compute_all`, `.resources_for`, `.read_records`, `.aggregate`, `.CachedRecords`; `wambatic.stats.errors.EmptySubjectError` and the other stats errors; `wambatic.fetch.base.Subject`, `.Fetcher`, `.BUILT_RESOURCES`, `.SyncProgress`, `.StarEvent`, `.Fork`. Update `agents/specs/stats/spec.md` (module location, and every `compute.py` mention) and any other spec or doc naming `stats/compute.py`. The top-level `wambatic` re-exports stay, with `wambatic.compute` now imported from `wambatic.stats.engine`
+- [x] S2: rename `cli.py:32` `GRANULARITIES` to `Granularities` and `:33` `FORMATS` to `Formats`; `src/tests/fetch/test_cache.py:497` `instants`, `:502` `commit_lists`, `src/tests/reports/test_base.py:174` `durations`, `:175` `words` to UPPER_SNAKE
+- [x] S4: move `restore_logger` (`src/tests/test_cli.py:821`, `src/tests/test_logs.py:10`) and `cache_path`/`cache` (`src/tests/fetch/test_cache.py:26`, `:31`) into `src/tests/conftest.py`; `src/tests/reports/test_terminal.py:209` fills its template with `string.Template` instead of `.format()`; add `src/tests/reports/test_errors.py` for the error hierarchy; move the `Fetcher` sync tests of `src/tests/fetch/test_fetcher.py` into `src/tests/fetch/test_base.py` or name the module in AGENTS.md as the deliberate exception (it is 1000+ lines; keep it separate and record that)
+- [x] S4 (`cli.py:385`, `:393`): keep `loguru.logger.error` for expected domain errors, with a comment citing review-1 F16
 
 **Acceptance Criteria:**
 
-- [ ] `src/tests/test_package.py` checks exactly the names the system spec lists
-- [ ] No module-level type alias is UPPER_SNAKE and no module-level hypothesis strategy is lower_snake
+- [x] `src/tests/test_package.py` checks exactly the names the system spec lists
+- [x] No module-level type alias is UPPER_SNAKE and no module-level hypothesis strategy is lower_snake
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/test_package.py src/tests/test_cli.py src/tests/test_logs.py src/tests/fetch/test_cache.py src/tests/fetch/test_base.py src/tests/fetch/test_fetcher.py src/tests/reports` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/test_package.py src/tests/test_cli.py src/tests/test_logs.py src/tests/fetch/test_cache.py src/tests/fetch/test_base.py src/tests/fetch/test_fetcher.py src/tests/reports` passes
 
 **Notes:**
 

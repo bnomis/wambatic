@@ -309,12 +309,12 @@ def test_an_unknown_granularity_is_a_usage_error(by: str) -> None:
         )
 
 
-def test_build_results_with_sync_false_makes_no_request_and_needs_no_token(
+def test_sync_and_compute_with_sync_false_makes_no_request_and_needs_no_token(
     stats_cache: wambatic.fetch.cache.Cache,
 ) -> None:
     settings, request = month_request()
     subject, results = asyncio.run(
-        wambatic.reports.service.build_results(
+        wambatic.reports.service.sync_and_compute(
             settings,
             stats_cache,
             ALPHA,
@@ -336,7 +336,7 @@ def build_with(
     sync: bool | None,
     progress: wambatic.fetch.base.SyncProgress | None = None,
 ) -> int:
-    """The number of requests `build_results` makes against the fake GitHub."""
+    """The number of requests `sync_and_compute` makes against the fake GitHub."""
     monkeypatch.setenv('GITHUB_TOKEN', 'test-token')
     settings, request = month_request('30d')
 
@@ -344,7 +344,7 @@ def build_with(
         upstream = tests.fixtures.reports.alpha_upstream()
         async with tests.fixtures.fetch.server.ReplayServer({}, upstream.respond) as server:
             tests.fixtures.reports.install_replay(monkeypatch, make_client, server)
-            await wambatic.reports.service.build_results(
+            await wambatic.reports.service.sync_and_compute(
                 settings,
                 stats_cache,
                 ALPHA,

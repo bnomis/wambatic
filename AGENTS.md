@@ -17,3 +17,7 @@ After cloning: `git submodule update --init`. Claude Code cloud sessions do this
 
 Project-specific rules and skills go in this repository's own `claude/`
 directory, not in agents (see `.agents/claude/rules/rule-scope.md`).
+
+## Tests
+
+`src/tests/fetch/test_fetcher.py` is deliberately separate from `test_base.py`: it holds the `Fetcher` sync tests and is too long to merge into the module-level tests of `fetch/base.py` (audit review 1, F16).

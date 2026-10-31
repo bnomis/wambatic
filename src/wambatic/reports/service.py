@@ -17,8 +17,9 @@ import wambatic.fetch.cache
 import wambatic.fetch.ratelimit
 import wambatic.reports.errors
 import wambatic.settings
-import wambatic.stats
 import wambatic.stats.base
+import wambatic.stats.engine
+import wambatic.stats.errors
 
 LOGIN = re.compile(r'[A-Za-z0-9-]{1,39}')
 REPO_NAME = re.compile(r'[A-Za-z0-9._-]{1,100}')
@@ -212,7 +213,8 @@ async def sync_target(
         else:
             subject = target
         resources = (
-            wambatic.stats.resources_for(request.groups) & wambatic.fetch.base.BUILT_RESOURCES
+            wambatic.stats.engine.resources_for(request.groups)
+            & wambatic.fetch.base.BUILT_RESOURCES
         )
         if sync is None:
             provenance = await reader.provenance(subject, resources)
@@ -233,7 +235,7 @@ async def sync_target(
     return subject
 
 
-async def build_results(
+async def sync_and_compute(
     settings: wambatic.settings.Settings,
     cache: wambatic.fetch.cache.Cache,
     target: wambatic.fetch.base.Subject | str,
@@ -264,10 +266,12 @@ async def build_results(
     )
     reader = make_fetcher('', cache, settings.fetch)
     try:
-        return subject, await wambatic.stats.compute_all(subject, reader, requests, clock=clock)
-    except wambatic.stats.EmptySubjectError as e:
+        return subject, await wambatic.stats.engine.compute_all(
+            subject, reader, requests, clock=clock
+        )
+    except wambatic.stats.errors.EmptySubjectError as e:
         if no_fetch:
-            raise wambatic.stats.EmptySubjectError(
+            raise wambatic.stats.errors.EmptySubjectError(
                 f'{e}; the cache may only need a sync, so try again without --no-fetch'
             ) from None
         raise

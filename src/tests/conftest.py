@@ -7,6 +7,7 @@ import random
 import types
 import typing
 
+import loguru
 import pytest
 
 import tests.fixtures.audit_check
@@ -19,8 +20,27 @@ import wambatic.fetch.cache
 import wambatic.fetch.client
 import wambatic.reports.html
 import wambatic.settings
-import wambatic.stats
 import wambatic.stats.base
+import wambatic.stats.engine
+
+
+@pytest.fixture(autouse=True)
+def restore_logger() -> typing.Iterator[None]:
+    yield
+    loguru.logger.remove()
+
+
+@pytest.fixture
+def cache_path(tmp_path: pathlib.Path) -> pathlib.Path:
+    return tmp_path / 'nested' / 'cache.sqlite3'
+
+
+@pytest.fixture
+def cache(cache_path: pathlib.Path) -> typing.Iterator[wambatic.fetch.cache.Cache]:
+    opened = wambatic.fetch.cache.Cache.open(cache_path)
+    yield opened
+    opened.close()
+
 
 MakeClient = typing.Callable[..., wambatic.fetch.client.GitHubClient]
 MakeFetcher = typing.Callable[..., wambatic.fetch.base.Fetcher]
@@ -255,7 +275,9 @@ def compute_stats(
     request: wambatic.stats.base.StatsRequest,
     clock: datetime.datetime = tests.fixtures.stats.NOW,
 ) -> wambatic.stats.base.StatsResult:
-    return asyncio.run(wambatic.stats.compute(subject, fetcher, request, clock=lambda: clock))
+    return asyncio.run(
+        wambatic.stats.engine.compute(subject, fetcher, request, clock=lambda: clock)
+    )
 
 
 @pytest.fixture

@@ -22,12 +22,12 @@ Version 1.7 makes every error `wambatic.stats` raises itself a `StatsError`: `bu
 | `base.py` | `Granularity`, `Bucket`, `Series`, `StatsRequest`, `StatsResult`, `GROUPS` | 4 |
 | `buckets.py` | `bucket_for`, `bucket_range`, `partial_buckets` | 4 |
 | `activity.py` | the pure `activity` aggregation | 4 |
-| `compute.py` | `compute`, `resources_for` | 4 |
+| `engine.py` | `compute`, `compute_all`, `read_records`, `aggregate`, `CachedRecords`, `resources_for` | 4 |
 | `flow.py` | the pure `flow` aggregation | 6 |
 | `delivery.py` | the pure `delivery` aggregation | 8 |
 | `popularity.py` | the pure `popularity` aggregation | 10 |
 
-`compute` lives in its own module because it imports every group's aggregation, and each aggregation imports the records in `base.py`.
+`compute` lives in its own module, `engine.py`, rather than `compute.py`, because a package attribute `compute` would hide a submodule of that name, and because it imports every group's aggregation, and each aggregation imports the records in `base.py`.
 
 ## API
 

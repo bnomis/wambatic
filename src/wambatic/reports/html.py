@@ -66,7 +66,7 @@ def html_report(results: list[wambatic.stats.base.StatsResult], initial: Granula
 
 
 class SubjectLike(typing.Protocol):
-    """What `report_filename` reads of a `wambatic.fetch.Subject`, which `wambatic.reports` may
+    """What `report_filename` reads of a `wambatic.fetch.base.Subject`, which `wambatic.reports` may
     not import."""
 
     @property
@@ -666,6 +666,7 @@ def render_html(report: HtmlReport, out: pathlib.Path, theme: Theme) -> pathlib.
                 temporary.chmod(FILE_MODE)
                 os.replace(temporary, out)
             except BaseException:
+                # Cleans up the temporary file, then re-raises the original error.
                 temporary.unlink(missing_ok=True)
                 raise
     except OSError as e:

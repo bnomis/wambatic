@@ -5,8 +5,8 @@ an author breakdown, regenerated when the flow tables were added, then checked b
 2026-10-30: every number against the hand-worked totals in `tests.fixtures.stats` (periods,
 breakdowns by repository and by author, top contributors, and the flow counts and times by period,
 whose arithmetic is in `ORG_FLOW_BY_MONTH_UTC`) and the layout against the reports spec's Terminal
-section. The versions in the provenance footer are `{wambatic_version}` and
-`{schema_version}`, filled in by the test; trailing spaces are not kept, so the test compares
+section. The versions in the provenance footer are `$wambatic_version` and
+`$schema_version`, filled in by the test; trailing spaces are not kept, so the test compares
 lines without them.
 """
 
@@ -158,8 +158,8 @@ computed_at: 2027-01-20T12:00:00+00:00
 fetched_at:commits: 2027-02-01T10:00:00+00:00
 fetched_at:issues: 2027-02-01T10:00:00+00:00
 fetched_at:pull_requests: 2027-02-01T10:00:00+00:00
-wambatic_version: {wambatic_version}
-schema_version: {schema_version}
+wambatic_version: $wambatic_version
+schema_version: $schema_version
 """
 
 

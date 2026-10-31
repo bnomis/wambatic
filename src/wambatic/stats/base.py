@@ -3,7 +3,7 @@ import datetime
 import enum
 import typing
 
-import wambatic.fetch
+import wambatic.fetch.base
 import wambatic.settings
 import wambatic.stats.errors
 
@@ -54,7 +54,7 @@ class StatsRequest:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class StatsResult:
-    subject: wambatic.fetch.Subject
+    subject: wambatic.fetch.base.Subject
     request: StatsRequest
     since: datetime.date
     until: datetime.date

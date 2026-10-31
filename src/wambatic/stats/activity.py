@@ -23,7 +23,10 @@ Tables = dict[str, list[dict[str, typing.Any]]]
 
 @dataclasses.dataclass(slots=True)
 class Tally:
-    """What the commits of one group add up to, in one bucket or over the whole range."""
+    """What the commits of one group add up to, in one bucket or over the whole range.
+
+    A mutable accumulator by design: the stats code adds each commit to it while it reads them.
+    """
 
     commits: int = 0
     lines_added: int = 0

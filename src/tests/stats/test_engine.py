@@ -13,9 +13,9 @@ import tests.fixtures.stats as fixture
 import wambatic.fetch.base
 import wambatic.fetch.cache
 import wambatic.settings
-import wambatic.stats
 import wambatic.stats.base
 import wambatic.stats.delivery
+import wambatic.stats.engine
 import wambatic.stats.errors
 import wambatic.stats.flow
 
@@ -49,7 +49,9 @@ def compute(
     subject: wambatic.fetch.base.Subject = fixture.ORG,
     **changes: object,
 ) -> wambatic.stats.base.StatsResult:
-    return asyncio.run(wambatic.stats.compute(subject, fetcher, request(**changes), clock=clock))
+    return asyncio.run(
+        wambatic.stats.engine.compute(subject, fetcher, request(**changes), clock=clock)
+    )
 
 
 def pick(
@@ -71,14 +73,14 @@ class Untouchable:
 
 def untouched(subject: wambatic.fetch.base.Subject = fixture.ORG, **changes: object) -> None:
     fetcher = typing.cast(wambatic.fetch.base.Fetcher, Untouchable())
-    asyncio.run(wambatic.stats.compute(subject, fetcher, request(**changes), clock=clock))
+    asyncio.run(wambatic.stats.engine.compute(subject, fetcher, request(**changes), clock=clock))
 
 
 # resources_for
 
 
 def test_resources_for_maps_each_group() -> None:
-    resources_for = wambatic.stats.resources_for
+    resources_for = wambatic.stats.engine.resources_for
     assert resources_for(frozenset({'activity'})) == {'commits'}
     assert resources_for(frozenset({'flow'})) == {'issues', 'pull_requests'}
     assert resources_for(frozenset({'delivery'})) == {'pull_requests', 'releases', 'workflow_runs'}
@@ -93,7 +95,7 @@ def test_resources_for_maps_each_group() -> None:
 
 def test_resources_for_names_each_unknown_group_sorted() -> None:
     with pytest.raises(wambatic.stats.errors.UnknownGroupError, match='alpha, zeta') as raised:
-        wambatic.stats.resources_for(frozenset({'zeta', 'activity', 'alpha'}))
+        wambatic.stats.engine.resources_for(frozenset({'zeta', 'activity', 'alpha'}))
     assert 'activity' not in str(raised.value)
 
 
@@ -211,7 +213,7 @@ def test_a_commit_after_today_is_left_out_when_the_end_is_open(
 ) -> None:
     early_clock = datetime.datetime(2027, 1, 10, 12, 0, tzinfo=UTC)
     result = asyncio.run(
-        wambatic.stats.compute(
+        wambatic.stats.engine.compute(
             fixture.ORG, stats_fetcher, request(until=None), clock=lambda: early_clock
         )
     )
@@ -222,7 +224,9 @@ def test_a_commit_after_today_is_left_out_when_the_end_is_open(
 def test_the_default_request_returns_flow_beside_activity_and_lists_nothing_unavailable(
     stats_fetcher: wambatic.fetch.base.Fetcher,
 ) -> None:
-    result = asyncio.run(wambatic.stats.compute(fixture.ORG, stats_fetcher, Request(), clock=clock))
+    result = asyncio.run(
+        wambatic.stats.engine.compute(fixture.ORG, stats_fetcher, Request(), clock=clock)
+    )
     assert pick(result, 'commits')
     assert pick(result, 'prs_opened')
     assert result.tables['unavailable'] == []
@@ -569,7 +573,7 @@ def test_an_open_start_after_an_open_end_is_an_invalid_range(
     long_ago = datetime.datetime(2026, 9, 1, tzinfo=UTC)
     with pytest.raises(wambatic.stats.errors.InvalidRangeError):
         asyncio.run(
-            wambatic.stats.compute(
+            wambatic.stats.engine.compute(
                 fixture.ORG, stats_fetcher, request(since=None, until=None), clock=lambda: long_ago
             )
         )
@@ -790,7 +794,7 @@ def compute_all_of(
 ) -> list[wambatic.stats.base.StatsResult]:
     requests = [request(granularity=granularity, **changes) for granularity in granularities]
     return asyncio.run(
-        wambatic.stats.compute_all(
+        wambatic.stats.engine.compute_all(
             fixture.ORG, typing.cast(wambatic.fetch.base.Fetcher, fetcher), requests, clock=clock
         )
     )
@@ -815,7 +819,7 @@ def test_compute_all_returns_what_one_compute_per_request_returns(
     try:
         expected = [
             asyncio.run(
-                wambatic.stats.compute(
+                wambatic.stats.engine.compute(
                     fixture.ORG, stats_fetcher, request(granularity=g, **changes), clock=clock
                 )
             )
@@ -860,4 +864,4 @@ def test_compute_all_rejects_requests_that_differ_in_more_than_granularity() -> 
     requests = [request(), request(granularity=Granularity.DAY, by_author=True)]
     fetcher = typing.cast(wambatic.fetch.base.Fetcher, Untouchable())
     with pytest.raises(wambatic.stats.errors.InvalidRequestError, match='by_author'):
-        asyncio.run(wambatic.stats.compute_all(fixture.ORG, fetcher, requests, clock=clock))
+        asyncio.run(wambatic.stats.engine.compute_all(fixture.ORG, fetcher, requests, clock=clock))

@@ -31,7 +31,7 @@ import wambatic.reports.html
 import wambatic.reports.service
 import wambatic.reports.web
 import wambatic.settings
-import wambatic.stats
+import wambatic.stats.errors
 
 KEY = ('org:octo-org', frozenset({'commits'}))
 OTHER = ('org:other', frozenset({'commits'}))
@@ -42,11 +42,11 @@ OTHER = ('org:other', frozenset({'commits'}))
     [
         (wambatic.reports.errors.UsageError('x'), 400),
         (wambatic.settings.SettingsError('x'), 400),
-        (wambatic.stats.UnknownGroupError('x'), 400),
-        (wambatic.stats.InvalidRangeError('x'), 400),
-        (wambatic.stats.InvalidRequestError('x'), 400),
+        (wambatic.stats.errors.UnknownGroupError('x'), 400),
+        (wambatic.stats.errors.InvalidRangeError('x'), 400),
+        (wambatic.stats.errors.InvalidRequestError('x'), 400),
         (wambatic.fetch.errors.NotFoundError('x'), 404),
-        (wambatic.stats.EmptySubjectError('x'), 404),
+        (wambatic.stats.errors.EmptySubjectError('x'), 404),
         (wambatic.fetch.errors.AuthError('x'), 502),
         (
             wambatic.fetch.errors.RateLimitError(
@@ -691,10 +691,10 @@ def test_is_loopback_agrees_with_ipaddress_for_ipv4(address: ipaddress.IPv4Addre
     assert wambatic.reports.web.is_loopback(str(address)) is address.is_loopback
 
 
-def test_check_bind_refuses_a_public_host_unless_allowed_and_then_warns() -> None:
-    wambatic.reports.web.check_bind('127.0.0.1', False)
+def test_warn_on_bind_refuses_a_public_host_unless_allowed_and_then_warns() -> None:
+    wambatic.reports.web.warn_on_bind('127.0.0.1', False)
     with pytest.raises(wambatic.reports.errors.UsageError, match='--allow-remote'):
-        wambatic.reports.web.check_bind('0.0.0.0', False)
+        wambatic.reports.web.warn_on_bind('0.0.0.0', False)
     messages: list[str] = []
     sink = loguru.logger.add(
         lambda message: messages.append(
@@ -702,8 +702,8 @@ def test_check_bind_refuses_a_public_host_unless_allowed_and_then_warns() -> Non
         )
     )
     try:
-        wambatic.reports.web.check_bind('0.0.0.0', True)
-        wambatic.reports.web.check_bind('127.0.0.1', True)
+        wambatic.reports.web.warn_on_bind('0.0.0.0', True)
+        wambatic.reports.web.warn_on_bind('127.0.0.1', True)
     finally:
         loguru.logger.remove(sink)
     assert len(messages) == 1

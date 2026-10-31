@@ -26,11 +26,12 @@ import wambatic.reports.service
 import wambatic.reports.terminal
 import wambatic.reports.web
 import wambatic.settings
-import wambatic.stats
 import wambatic.stats.base
+import wambatic.stats.engine
+import wambatic.stats.errors
 
-GRANULARITIES = typing.Literal['day', 'month', 'total', 'week', 'year']
-FORMATS = typing.Literal['html', 'json', 'terminal']
+Granularities = typing.Literal['day', 'month', 'total', 'week', 'year']
+Formats = typing.Literal['html', 'json', 'terminal']
 
 
 @cappa.command(name='report', help='Print a report of a user, an organisation or a repository.')
@@ -40,7 +41,7 @@ class Report:
         str, cappa.Arg(help='user:NAME, org:NAME, repo:OWNER/NAME, OWNER/NAME or a bare NAME')
     ]
     format: typing.Annotated[
-        FORMATS | None,
+        Formats | None,
         cappa.Arg(long=True, help='Output format: terminal, html or json (default: report.format)'),
     ] = None
     out: typing.Annotated[
@@ -51,7 +52,7 @@ class Report:
         ),
     ] = None
     by: typing.Annotated[
-        GRANULARITIES,
+        Granularities,
         cappa.Arg(
             long=True,
             help='Period to bucket by; with html, the period shown first (default: month)',
@@ -250,14 +251,14 @@ async def run_report(
     target = wambatic.reports.service.parse_target(report.target)
     check_report(report, settings)
     request = build_request(report, settings, clock())
-    wambatic.stats.resources_for(request.groups)
+    wambatic.stats.engine.resources_for(request.groups)
     cache = wambatic.fetch.cache.Cache.open(
         settings.fetch.cache_path, ignore_version=report.ignore_cache_version
     )
     as_html = settings.report.format == 'html'
     requests = wambatic.reports.html.period_requests(request) if as_html else [request]
     try:
-        subject, results = await wambatic.reports.service.build_results(
+        subject, results = await wambatic.reports.service.sync_and_compute(
             settings,
             cache,
             target,
@@ -375,13 +376,15 @@ def main(argv: list[str] | None = None) -> int:
     try:
         execute(root)
     except (wambatic.reports.errors.UsageError, wambatic.settings.SettingsError) as e:
+        # Expected domain errors are logged with `error`, without a traceback (review-1 F16).
         loguru.logger.error(wambatic.reports.service.redact_environment_token(str(e)))
         return 2
     except (
         wambatic.fetch.errors.FetchError,
         wambatic.reports.errors.ReportsError,
-        wambatic.stats.StatsError,
+        wambatic.stats.errors.StatsError,
     ) as e:
+        # Expected domain errors are logged with `error`, without a traceback (review-1 F16).
         loguru.logger.error(wambatic.reports.service.redact_environment_token(str(e)))
         return 1
     except KeyboardInterrupt:

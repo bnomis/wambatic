@@ -16,6 +16,7 @@ import wambatic.fetch.base
 
 UTC = datetime.UTC
 NOW = datetime.datetime(2027, 1, 20, 12, 0, tzinfo=UTC)
+AFTER_FIXTURE_RANGES = datetime.datetime(2027, 2, 1, 12, 0, tzinfo=UTC)
 ALPHA_SYNCED_AT = datetime.datetime(2027, 2, 1, 10, 0, tzinfo=UTC)
 BETA_SYNCED_AT = datetime.datetime(2027, 2, 1, 12, 0, tzinfo=UTC)
 GAMMA_SYNCED_AT = datetime.datetime(2027, 2, 1, 11, 0, tzinfo=UTC)

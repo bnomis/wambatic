@@ -33,6 +33,7 @@ import wambatic.fetch.base
 import wambatic.fetch.cache
 import wambatic.fetch.client
 import wambatic.fetch.errors
+import wambatic.fetch.ratelimit
 import wambatic.reports.errors
 import wambatic.reports.service
 import wambatic.settings
@@ -80,7 +81,10 @@ def test_the_request_defaults_follow_the_stats_request() -> None:
     flags = report()
     settings = settings_for(flags)
     request = wambatic.cli.build_request(
-        flags, settings, wambatic.reports.service.resolve_tz(settings)
+        flags,
+        settings,
+        wambatic.reports.service.resolve_tz(settings),
+        tests.fixtures.stats.AFTER_FIXTURE_RANGES,
     )
     assert request.granularity is wambatic.stats.base.Granularity.MONTH
     assert request.groups == wambatic.stats.base.StatsRequest().groups
@@ -92,7 +96,10 @@ def test_the_request_carries_the_flags() -> None:
     flags = report(by='week', since='2026-10-01', until='2026-10-29', by_author=True, tz='UTC')
     settings = settings_for(flags)
     request = wambatic.cli.build_request(
-        flags, settings, wambatic.reports.service.resolve_tz(settings)
+        flags,
+        settings,
+        wambatic.reports.service.resolve_tz(settings),
+        tests.fixtures.stats.AFTER_FIXTURE_RANGES,
     )
     assert request.granularity is wambatic.stats.base.Granularity.WEEK
     assert request.since == datetime.date(2026, 10, 1)
@@ -104,7 +111,10 @@ def test_groups_are_split_on_commas_and_stripped() -> None:
     flags = report(groups='activity, flow')
     settings = settings_for(flags)
     request = wambatic.cli.build_request(
-        flags, settings, wambatic.reports.service.resolve_tz(settings)
+        flags,
+        settings,
+        wambatic.reports.service.resolve_tz(settings),
+        tests.fixtures.stats.AFTER_FIXTURE_RANGES,
     )
     assert request.groups == frozenset({'activity', 'flow'})
 
@@ -113,7 +123,10 @@ def test_an_unknown_group_is_passed_through_for_compute_to_reject() -> None:
     flags = report(groups='activity,bogus')
     settings = settings_for(flags)
     request = wambatic.cli.build_request(
-        flags, settings, wambatic.reports.service.resolve_tz(settings)
+        flags,
+        settings,
+        wambatic.reports.service.resolve_tz(settings),
+        tests.fixtures.stats.AFTER_FIXTURE_RANGES,
     )
     assert request.groups == frozenset({'activity', 'bogus'})
 
@@ -122,7 +135,12 @@ def test_no_group_at_all_is_a_usage_error() -> None:
     flags = report(groups=' , ')
     settings = settings_for(flags)
     with pytest.raises(UsageError, match='--groups'):
-        wambatic.cli.build_request(flags, settings, wambatic.reports.service.resolve_tz(settings))
+        wambatic.cli.build_request(
+            flags,
+            settings,
+            wambatic.reports.service.resolve_tz(settings),
+            tests.fixtures.stats.AFTER_FIXTURE_RANGES,
+        )
 
 
 @pytest.mark.parametrize(('since', 'until'), [('20261029', None), (None, '2026-02-30')])
@@ -130,7 +148,12 @@ def test_a_bad_date_flag_is_a_usage_error(since: str | None, until: str | None) 
     flags = report(since=since, until=until)
     settings = settings_for(flags)
     with pytest.raises(UsageError, match='YYYY-MM-DD'):
-        wambatic.cli.build_request(flags, settings, wambatic.reports.service.resolve_tz(settings))
+        wambatic.cli.build_request(
+            flags,
+            settings,
+            wambatic.reports.service.resolve_tz(settings),
+            tests.fixtures.stats.AFTER_FIXTURE_RANGES,
+        )
 
 
 def test_full_refresh_with_no_fetch_is_a_usage_error() -> None:
@@ -823,6 +846,14 @@ def restore_logger() -> typing.Iterator[None]:
     loguru.logger.remove()
 
 
+@pytest.fixture
+def clock_after_fixtures(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The command line's clock, set after the fixtures' date ranges so `--until` is in bounds."""
+    monkeypatch.setattr(
+        wambatic.fetch.ratelimit, 'utc_now', lambda: tests.fixtures.stats.AFTER_FIXTURE_RANGES
+    )
+
+
 def config_for(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, cache: pathlib.Path
 ) -> None:
@@ -887,6 +918,22 @@ def test_a_max_age_too_long_for_a_timedelta_exits_2_with_a_settings_message(
     assert [line for line in err.splitlines() if line.startswith('ERROR:')] == [
         'ERROR: fetch.max_age: the duration 99999999999d is too long'
     ]
+    assert 'Traceback' not in err
+
+
+@pytest.mark.parametrize(
+    ('flag', 'value', 'message'),
+    [
+        ('--since', '0001-01-01', '--since may not be before 2008-01-01'),
+        ('--until', '9999-12-31', '--until may not be after'),
+    ],
+)
+def test_a_date_outside_the_bounds_exits_2_with_a_usage_message(
+    capsys: pytest.CaptureFixture[str], flag: str, value: str, message: str
+) -> None:
+    assert wambatic.cli.main(['report', 'repo:octo-org/alpha', flag, value]) == 2
+    err = capsys.readouterr().err
+    assert message in err
     assert 'Traceback' not in err
 
 
@@ -984,6 +1031,7 @@ def test_a_bad_flag_value_returns_2_before_any_cache_is_opened(
     assert not cache.parent.exists()
 
 
+@pytest.mark.usefixtures('clock_after_fixtures')
 def test_a_warm_cache_report_through_main_returns_0_and_prints_the_period_table(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -999,6 +1047,7 @@ def test_a_warm_cache_report_through_main_returns_0_and_prints_the_period_table(
     assert captured.err == ''
 
 
+@pytest.mark.usefixtures('clock_after_fixtures')
 def test_json_through_main_is_pure_json_on_stdout(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -1108,7 +1157,7 @@ def test_a_closed_pipe_ends_the_terminal_report_quietly(
             'report',
             'org:octo-org',
             '--no-fetch',
-            *ALPHA_FLAGS,
+            *['--since', '2026-10-01', '--until', '2026-10-30'],
         ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -1181,6 +1230,7 @@ def html_config(
     return out_dir
 
 
+@pytest.mark.usefixtures('clock_after_fixtures')
 def test_html_writes_the_default_file_and_prints_exactly_its_path(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -1200,6 +1250,7 @@ def test_html_writes_the_default_file_and_prints_exactly_its_path(
     assert 'id="activity-commits"' in text
 
 
+@pytest.mark.usefixtures('clock_after_fixtures')
 def test_html_of_the_delivery_group_alone_has_the_delivery_section_and_no_other(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -1217,6 +1268,7 @@ def test_html_of_the_delivery_group_alone_has_the_delivery_section_and_no_other(
     assert 'id="flow"' not in text
 
 
+@pytest.mark.usefixtures('clock_after_fixtures')
 def test_out_names_a_file_or_an_existing_directory(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -1237,6 +1289,7 @@ def test_out_names_a_file_or_an_existing_directory(
     assert not out_dir.exists()
 
 
+@pytest.mark.usefixtures('clock_after_fixtures')
 def test_the_html_format_from_the_config_works_without_the_flag_and_by_picks_the_initial_period(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -1298,6 +1351,7 @@ def test_html_syncs_once_and_computes_five_times_and_writes_one_file(
     assert [path.name for path in out.parent.iterdir()] == ['report.html']
 
 
+@pytest.mark.usefixtures('clock_after_fixtures')
 def test_an_out_that_cannot_be_written_returns_1_with_one_error_line_and_no_temporary_file(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

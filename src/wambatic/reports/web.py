@@ -232,7 +232,13 @@ def blank_to_none(value: str | None) -> str | None:
     return value.strip() or None if value is not None else None
 
 
-def parse_query(settings: wambatic.settings.Settings, raw: RawQuery, *, page: bool) -> Query:
+def parse_query(
+    settings: wambatic.settings.Settings,
+    raw: RawQuery,
+    today: datetime.datetime,
+    *,
+    page: bool,
+) -> Query:
     """The CLI's parsers applied to the parameters, so a value the CLI rejects is rejected with
     the same message."""
     text = (blank_to_none(raw.target) or '').strip()
@@ -264,6 +270,7 @@ def parse_query(settings: wambatic.settings.Settings, raw: RawQuery, *, page: bo
         by_author,
         wambatic.reports.service.resolve_tz(effective),
         effective,
+        today,
     )
     resources = wambatic.stats.resources_for(request.groups) & wambatic.fetch.base.BUILT_RESOURCES
     return Query(target, request, by_author, (text, resources), blank_to_none(raw.job))
@@ -449,7 +456,7 @@ def make_app(
     async def report(
         request: fastapi.Request, raw: typing.Annotated[RawQuery, fastapi.Depends(raw_query)]
     ) -> fastapi.responses.HTMLResponse:
-        query = parse_query(settings, raw, page=True)
+        query = parse_query(settings, raw, clock(), page=True)
         outcome = await results_or_job(query, wambatic.reports.html.period_requests(query.request))
         if isinstance(outcome, SyncJob):
             reload = reload_path(request.url.components, outcome.id)
@@ -478,7 +485,7 @@ def make_app(
         raw: typing.Annotated[RawQuery, fastapi.Depends(raw_query)],
     ) -> fastapi.responses.JSONResponse:
         """The result as `report --format json` prints it, or 202 and a job to follow."""
-        query = parse_query(settings, raw, page=False)
+        query = parse_query(settings, raw, clock(), page=False)
         outcome = await results_or_job(query, [query.request])
         if isinstance(outcome, SyncJob):
             return fastapi.responses.JSONResponse(

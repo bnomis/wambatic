@@ -228,8 +228,8 @@ Global options come before the command: `wambatic -v report ...`.
 | `--format terminal\|html\|json` | `report.format` | The output format |
 | `--out PATH` | `report.out_dir` | With `--format html`, the file to write, or an existing directory to write the report into; an error with another format |
 | `--by year\|month\|week\|day\|total` | `month` | The period to bucket by; weeks are ISO weeks starting on Monday. With `--format html`, the period shown when the page opens, and `total` is an error |
-| `--since YYYY-MM-DD` | the first commit | First day, inclusive, in the report time zone |
-| `--until YYYY-MM-DD` | today | Last day, inclusive, in the report time zone |
+| `--since YYYY-MM-DD` | the first commit | First day, inclusive, in the report time zone; not before 2008-01-01 |
+| `--until YYYY-MM-DD` | today | Last day, inclusive, in the report time zone; not after tomorrow in that zone |
 | `--groups NAMES` | `activity,flow` | Comma-separated metric groups: `activity`, `delivery`, `flow`, `popularity`. `delivery` and `popularity` are off by default because they read every workflow run, star and fork, which costs requests (see [The cache](#the-cache)) |
 | `--by-author` | off | Break activity down by author; not for a user target |
 | `--tz ZONE` | `stats.timezone` | An [IANA time zone](https://www.iana.org/time-zones) such as `Europe/Berlin` |

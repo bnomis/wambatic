@@ -253,7 +253,14 @@ SYNCED = tests.fixtures.stats.ALPHA_SYNCED_AT
 def month_request(max_age: str = '0s') -> tuple[wambatic.settings.Settings, StatsRequest]:
     settings = wambatic.settings.load_settings(None, {'fetch': {'max_age': max_age}})
     request = wambatic.reports.service.make_request(
-        'month', '2026-10-01', '2027-01-31', None, False, zoneinfo.ZoneInfo('UTC'), settings
+        'month',
+        '2026-10-01',
+        '2027-01-31',
+        None,
+        False,
+        zoneinfo.ZoneInfo('UTC'),
+        settings,
+        tests.fixtures.stats.AFTER_FIXTURE_RANGES,
     )
     return settings, request
 
@@ -293,7 +300,14 @@ def test_an_unknown_granularity_is_a_usage_error(by: str) -> None:
     settings = wambatic.settings.load_settings(None, {})
     with pytest.raises(UsageError, match='--by must be one of'):
         wambatic.reports.service.make_request(
-            by, None, None, None, False, zoneinfo.ZoneInfo('UTC'), settings
+            by,
+            None,
+            None,
+            None,
+            False,
+            zoneinfo.ZoneInfo('UTC'),
+            settings,
+            tests.fixtures.stats.AFTER_FIXTURE_RANGES,
         )
 
 
@@ -360,3 +374,42 @@ def test_a_fresh_cache_is_not_synced_unless_sync_is_true(
     progress = wambatic.fetch.base.SyncProgress()
     assert build_with(monkeypatch, make_client, stats_cache, True, progress) > 0
     assert progress.repos_listed == 1
+
+
+@pytest.mark.parametrize(
+    ('since', 'until', 'message'),
+    [
+        ('2007-12-31', None, '--since may not be before 2008-01-01'),
+        ('0001-01-01', None, '--since may not be before 2008-01-01'),
+        (None, '2027-02-03', '--until may not be after 2027-02-02'),
+    ],
+)
+def test_a_date_outside_the_bounds_is_a_usage_error(
+    since: str | None, until: str | None, message: str
+) -> None:
+    settings = wambatic.settings.load_settings(None, {})
+    with pytest.raises(UsageError, match=message):
+        wambatic.reports.service.make_request(
+            'month',
+            since,
+            until,
+            None,
+            False,
+            zoneinfo.ZoneInfo('UTC'),
+            settings,
+            tests.fixtures.stats.AFTER_FIXTURE_RANGES,
+        )
+
+
+def test_tomorrow_is_taken_in_the_requested_time_zone() -> None:
+    settings = wambatic.settings.load_settings(None, {})
+    clock = datetime.datetime(2027, 2, 1, 20, 0, tzinfo=datetime.UTC)
+
+    def make(tz: str) -> StatsRequest:
+        return wambatic.reports.service.make_request(
+            'month', None, '2027-02-03', None, False, zoneinfo.ZoneInfo(tz), settings, clock
+        )
+
+    assert make('Pacific/Auckland').until == datetime.date(2027, 2, 3)
+    with pytest.raises(UsageError, match='--until'):
+        make('UTC')

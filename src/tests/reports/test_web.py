@@ -191,8 +191,9 @@ def test_close_cancels_a_running_job() -> None:
 # The app
 
 BASE = 'http://127.0.0.1:8000'
-FRESH_PARAMS = 'target=org:octo-org&since=2026-10-01&until=2027-01-31&by=month&by_author=1'
-ALPHA_PARAMS = 'target=repo:octo-org/alpha&since=2026-10-01&until=2027-01-31'
+FRESH_PARAMS = 'target=org:octo-org&since=2026-10-01&until=2027-01-21&by=month&by_author=1'
+HTML_PARAMS = FRESH_PARAMS.replace('until=2027-01-21', 'until=2027-01-31')
+ALPHA_PARAMS = 'target=repo:octo-org/alpha&since=2026-10-01&until=2027-01-21'
 NOW = tests.fixtures.stats.NOW
 
 
@@ -209,10 +210,11 @@ async def serving(
     *,
     check_host: bool = True,
     default_target: str | None = None,
+    clock: datetime.datetime = NOW,
 ) -> collections.abc.AsyncIterator[httpx.AsyncClient]:
     """An HTTPX client for the app, with its lifespan entered (`ASGITransport` does not)."""
     app = wambatic.reports.web.make_app(
-        settings, cache, default_target=default_target, check_host=check_host, clock=lambda: NOW
+        settings, cache, default_target=default_target, check_host=check_host, clock=lambda: clock
     )
     async with app.router.lifespan_context(app):
         transport = httpx.ASGITransport(app=app)
@@ -240,7 +242,14 @@ def direct(
     subject: wambatic.fetch.base.Subject = tests.fixtures.stats.ORG,
 ) -> dict[str, object]:
     request = wambatic.reports.service.make_request(
-        by, '2026-10-01', '2027-01-31', None, True, zoneinfo.ZoneInfo('UTC'), settings
+        by,
+        '2026-10-01',
+        '2027-01-21',
+        None,
+        True,
+        zoneinfo.ZoneInfo('UTC'),
+        settings,
+        tests.fixtures.stats.NOW,
     )
     result = tests.conftest.compute_stats(cache_fetcher, subject, request)
     return typing.cast(
@@ -276,6 +285,8 @@ def test_api_stats_of_a_fresh_cache_is_the_json_report(
         ('target=org:octo-org&tz=Mars/Base', 'stats.timezone is not a known time zone'),
         ('target=user:octocat&by_author=1', '--by-author is for an organisation'),
         ('target=org:octo-org&since=2027-01-31&until=2026-10-01', ''),
+        ('target=org:octo-org&since=0001-01-01', '--since may not be before 2008-01-01'),
+        ('target=org:octo-org&until=2027-01-22', '--until may not be after 2027-01-21'),
     ],
 )
 def test_invalid_parameters_answer_400_with_the_cli_message(
@@ -289,6 +300,16 @@ def test_invalid_parameters_answer_400_with_the_cli_message(
     status, error = asyncio.run(scenario())
     assert status == 400
     assert message in error
+
+
+def test_a_report_page_with_a_date_before_github_answers_400(
+    stats_cache: wambatic.fetch.cache.Cache,
+) -> None:
+    async def scenario() -> int:
+        async with serving(web_settings(), stats_cache) as client:
+            return (await client.get('/report?target=org:octo-org&since=0001-01-01')).status_code
+
+    assert asyncio.run(scenario()) == 400
 
 
 def test_a_stale_cache_answers_202_and_the_job_result_needs_no_second_sync(
@@ -530,14 +551,24 @@ def test_the_form_posts_to_report_and_escapes_the_default_target(
 @pytest.mark.parametrize('theme', ['auto', 'dark'])
 def test_report_of_a_fresh_cache_is_the_html_report_document(
     stats_cache: wambatic.fetch.cache.Cache,
-    org_report: wambatic.reports.html.HtmlReport,
+    stats_fetcher: wambatic.fetch.base.Fetcher,
     theme: str,
 ) -> None:
-    expected = wambatic.reports.html.html_document(org_report, theme)  # type: ignore[arg-type]
+    report = tests.conftest.make_report(
+        stats_fetcher,
+        tests.fixtures.stats.ORG,
+        by_author=True,
+        clock=tests.fixtures.stats.AFTER_FIXTURE_RANGES,
+    )
+    expected = wambatic.reports.html.html_document(report, theme)  # type: ignore[arg-type]
 
     async def scenario() -> tuple[int, str, str]:
-        async with serving(web_settings(theme=theme), stats_cache) as client:
-            response = await client.get(f'/report?{FRESH_PARAMS}')
+        async with serving(
+            web_settings(theme=theme),
+            stats_cache,
+            clock=tests.fixtures.stats.AFTER_FIXTURE_RANGES,
+        ) as client:
+            response = await client.get(f'/report?{HTML_PARAMS}')
             return response.status_code, response.headers['content-type'], response.text
 
     assert asyncio.run(scenario()) == (200, 'text/html; charset=utf-8', expected)

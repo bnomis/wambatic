@@ -199,10 +199,13 @@ def check_report(report: Report, settings: wambatic.settings.Settings) -> None:
 
 
 def build_request(
-    report: Report, settings: wambatic.settings.Settings, tz: zoneinfo.ZoneInfo
+    report: Report,
+    settings: wambatic.settings.Settings,
+    tz: zoneinfo.ZoneInfo,
+    today: datetime.datetime,
 ) -> wambatic.stats.base.StatsRequest:
     return wambatic.reports.service.make_request(
-        report.by, report.since, report.until, report.groups, report.by_author, tz, settings
+        report.by, report.since, report.until, report.groups, report.by_author, tz, settings, today
     )
 
 
@@ -244,7 +247,9 @@ async def run_report(
     """Check the flags, bring the cache up to date if needed, compute and print the report."""
     target = wambatic.reports.service.parse_target(report.target)
     check_report(report, settings)
-    request = build_request(report, settings, wambatic.reports.service.resolve_tz(settings))
+    request = build_request(
+        report, settings, wambatic.reports.service.resolve_tz(settings), clock()
+    )
     wambatic.stats.resources_for(request.groups)
     cache = wambatic.fetch.cache.Cache.open(
         settings.fetch.cache_path, ignore_version=report.ignore_cache_version
@@ -341,7 +346,11 @@ def execute(root: Wambatic) -> None:
     console = rich.console.Console()
     if isinstance(command, Report):
         settings = wambatic.settings.load_settings(None, overrides(command))
-        asyncio.run(run_report(command, settings, console, sys.stdout))
+        asyncio.run(
+            run_report(
+                command, settings, console, sys.stdout, clock=wambatic.fetch.ratelimit.utc_now
+            )
+        )
     elif isinstance(command, Serve):
         wambatic.reports.web.serve(
             wambatic.settings.load_settings(None, serve_overrides(command)),

@@ -253,10 +253,9 @@ def compute_stats(
     fetcher: wambatic.fetch.base.Fetcher,
     subject: wambatic.fetch.base.Subject,
     request: wambatic.stats.base.StatsRequest,
+    clock: datetime.datetime = tests.fixtures.stats.NOW,
 ) -> wambatic.stats.base.StatsResult:
-    return asyncio.run(
-        wambatic.stats.compute(subject, fetcher, request, clock=lambda: tests.fixtures.stats.NOW)
-    )
+    return asyncio.run(wambatic.stats.compute(subject, fetcher, request, clock=lambda: clock))
 
 
 @pytest.fixture
@@ -351,6 +350,7 @@ def make_report(
     initial: wambatic.stats.base.Granularity = wambatic.stats.base.Granularity.MONTH,
     by_author: bool = False,
     groups: frozenset[str] = frozenset({'activity', 'flow'}),
+    clock: datetime.datetime = tests.fixtures.stats.NOW,
 ) -> wambatic.reports.html.HtmlReport:
     """The five results an HTML report is built from, over the stats fixture's range."""
 
@@ -362,7 +362,7 @@ def make_report(
             by_author=by_author,
             groups=groups,
         )
-        return compute_stats(fetcher, subject, request)
+        return compute_stats(fetcher, subject, request, clock)
 
     return wambatic.reports.html.HtmlReport(
         total=result(wambatic.stats.base.Granularity.TOTAL),

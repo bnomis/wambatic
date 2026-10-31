@@ -27,6 +27,7 @@ PREFIXES: dict[str, typing.Literal['org', 'repo', 'user']] = {
     'repo': 'repo',
     'user': 'user',
 }
+EARLIEST_DATE = datetime.date(2008, 1, 1)
 TARGET_FORMS = 'user:NAME, org:NAME, repo:OWNER/NAME, OWNER/NAME or NAME'
 
 
@@ -93,8 +94,10 @@ def make_request(
     by_author: bool,
     tz: zoneinfo.ZoneInfo,
     settings: wambatic.settings.Settings,
+    today: datetime.datetime,
 ) -> wambatic.stats.base.StatsRequest:
-    """The `StatsRequest` of the computing flags or query parameters."""
+    """The `StatsRequest` of the computing flags or query parameters. `today` is the caller's
+    clock; `until` may not be after tomorrow in `tz`."""
     fields: dict[str, object] = {}
     if groups is not None:
         names = frozenset(name.strip() for name in groups.split(',') if name.strip())
@@ -106,10 +109,21 @@ def make_request(
     except ValueError:
         choices = ', '.join(sorted(item.value for item in wambatic.stats.base.Granularity))
         raise wambatic.reports.errors.UsageError(f'--by must be one of {choices}') from None
+    since_date = None if since is None else parse_date(since, '--since')
+    until_date = None if until is None else parse_date(until, '--until')
+    if since_date is not None and since_date < EARLIEST_DATE:
+        raise wambatic.reports.errors.UsageError(
+            f'--since may not be before {EARLIEST_DATE.isoformat()}, when GitHub began'
+        )
+    latest = today.astimezone(tz).date() + datetime.timedelta(days=1)
+    if until_date is not None and until_date > latest:
+        raise wambatic.reports.errors.UsageError(
+            f'--until may not be after {latest.isoformat()}, tomorrow in {tz.key}'
+        )
     return wambatic.stats.base.StatsRequest(
         granularity=granularity,
-        since=None if since is None else parse_date(since, '--since'),
-        until=None if until is None else parse_date(until, '--until'),
+        since=since_date,
+        until=until_date,
         by_author=by_author,
         tz=tz,
         settings=settings.stats,

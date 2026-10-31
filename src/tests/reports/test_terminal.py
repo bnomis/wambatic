@@ -669,3 +669,24 @@ def test_the_default_groups_print_no_popularity_tables(
     output = render(org_result)
     assert 'Popularity' not in output
     assert 'Languages' not in output
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(
+    metric=hypothesis.strategies.sampled_from(
+        [*wambatic.reports.rows.DELIVERY_UNITS, *wambatic.reports.rows.FLOW_TIMES, 'lines_net']
+    ),
+    value=hypothesis.strategies.none()
+    | hypothesis.strategies.floats(min_value=-1e6, max_value=1e6),
+)
+def test_format_cell_is_a_dash_for_no_data_and_a_percentage_for_ratios(
+    metric: str, value: float | None
+) -> None:
+    cell = wambatic.reports.terminal.format_cell(metric, value)
+    if value is None:
+        assert cell == wambatic.reports.rows.NO_DATA
+    elif wambatic.reports.rows.DELIVERY_UNITS.get(metric) == 'ratio':
+        assert cell.endswith('%')
+    elif metric == 'lines_net' and value >= 0.5:
+        assert cell.startswith('+')
+    assert cell

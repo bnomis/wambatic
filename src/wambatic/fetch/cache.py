@@ -172,10 +172,6 @@ def to_text(value: datetime.datetime) -> str:
     return value.astimezone(datetime.UTC).isoformat(timespec='microseconds')
 
 
-def optional_to_text(value: datetime.datetime | None) -> str | None:
-    return None if value is None else to_text(value)
-
-
 # auditme: accept[passthrough-shim] the inverse of to_text
 def from_text(value: str) -> datetime.datetime:
     return datetime.datetime.fromisoformat(value)

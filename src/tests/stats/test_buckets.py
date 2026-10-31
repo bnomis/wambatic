@@ -310,3 +310,26 @@ def test_placer_puts_everything_in_range_in_the_one_total_bucket() -> None:
     place = wambatic.stats.buckets.placer(buckets, datetime.UTC, since, until)
     assert place(datetime.datetime(2026, 11, 3, 12, tzinfo=datetime.UTC)) == 0
     assert place(datetime.datetime(2027, 1, 3, 12, tzinfo=datetime.UTC)) is None
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(ranges(), hypothesis.strategies.sampled_from(GRANULARITIES))
+def test_partial_buckets_are_the_cut_ends_of_any_range(
+    span: tuple[datetime.date, datetime.date],
+    granularity: wambatic.stats.base.Granularity,
+) -> None:
+    since, until = span
+    buckets = wambatic.stats.buckets.bucket_range(since, until, granularity)
+    partial = wambatic.stats.buckets.partial_buckets(since, until, buckets)
+    assert all(b in (buckets[0], buckets[-1]) for b in partial)
+    assert len(set(partial)) == len(partial)
+    first_cut = since > buckets[0].start
+    last_cut = (
+        until
+        < wambatic.stats.buckets.next_start(buckets[-1].start, granularity)
+        - wambatic.stats.buckets.ONE_DAY
+    )
+    expected = ([buckets[0]] if first_cut else []) + (
+        [buckets[-1]] if last_cut and not (first_cut and len(buckets) == 1) else []
+    )
+    assert partial == expected

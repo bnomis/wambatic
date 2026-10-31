@@ -274,7 +274,7 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 ## Task 8: Construction helpers, named returns and the terminal shim
 
-**Status:** todo
+**Status:** done
 **Priority:** low
 **Complexity:** small
 **Source Reference:** G7 (A15, A23; A8 no change), G9 (A17)
@@ -283,21 +283,21 @@ Task 1 comes first because the pre-push hook refuses every push until the 16 `ra
 
 **Subtasks:**
 
-- [ ] A15: one `series_of(name, unit, buckets, values)` helper used by `stats/flow.py`, `popularity.py`, `delivery.py` and `activity.py`; one helper for `PeriodTable` rows in `reports/rows.py`; build `RestResponse` once in `fetch/client.py` `rest_get`; one `Commit` builder shared by `fetch/base.py:487` and `:861`; one `Bucket` builder in `stats/buckets.py`
-- [ ] A23: name the dropped values (`data, _date = await self.graphql_dated(...)` at `fetch/client.py:163`; the same at `bin/record-fixtures.py:135`)
-- [ ] G9: remove the module `__getattr__` shim at `reports/terminal.py:14`; point `src/tests/reports/test_terminal.py:322` at `wambatic.reports.rows.TOP_CONTRIBUTORS_SHOWN`
-- [ ] A8: no change (`SyncJob`, `SyncProgress` and `Tally` are mutable by design, commented in tasks-1 Task 8)
+- [x] A15: one `series_of(name, unit, buckets, values)` helper used by `stats/flow.py`, `popularity.py`, `delivery.py` and `activity.py`; one helper for `PeriodTable` rows in `reports/rows.py`; build `RestResponse` once in `fetch/client.py` `rest_get`; one `Commit` builder shared by `fetch/base.py:487` and `:861`; one `Bucket` builder in `stats/buckets.py`
+- [x] A23: name the dropped values (`data, _date = await self.graphql_dated(...)` at `fetch/client.py:163`; the same at `bin/record-fixtures.py:135`)
+- [x] G9: remove the module `__getattr__` shim at `reports/terminal.py:14`; point `src/tests/reports/test_terminal.py:322` at `wambatic.reports.rows.TOP_CONTRIBUTORS_SHOWN`
+- [x] A8: no change (`SyncJob`, `SyncProgress` and `Tally` are mutable by design, commented in tasks-1 Task 8)
 
 **Acceptance Criteria:**
 
-- [ ] Every existing test passes unchanged apart from the one shim test
+- [x] Every existing test passes unchanged apart from the one shim test
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `bin/audit-check.sh --path src/wambatic --path bin` exits 0
-- [ ] `pytest src/tests/stats src/tests/reports/test_rows.py src/tests/reports/test_terminal.py src/tests/fetch/test_client.py src/tests/fetch/test_base.py src/tests/test_record_fixtures.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `bin/audit-check.sh --path src/wambatic --path bin` exits 0
+- [x] `pytest src/tests/stats src/tests/reports/test_rows.py src/tests/reports/test_terminal.py src/tests/fetch/test_client.py src/tests/fetch/test_base.py src/tests/test_record_fixtures.py` passes
 
 **Notes:**
 

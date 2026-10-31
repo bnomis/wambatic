@@ -73,10 +73,8 @@ def series_of(
     by_kind: wambatic.stats.base.ByKind | None = None,
 ) -> wambatic.stats.base.Series:
     empty = Tally()
-    points = {
-        bucket: tallies.get(index, empty).value(metric) for index, bucket in enumerate(buckets)
-    }
-    return wambatic.stats.base.Series(metric, unit, points, by, by_kind)
+    values = [tallies.get(index, empty).value(metric) for index in range(len(buckets))]
+    return wambatic.stats.base.series_of(metric, unit, buckets, values, by, by_kind)
 
 
 def aggregate(

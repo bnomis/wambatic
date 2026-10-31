@@ -319,7 +319,7 @@ def test_at_most_twenty_top_contributors_are_shown_then_a_count_of_the_rest(
         dataclasses.replace(org_result, tables={**org_result.tables, 'top_contributors': many})
     )
     shown = [line for line in output.splitlines() if line.strip().startswith('person')]
-    assert len(shown) == wambatic.reports.terminal.TOP_CONTRIBUTORS_SHOWN == 20
+    assert len(shown) == wambatic.reports.rows.TOP_CONTRIBUTORS_SHOWN == 20
     assert shown[-1].split()[0] == 'person19'
     assert 'and 5 more' in output
 

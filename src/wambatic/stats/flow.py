@@ -88,18 +88,13 @@ def aggregate(
         values: collections.abc.Sequence[collections.abc.Sequence[float]]
         summary: wambatic.stats.percentile.Summary
         if name in counts:
-            points: dict[wambatic.stats.base.Bucket, float] = dict(
-                zip(buckets, counts[name], strict=True)
-            )
-            series.append(wambatic.stats.base.Series(name, unit, points))
+            series.append(wambatic.stats.base.series_of(name, unit, buckets, counts[name]))
             continue
         if name == SIZE_METRIC:
             values, summary = sizes, statistics.median_low
         else:
             base, _, percentile = name.rpartition('_')
             values, summary = spans[base], wambatic.stats.percentile.summary(percentile)
-        points = {
-            bucket: summary(found) for bucket, found in zip(buckets, values, strict=True) if found
-        }
-        series.append(wambatic.stats.base.Series(name, unit, points))
+        medians = [summary(found) if found else None for found in values]
+        series.append(wambatic.stats.base.series_of(name, unit, buckets, medians))
     return series

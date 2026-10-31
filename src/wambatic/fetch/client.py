@@ -161,7 +161,8 @@ class GitHubClient:
         self, query: str, variables: collections.abc.Mapping[str, object]
     ) -> dict[str, object]:
         """POST `{api_url}/graphql`; returns `data`; raises the typed errors."""
-        return (await self.graphql_dated(query, variables))[0]
+        data, response_date = await self.graphql_dated(query, variables)
+        return data
 
     async def graphql_dated(
         self, query: str, variables: collections.abc.Mapping[str, object]
@@ -218,19 +219,12 @@ class GitHubClient:
                 )
             await self.sleep(wambatic.fetch.ratelimit.backoff_delay(pending, self.rng))
             pending += 1
-        if response.status == 304:
-            return RestResponse(
-                status=304,
-                data=None,
-                etag=etag,
-                next_url=None,
-                date=header_date(response),
-            )
+        not_modified = response.status == 304
         return RestResponse(
             status=response.status,
-            data=response.data,
-            etag=response.headers.get('ETag'),
-            next_url=next_link(response.headers.get('Link')),
+            data=None if not_modified else response.data,
+            etag=etag if not_modified else response.headers.get('ETag'),
+            next_url=None if not_modified else next_link(response.headers.get('Link')),
             date=header_date(response),
         )
 

@@ -1,3 +1,4 @@
+import collections.abc
 import dataclasses
 import datetime
 import enum
@@ -40,6 +41,21 @@ class Series:
             raise wambatic.stats.errors.InvalidRequestError(
                 'by and by_kind are both set or both None'
             )
+
+
+def series_of(
+    name: str,
+    unit: str,
+    buckets: collections.abc.Iterable[Bucket],
+    values: collections.abc.Iterable[float | None],
+    by: str | None = None,
+    by_kind: ByKind | None = None,
+) -> Series:
+    """A series with one point per bucket that has a value; a `None` value leaves the bucket out."""
+    points = {
+        bucket: value for bucket, value in zip(buckets, values, strict=True) if value is not None
+    }
+    return Series(name, unit, points, by, by_kind)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

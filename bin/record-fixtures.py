@@ -131,7 +131,9 @@ class Recorder:
         Raises:
             RecordingError: the request fails or GitHub answers with errors.
         """
-        body, _ = self.send('POST', '/graphql', body={'query': query, 'variables': variables})
+        body, response_headers = self.send(
+            'POST', '/graphql', body={'query': query, 'variables': variables}
+        )
         if not isinstance(body, dict) or 'errors' in body:
             raise RecordingError(f'GraphQL error: {body!r}')
         return body

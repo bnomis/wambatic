@@ -11,14 +11,6 @@ import wambatic.stats.base
 BLOCKS = '▁▂▃▄▅▆▇█'
 
 
-def __getattr__(name: str) -> int:
-    """`TOP_CONTRIBUTORS_SHOWN` stays reachable here, but it lives in `rows`; `wambatic.reports`
-    is still being imported when this module loads, so it cannot be copied at import time."""
-    if name == 'TOP_CONTRIBUTORS_SHOWN':
-        return wambatic.reports.rows.TOP_CONTRIBUTORS_SHOWN
-    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
-
-
 def sparkline(values: list[float]) -> str:
     """One block character per value from U+2581 to U+2588, scaled linearly from the minimum to
     the maximum; all-equal values give U+2581 throughout and an empty list gives ''."""

@@ -225,6 +225,18 @@ def period_row(
     return PeriodRow(label, label in partial, tuple(values))
 
 
+def period_table(
+    title: str,
+    headers: tuple[str, ...],
+    metrics: tuple[str, ...],
+    rows: tuple[PeriodRow, ...],
+    make_total: collections.abc.Callable[[], tuple[float | None, ...]] | None = None,
+) -> PeriodTable:
+    """A table whose footer is `make_total()` when there is more than one row, else None."""
+    total = make_total() if make_total is not None and len(rows) > 1 else None
+    return PeriodTable(title, headers, metrics, rows, total)
+
+
 def activity_table(
     result: wambatic.stats.base.StatsResult, series: TotalSeries | None = None
 ) -> PeriodTable | None:
@@ -237,12 +249,13 @@ def activity_table(
         period_row(bucket.label, partial, (series[metric][index][1] for metric in TOTAL_METRICS))
         for index, (bucket, _) in enumerate(series['commits'])
     )
-    total: tuple[float | None, ...] | None = None
-    if len(rows) > 1:
+
+    def make_total() -> tuple[float | None, ...]:
         sums = {metric: sum(value for _, value in series[metric]) for metric in TOTAL_METRICS}
         sums['contributors'] = contributor_count(result)
-        total = tuple(sums[metric] for metric in TOTAL_METRICS)
-    return PeriodTable('Activity by period', ACTIVITY_HEADERS, TOTAL_METRICS, rows, total)
+        return tuple(sums[metric] for metric in TOTAL_METRICS)
+
+    return period_table('Activity by period', ACTIVITY_HEADERS, TOTAL_METRICS, rows, make_total)
 
 
 def flow_table(
@@ -257,10 +270,13 @@ def flow_table(
         period_row(bucket.label, partial, (series[metric][index][1] for metric in FLOW_COUNTS))
         for index, bucket in enumerate(buckets_from(series))
     )
-    total: tuple[float | None, ...] | None = None
-    if len(rows) > 1:
-        total = tuple(sum(value for _, value in series[metric]) for metric in FLOW_COUNTS)
-    return PeriodTable('Flow by period', FLOW_HEADERS, FLOW_COUNTS, rows, total)
+    return period_table(
+        'Flow by period',
+        FLOW_HEADERS,
+        FLOW_COUNTS,
+        rows,
+        lambda: tuple(sum(value for _, value in series[metric]) for metric in FLOW_COUNTS),
+    )
 
 
 def flow_times_table(
@@ -279,7 +295,7 @@ def flow_times_table(
         )
         for bucket in buckets_from(series)
     )
-    return PeriodTable('Flow times by period', FLOW_TIMES_HEADERS, FLOW_TIMES_METRICS, rows, None)
+    return period_table('Flow times by period', FLOW_TIMES_HEADERS, FLOW_TIMES_METRICS, rows)
 
 
 def delivery_period_table(
@@ -300,13 +316,16 @@ def delivery_period_table(
         period_row(bucket.label, partial, (points[metric].get(bucket) for metric in metrics))
         for bucket in buckets_from(series)
     )
-    total: tuple[float | None, ...] | None = None
-    if len(rows) > 1:
-        total = tuple(
+    return period_table(
+        title,
+        tuple(DELIVERY_HEADERS[m] for m in metrics),
+        metrics,
+        rows,
+        lambda: tuple(
             sum(points[metric].values()) if metric in DELIVERY_TOTALS else None
             for metric in metrics
-        )
-    return PeriodTable(title, tuple(DELIVERY_HEADERS[m] for m in metrics), metrics, rows, total)
+        ),
+    )
 
 
 def delivery_table(
@@ -342,16 +361,17 @@ def popularity_table(
         )
         for index, bucket in enumerate(buckets_from(series))
     )
-    total: tuple[float | None, ...] | None = None
-    if len(rows) > 1:
-        total = tuple(
+    return period_table(
+        'Popularity by period',
+        POPULARITY_HEADERS,
+        POPULARITY_TABLE_METRICS,
+        rows,
+        lambda: tuple(
             sum(value for _, value in series[metric])
             if metric in POPULARITY_ADDED
             else series[metric][-1][1]
             for metric in POPULARITY_TABLE_METRICS
-        )
-    return PeriodTable(
-        'Popularity by period', POPULARITY_HEADERS, POPULARITY_TABLE_METRICS, rows, total
+        ),
     )
 
 

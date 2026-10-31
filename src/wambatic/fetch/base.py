@@ -478,21 +478,33 @@ def parse_fork(repo: str, node: object) -> Fork:
     )
 
 
+def commit_of(repo: str, found: NewCommit, additions: int, deletions: int) -> Commit:
+    return Commit(
+        repo=repo,
+        oid=found.oid,
+        authored_at=found.authored_at,
+        author_login=found.author_login,
+        additions=additions,
+        deletions=deletions,
+        is_merge=found.is_merge,
+    )
+
+
 def parse_history_node(repo: str, node: object) -> Commit:
     fields = mapping(node, 'history node')
     author = fields.get('author')
     user = mapping(author, 'author').get('user') if author is not None else None
     login = mapping(user, 'author.user').get('login') if user is not None else None
     parents = mapping(fields.get('parents'), 'parents')
-    return Commit(
-        repo=repo,
+    found = NewCommit(
         oid=text(fields.get('oid'), 'oid'),
         authored_at=timestamp(fields.get('authoredDate'), 'authoredDate'),
         author_login=None if login is None else text(login, 'author.user.login'),
-        additions=integer(fields.get('additions'), 'additions'),
-        deletions=integer(fields.get('deletions'), 'deletions'),
         is_merge=integer(parents.get('totalCount'), 'parents.totalCount') > 1,
     )
+    additions = integer(fields.get('additions'), 'additions')
+    deletions = integer(fields.get('deletions'), 'deletions')
+    return commit_of(repo, found, additions, deletions)
 
 
 def parse_compare_commit(node: object) -> NewCommit:
@@ -905,17 +917,7 @@ class Fetcher:
                     [('MISSING', f'no line counts returned for commit {commit.oid}')]
                 )
             additions, deletions = counts[commit.oid]
-            commits.append(
-                Commit(
-                    repo=repo.name_with_owner,
-                    oid=commit.oid,
-                    authored_at=commit.authored_at,
-                    author_login=commit.author_login,
-                    additions=additions,
-                    deletions=deletions,
-                    is_merge=commit.is_merge,
-                )
-            )
+            commits.append(commit_of(repo.name_with_owner, commit, additions, deletions))
         return commits
 
     async def update_commits(self, repo: Repo, state: SyncState) -> int | None:

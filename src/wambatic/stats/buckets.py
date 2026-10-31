@@ -85,6 +85,12 @@ def bucket_for(
     if when.tzinfo is None:
         raise wambatic.stats.errors.InvalidRequestError('when must be timezone-aware')
     start = bucket_start(when.astimezone(tz).date(), granularity)
+    return bucket_at(start, granularity)
+
+
+def bucket_at(
+    start: datetime.date, granularity: wambatic.stats.base.Granularity
+) -> wambatic.stats.base.Bucket:
     return wambatic.stats.base.Bucket(start, label(start, granularity))
 
 
@@ -105,7 +111,7 @@ def bucket_range(
     buckets: list[wambatic.stats.base.Bucket] = []
     start = bucket_start(since, granularity)
     while start <= until:
-        buckets.append(wambatic.stats.base.Bucket(start, label(start, granularity)))
+        buckets.append(bucket_at(start, granularity))
         start = next_start(start, granularity)
     return buckets
 

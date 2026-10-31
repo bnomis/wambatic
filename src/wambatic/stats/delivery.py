@@ -208,33 +208,26 @@ def aggregate(
     for name, unit in DELIVERY_METRICS:
         if name in missing:
             continue
-        points: dict[wambatic.stats.base.Bucket, float]
+        found: list[float | None]
         if name in counts:
-            points = dict(zip(buckets, counts[name], strict=True))
+            found = list(counts[name])
         elif name == 'workflow_success_rate':
-            points = {
-                bucket: successes[i] / outcomes[i]
-                for i, bucket in enumerate(buckets)
-                if outcomes[i]
-            }
+            found = [
+                successes[i] / outcomes[i] if outcomes[i] else None for i in range(len(buckets))
+            ]
         elif name == 'change_failure_rate':
-            points = {
-                bucket: failures[i] / counts['deployments'][i]
-                for i, bucket in enumerate(buckets)
-                if counts['deployments'][i]
-            }
+            found = [
+                failures[i] / counts['deployments'][i] if counts['deployments'][i] else None
+                for i in range(len(buckets))
+            ]
         else:
-            points = percentile_points(name, buckets, values)
-        series.append(wambatic.stats.base.Series(name, unit, points))
+            found = percentile_values(name, values)
+        series.append(wambatic.stats.base.series_of(name, unit, buckets, found))
     return series, [{'metric': name, 'reason': reason} for name, reason in missing.items()]
 
 
-def percentile_points(
-    name: str,
-    buckets: list[wambatic.stats.base.Bucket],
-    values: dict[str, list[list[float]]],
-) -> dict[wambatic.stats.base.Bucket, float]:
-    """The buckets that have values for a duration, interval, lead time or restore series."""
+def percentile_values(name: str, values: dict[str, list[list[float]]]) -> list[float | None]:
+    """Per bucket, the duration, interval, lead time or restore summary; None without values."""
     base, _, suffix = name.rpartition('_')
     found = values['interval' if name == 'release_interval_p50' else base.removeprefix('workflow_')]
     summary: wambatic.stats.percentile.Summary = (
@@ -242,4 +235,4 @@ def percentile_points(
         if name == 'release_interval_p50'
         else wambatic.stats.percentile.summary(suffix)
     )
-    return {bucket: summary(items) for bucket, items in zip(buckets, found, strict=True) if items}
+    return [summary(items) if items else None for items in found]

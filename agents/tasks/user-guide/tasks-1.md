@@ -123,7 +123,7 @@ stops as `blocked`, naming the command for the operator to run.
 
 ## Task 3: Write the screenshot script
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** large
 **Spec Reference:** Screenshots; API (`bin/screenshots.py`); Error handling
@@ -132,44 +132,44 @@ stops as `blocked`, naming the command for the operator to run.
 
 **Subtasks:**
 
-- [ ] Write `bin/screenshots.py` (executable, `#!/usr/bin/env python3`, argparse with `--out docs/images` and `--skip-sync`) and its wrapper `bin/screenshots.sh` on the pattern of `bin/audit-check.sh`
-- [ ] Write a temporary config, setting `fetch.cache_path` to `~/.cache/wambatic/docs.sqlite3` and `stats.timezone` to `UTC`, and point `WAMBATIC_CONFIG` at it for every wambatic call the script makes, in-process and as a subprocess
-- [ ] Sync and compute through the same function the CLI uses (`wambatic.reports.service`), for:
+- [x] Write `bin/screenshots.py` (executable, `#!/usr/bin/env python3`, argparse with `--out docs/images` and `--skip-sync`) and its wrapper `bin/screenshots.sh` on the pattern of `bin/audit-check.sh`
+- [x] Write a temporary config, setting `fetch.cache_path` to `~/.cache/wambatic/docs.sqlite3` and `stats.timezone` to `UTC`, and point `WAMBATIC_CONFIG` at it for every wambatic call the script makes, in-process and as a subprocess
+- [x] Sync and compute through the same function the CLI uses (`wambatic.reports.service`), for:
   - `repo:pallets/click`
   - `org:pallets` with `--by-author`
   - groups `activity,flow,delivery,popularity`
   - `--since 2024-11-01 --until 2026-10-31 --by month`
   - the two date bounds and the subjects as constants at the top of the script
-- [ ] `capture_terminal`: render with `rich.console.Console(record=True, width=110, force_terminal=True)`, write `docs/images/terminal/<subject>-full.svg`, and split the record at each `heading` into `docs/images/terminal/<subject>-<section-slug>.svg`. Also capture `wambatic cache info` as `cache-info.svg`
-- [ ] `capture_html`: write the HTML report with `--out` into a temporary directory. In Playwright Chromium at 1280x800, write full-page `html/<subject>-light.png` and `-dark.png` (`color_scheme`), then one crop for each entry of a `SELECTORS` table at the top of the script: the tiles, the period switch, the calendar, a chart with a partial period, the delivery charts, the popularity charts, the languages chart. Take the selectors from `src/wambatic/reports/templates/report.html` and `report.js`
-- [ ] `capture_web`: start `wambatic serve --port <free> --max-age 30d` as a subprocess and wait for the port (30 s limit). Capture `web/form.png`, `web/report.png` and `web/api-docs.png`, then stop it. For `web/progress.png`, start a second server on an empty temporary cache, request `org:pallets` and capture once the page shows "Syncing repositories"
-- [ ] Write `docs/snippets/captured.md`: "Screenshots captured on `<UTC date>` from `pallets/click` and `org:pallets` with wambatic `<version>`, covering `<since>` to `<until>`."
-- [ ] Error handling as the spec's Error handling section says, each case one line on stderr and exit 1:
+- [x] `capture_terminal`: render with `rich.console.Console(record=True, width=110, force_terminal=True)`, write `docs/images/terminal/<subject>-full.svg`, and split the record at each `heading` into `docs/images/terminal/<subject>-<section-slug>.svg`. Also capture `wambatic cache info` as `cache-info.svg`
+- [x] `capture_html`: write the HTML report with `--out` into a temporary directory. In Playwright Chromium at 1280x800, write full-page `html/<subject>-light.png` and `-dark.png` (`color_scheme`), then one crop for each entry of a `SELECTORS` table at the top of the script: the tiles, the period switch, the calendar, a chart with a partial period, the delivery charts, the popularity charts, the languages chart. Take the selectors from `src/wambatic/reports/templates/report.html` and `report.js`
+- [x] `capture_web`: start `wambatic serve --port <free> --max-age 30d` as a subprocess and wait for the port (30 s limit). Capture `web/form.png`, `web/report.png` and `web/api-docs.png`, then stop it. For `web/progress.png`, start a second server on an empty temporary cache, request `org:pallets` and capture once the page shows "Syncing repositories"
+- [x] Write `docs/snippets/captured.md`: "Screenshots captured on `<UTC date>` from `pallets/click` and `org:pallets` with wambatic `<version>`, covering `<since>` to `<until>`."
+- [x] Error handling as the spec's Error handling section says, each case one line on stderr and exit 1:
   - no token;
   - no Chromium;
   - a wambatic error;
   - a selector matching nothing;
   - a server not answering;
   - a file over 1 MB
-- [ ] Write `src/tests/test_screenshots.py` (no network; mark Chromium tests `browser`):
+- [x] Write `src/tests/test_screenshots.py` (no network; mark Chromium tests `browser`):
   - the SVG section split on a recorded console with two headings;
   - the selector table against an HTML report built from `tests.fixtures.reports`: every selector matches;
   - the 1 MB check;
   - a missing token naming the fix
-- [ ] Add `bin/screenshots.py` to `pyproject.toml`'s `per-file-ignores` for `T20` only if it prints, as `bin/record-fixtures.py` does
+- [x] Add `bin/screenshots.py` to `pyproject.toml`'s `per-file-ignores` for `T20` only if it prints, as `bin/record-fixtures.py` does
 
 **Acceptance Criteria:**
 
-- [ ] `bin/screenshots.sh --help` prints the usage
-- [ ] Every test in `src/tests/test_screenshots.py` passes, the browser ones included where Chromium is installed
-- [ ] The script never reads or writes the user's own cache: the only `cache_path` it sets is the docs cache or a temporary one
+- [x] `bin/screenshots.sh --help` prints the usage
+- [x] Every test in `src/tests/test_screenshots.py` passes, the browser ones included where Chromium is installed
+- [x] The script never reads or writes the user's own cache: the only `cache_path` it sets is the docs cache or a temporary one
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `bin/audit-check.sh --path bin` exits 0
-- [ ] `pytest src/tests/test_screenshots.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `bin/audit-check.sh --path bin` exits 0
+- [x] `pytest src/tests/test_screenshots.py` passes
 
 **Notes:**
 

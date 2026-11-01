@@ -182,7 +182,7 @@ stops as `blocked`, naming the command for the operator to run.
 
 ## Task 4: Capture the screenshots
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** small
 **Spec Reference:** Screenshots
@@ -191,21 +191,21 @@ stops as `blocked`, naming the command for the operator to run.
 
 **Subtasks:**
 
-- [ ] Check for the inputs without printing them: `[ -n "${GITHUB_TOKEN:-}" ] || gh auth token >/dev/null 2>&1` and `python -c 'import playwright.sync_api; playwright.sync_api.sync_playwright().start().chromium.launch().close()'`. If either is missing, stop the task as `blocked` and name the command for the operator to run, `bin/screenshots.sh`
-- [ ] Run `bin/screenshots.sh`
-- [ ] Look at every image once, and check it shows what its name says. If one shows an error, an empty chart or a cut-off section, fix the script (Task 3's code) and run it again
-- [ ] Commit `docs/images/` and `docs/snippets/captured.md`
+- [x] Check for the inputs without printing them: `[ -n "${GITHUB_TOKEN:-}" ] || gh auth token >/dev/null 2>&1` and `python -c 'import playwright.sync_api; playwright.sync_api.sync_playwright().start().chromium.launch().close()'`. If either is missing, stop the task as `blocked` and name the command for the operator to run, `bin/screenshots.sh`
+- [x] Run `bin/screenshots.sh`
+- [x] Look at every image once, and check it shows what its name says. If one shows an error, an empty chart or a cut-off section, fix the script (Task 3's code) and run it again
+- [x] Commit `docs/images/` and `docs/snippets/captured.md`
 
 **Acceptance Criteria:**
 
-- [ ] Each file the script names exists under `docs/images/`, and none is over 1 MB
-- [ ] `docs/snippets/captured.md` names the capture date and the wambatic version
+- [x] Each file the script names exists under `docs/images/`, and none is over 1 MB
+- [x] `docs/snippets/captured.md` names the capture date and the wambatic version
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `git diff --cached --stat` shows no file over 1 MB
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `git diff --cached --stat` shows no file over 1 MB
 
 **Notes:**
 

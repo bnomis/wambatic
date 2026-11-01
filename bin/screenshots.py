@@ -68,6 +68,7 @@ BY = 'month'
 
 TERMINAL_WIDTH = 110
 VIEWPORT = {'height': 800, 'width': 1280}
+FULL_PAGE_SCALE = 0.45  # a full page is tall; at full size it passes the 1 MB limit
 MAX_BYTES = 1_000_000
 SERVER_TIMEOUT = 30.0
 PROGRESS_TIMEOUT = 60.0
@@ -138,7 +139,8 @@ def check_size(path: pathlib.Path) -> pathlib.Path:
 
 def write_text(path: pathlib.Path, text: str) -> pathlib.Path:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding='utf-8')
+    lines = [line.rstrip() for line in text.splitlines()]
+    path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
     return check_size(path)
 
 
@@ -297,18 +299,22 @@ def save_png(
 ) -> pathlib.Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     if isinstance(target, playwright.sync_api.Page):
-        target.screenshot(path=path, full_page=True, scale='css')
+        target.screenshot(path=path, full_page=True, scale='device')
     else:
         target.screenshot(path=path, scale='css')
     return check_size(path)
 
 
 def open_report(
-    browser: playwright.sync_api.Browser, report_path: pathlib.Path, scheme: str
+    browser: playwright.sync_api.Browser,
+    report_path: pathlib.Path,
+    scheme: str,
+    device_scale_factor: float = 1.0,
 ) -> tuple[playwright.sync_api.BrowserContext, playwright.sync_api.Page]:
     context = browser.new_context(
         viewport=VIEWPORT,  # type: ignore[arg-type]
         color_scheme=scheme,  # type: ignore[arg-type]
+        device_scale_factor=device_scale_factor,
     )
     page = context.new_page()
     page.set_default_timeout(PAGE_TIMEOUT_MS)
@@ -345,7 +351,7 @@ def capture_html(report_path: pathlib.Path, out_dir: pathlib.Path) -> list[pathl
     written = []
     with launch_chromium() as browser:
         for scheme in ('light', 'dark'):
-            context, page = open_report(browser, report_path, scheme)
+            context, page = open_report(browser, report_path, scheme, FULL_PAGE_SCALE)
             try:
                 written.append(save_png(page, folder / f'{name}-{scheme}.png'))
             finally:
@@ -410,9 +416,12 @@ def report_query(target: str) -> str:
 
 
 def web_page(
-    browser: playwright.sync_api.Browser,
+    browser: playwright.sync_api.Browser, device_scale_factor: float = 1.0
 ) -> tuple[playwright.sync_api.BrowserContext, playwright.sync_api.Page]:
-    context = browser.new_context(viewport=VIEWPORT)  # type: ignore[arg-type]
+    context = browser.new_context(
+        viewport=VIEWPORT,  # type: ignore[arg-type]
+        device_scale_factor=device_scale_factor,
+    )
     page = context.new_page()
     page.set_default_timeout(PAGE_TIMEOUT_MS)
     return context, page
@@ -427,12 +436,16 @@ def capture_web(config_path: pathlib.Path, out_dir: pathlib.Path) -> list[pathli
         try:
             page.goto(f'{base}/')
             written.append(save_png(page, folder / 'form.png'))
-            page.goto(f'{base}/report?{report_query(REPO_TARGET)}')
-            page.wait_for_function(EVERY_CHART_DRAWN)
-            written.append(save_png(page, folder / 'report.png'))
             page.goto(f'{base}/docs')
             page.wait_for_selector('.opblock')
             written.append(save_png(page, folder / 'api-docs.png'))
+        finally:
+            context.close()
+        context, page = web_page(browser, FULL_PAGE_SCALE)
+        try:
+            page.goto(f'{base}/report?{report_query(REPO_TARGET)}')
+            page.wait_for_function(EVERY_CHART_DRAWN)
+            written.append(save_png(page, folder / 'report.png'))
         finally:
             context.close()
     return written

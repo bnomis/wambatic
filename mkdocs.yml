@@ -1,0 +1,81 @@
+site_name: wambatic
+site_description: Statistics from github.com for a user, a repository or an organisation
+site_url: https://bnomis.github.io/wambatic/
+repo_url: https://github.com/bnomis/wambatic
+theme:
+  name: material
+  logo: assets/wambatic-mark.svg
+  favicon: assets/favicon.svg
+  # Mona Sans for text, Source Code Pro for code; both served by Google Fonts.
+  # https://squidfunk.github.io/mkdocs-material/setup/changing-the-fonts/
+  font:
+    text: Mona Sans
+    code: Source Code Pro
+  # https://squidfunk.github.io/mkdocs-material/setup/changing-the-colors/#color-palette-toggle
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - content.code.annotate
+extra_css:
+  - assets/theme.css
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.snippets:
+      base_path: docs/snippets
+      check_paths: true
+  - pymdownx.superfences:
+      custom_fences:
+        # https://squidfunk.github.io/mkdocs-material/reference/diagrams/
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+plugins:
+  - search
+nav:
+  - Home: index.md
+  - Installation: install.md
+  - The GitHub token: token.md
+  - Getting started: getting-started.md
+  - How wambatic works: concepts.md
+  - User guide:
+      - Targets: guide/targets.md
+      - Periods and ranges: guide/periods.md
+      - The terminal report: guide/terminal.md
+      - The HTML report: guide/html.md
+      - The web app: guide/web.md
+      - JSON output: guide/json.md
+      - Activity: guide/activity.md
+      - Flow: guide/flow.md
+      - Delivery and DORA: guide/delivery.md
+      - Popularity: guide/popularity.md
+      - The cache: guide/cache.md
+      - Configuration: guide/config.md
+      - Recipes: guide/recipes.md
+      - Troubleshooting: guide/troubleshooting.md
+  - Reference:
+      - Command line: reference/cli.md
+      - Settings: reference/settings.md
+      - Metrics: reference/metrics.md
+      - Exit statuses: reference/exit-statuses.md
+  - Limits: limits.md
+
+exclude_docs: |
+  snippets/

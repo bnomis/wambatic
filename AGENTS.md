@@ -9,6 +9,7 @@ Visualisation and report of statistics from github.com for a user, a repo or an 
 - `src/wambatic/reports`: terminal, HTML, JSON and the web app
 - `src/tests`: tests, mirroring the source layout
 - `bin`: entry-point and check scripts
+- `docs`: the user guide (MkDocs site, built from `mkdocs.yml`)
 - `agents/specs`: the specifications
 - `agents/tasks`: task lists
 - `agents/audit-reviews`: audit reviews
@@ -18,6 +19,7 @@ Visualisation and report of statistics from github.com for a user, a repo or an 
 - Runtime: aiohttp, cappa, fastapi, loguru, plotly, rich, uvicorn
 - Development: hypothesis, httpx, mypy, playwright, pre-commit, pytest, ruff
 - Environment and dependencies: uv (`uv sync` installs the development tools)
+- User guide: mkdocs and mkdocs-material, in the `docs` group (`uv sync --group docs`)
 
 ## Shared rules and skills
 
@@ -50,6 +52,7 @@ Other deliberate test-layout exceptions: property tests, browser tests, live tes
 - On commit (pre-commit): ruff with the rules in `pyproject.toml`, ruff format, mypy, and the end-of-file and trailing-whitespace hooks.
 - On push (pre-push): `bin/audit-check.sh`, the whole-tree audit script; any unaccepted hit refuses the push.
 - In CI: all of the above, plus the tests, in the `check`, `browser`, `live` and `audit` jobs.
+- In CI, the `docs` workflow runs `mkdocs build --strict` on pull requests and deploys the site to GitHub Pages from main.
 - `--no-verify` is never used; fix the hit or record the accepted exception.
 
 Install both hook types: `pre-commit install --hook-type pre-commit --hook-type pre-push`.

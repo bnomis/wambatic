@@ -18,7 +18,7 @@ stops as `blocked`, naming the command for the operator to run.
 
 ## Task 1: Scaffold the MkDocs site, theme and docs workflow
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** medium
 **Spec Reference:** Module location; Implementation (`mkdocs.yml`, Theme, Logo, Light and dark, Dependencies, CI)
@@ -27,39 +27,39 @@ stops as `blocked`, naming the command for the operator to run.
 
 **Subtasks:**
 
-- [ ] `uv add --group docs mkdocs mkdocs-material`, then check that `pyproject.toml` and `uv.lock` both changed, and nothing else did
-- [ ] Add `site/` to `.gitignore`
-- [ ] Write `mkdocs.yml` as the spec's Implementation says:
+- [x] `uv add --group docs mkdocs mkdocs-material`, then check that `pyproject.toml` and `uv.lock` both changed, and nothing else did
+- [x] Add `site/` to `.gitignore`
+- [x] Write `mkdocs.yml` as the spec's Implementation says:
   - `site_name`, `site_description`, `site_url: https://bnomis.github.io/wambatic/` and `repo_url`
   - Material with the logo and favicon, Mona Sans and Source Code Pro, and the features `navigation.sections`, `navigation.top`, `content.code.copy` and `content.code.annotate`
   - the palette toggle with a light and a dark scheme
   - the extensions `admonition`, `attr_list`, `md_in_html`, `tables`, `toc` (permalink), `pymdownx.highlight`, `pymdownx.snippets` (`base_path: docs/snippets`, `check_paths: true`) and `pymdownx.superfences`, the last with the `mermaid` custom fence from the Material diagrams page
   - `plugins: [search]`
   - the full nav of the spec's Pages table, in order
-- [ ] Write `docs/assets/theme.css`: metafopy's colour variables, header rule and search-box rules, with its colour comment. Leave out its `.compare`, `.plots`, `.doc-contents` and `details.metafor-reference` rules. Add a `[data-md-color-scheme="slate"]` block whose colours keep the same hues on a dark ground
-- [ ] Draw `docs/assets/wambatic-mark.svg` (three or four rising bars in a hairline box; graphite `#3D3F44`, one bar Solarized blue `#268BD2`) and `docs/assets/favicon.svg` (the same mark, legible at 16 px)
-- [ ] Create each page in the nav as a stub: an H1 and the one sentence saying what the page is for, from the spec's Pages table. Then `docs/snippets/captured.md` with one line, "Screenshots not captured yet."
-- [ ] Write `.github/workflows/docs.yml` on the pattern of the spec's CI paragraph:
+- [x] Write `docs/assets/theme.css`: metafopy's colour variables, header rule and search-box rules, with its colour comment. Leave out its `.compare`, `.plots`, `.doc-contents` and `details.metafor-reference` rules. Add a `[data-md-color-scheme="slate"]` block whose colours keep the same hues on a dark ground
+- [x] Draw `docs/assets/wambatic-mark.svg` (three or four rising bars in a hairline box; graphite `#3D3F44`, one bar Solarized blue `#268BD2`) and `docs/assets/favicon.svg` (the same mark, legible at 16 px)
+- [x] Create each page in the nav as a stub: an H1 and the one sentence saying what the page is for, from the spec's Pages table. Then `docs/snippets/captured.md` with one line, "Screenshots not captured yet."
+- [x] Write `.github/workflows/docs.yml` on the pattern of the spec's CI paragraph:
   - triggers: pull requests, pushes to main touching `docs/**`, `mkdocs.yml`, `pyproject.toml`, `uv.lock` or the workflow, and `workflow_dispatch`
   - `permissions: contents: write`, and a concurrency group
   - the `actions/checkout` and `astral-sh/setup-uv` versions and comments of `.github/workflows/ci.yml`, with `submodules: false`
   - `uv sync --locked --group docs`
   - on pull requests, `uv run mkdocs build --strict`; otherwise, after setting the bot's git identity, `uv run mkdocs gh-deploy --strict --force --no-history --remote-branch gh-pages`
-- [ ] Add `docs` (the user guide) to `AGENTS.md`'s Layout. Add the docs workflow to its Checks, and `mkdocs`/`mkdocs-material` (the `docs` group, `uv sync --group docs`) to its Tools
+- [x] Add `docs` (the user guide) to `AGENTS.md`'s Layout. Add the docs workflow to its Checks, and `mkdocs`/`mkdocs-material` (the `docs` group, `uv sync --group docs`) to its Tools
 
 **Acceptance Criteria:**
 
-- [ ] `mkdocs build --strict` exits 0 with every nav entry present
-- [ ] `git status --porcelain` lists no file under `site/`
-- [ ] The built `site/index.html` references `assets/theme.css` and the logo
+- [x] `mkdocs build --strict` exits 0 with every nav entry present
+- [x] `git status --porcelain` lists no file under `site/`
+- [x] The built `site/index.html` references `assets/theme.css` and the logo
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] `uv sync --group docs` succeeds
-- [ ] `mkdocs build --strict` exits 0
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/test_package.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] `uv sync --group docs` succeeds
+- [x] `mkdocs build --strict` exits 0
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/test_package.py` passes
 
 **Notes:**
 

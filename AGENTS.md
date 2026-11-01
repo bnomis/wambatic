@@ -47,6 +47,10 @@ Logins and repository names are logged by design: they are public identifiers th
 
 Other deliberate test-layout exceptions: property tests, browser tests, live tests, `test_layering.py`, `test_package.py`, the bin-script tests, `test_docs.py` (the user guide against the code) and the fixtures of the fake GitHub do not mirror a source module.
 
+## The user guide
+
+A change to user-visible behaviour (options, settings, defaults, output, errors) updates the guide in `docs` in the same commit. When the output changes, re-run `bin/screenshots.sh` and commit the new images.
+
 ## Checks
 
 - On commit (pre-commit): ruff with the rules in `pyproject.toml`, ruff format, mypy, and the end-of-file and trailing-whitespace hooks.

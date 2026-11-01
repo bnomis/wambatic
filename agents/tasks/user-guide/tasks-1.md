@@ -376,7 +376,7 @@ stops as `blocked`, naming the command for the operator to run.
 
 ## Task 9: Slim the README and point at the guide
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** small
 **Spec Reference:** Introduction (README); Implementation (README, AGENTS.md)
@@ -385,29 +385,29 @@ stops as `blocked`, naming the command for the operator to run.
 
 **Subtasks:**
 
-- [ ] Before deleting anything from the README, check that each section is covered in the guide: for each README section, name the guide page that holds its content, and add whatever is missing to that page
-- [ ] Cut `README.md` to:
+- [x] Before deleting anything from the README, check that each section is covered in the guide: for each README section, name the guide page that holds its content, and add whatever is missing to that page
+- [x] Cut `README.md` to:
   - the pitch;
   - Install;
   - The token, in two lines with a link;
   - A first report;
   - a "Documentation" link to <https://bnomis.github.io/wambatic/>;
   - More, and Updating the shared rules, unchanged apart from the guide link
-- [ ] Add `[project.urls]` with `Documentation` and `Repository` to `pyproject.toml`
-- [ ] Add to `AGENTS.md` that a change to user-visible behaviour (options, settings, defaults, output, errors) updates the guide in the same commit, and that `bin/screenshots.sh` is re-run when the output changes
+- [x] Add `[project.urls]` with `Documentation` and `Repository` to `pyproject.toml`
+- [x] Add to `AGENTS.md` that a change to user-visible behaviour (options, settings, defaults, output, errors) updates the guide in the same commit, and that `bin/screenshots.sh` is re-run when the output changes
 
 **Acceptance Criteria:**
 
-- [ ] Every README section removed has its content in a named guide page, listed in the commit body
-- [ ] No table of options, settings or metrics remains in the README
+- [x] Every README section removed has its content in a named guide page, listed in the commit body
+- [x] No table of options, settings or metrics remains in the README
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] `uv sync --group docs` succeeds
-- [ ] `mkdocs build --strict` exits 0
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/test_package.py src/tests/test_docs.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] `uv sync --group docs` succeeds
+- [x] `mkdocs build --strict` exits 0
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/test_package.py src/tests/test_docs.py` passes
 
 **Notes:**
 

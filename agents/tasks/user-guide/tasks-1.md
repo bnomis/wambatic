@@ -256,7 +256,7 @@ stops as `blocked`, naming the command for the operator to run.
 
 ## Task 6: Write the guide pages on targets, periods and the three front ends
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** large
 **Spec Reference:** Pages (`guide/targets.md`, `guide/periods.md`, `guide/terminal.md`, `guide/html.md`, `guide/web.md`)
@@ -265,30 +265,30 @@ stops as `blocked`, naming the command for the operator to run.
 
 **Subtasks:**
 
-- [ ] `targets.md` with the target flowchart
-- [ ] `periods.md` with the Mermaid `gantt` of a range cut into months
-- [ ] `terminal.md`: every section, in output order, each with its screenshot
-- [ ] `html.md`: the light and dark full pages and the crops the spec lists
-- [ ] `web.md`:
+- [x] `targets.md` with the target flowchart
+- [x] `periods.md` with the Mermaid `gantt` of a range cut into months
+- [x] `terminal.md`: every section, in output order, each with its screenshot
+- [x] `html.md`: the light and dark full pages and the crops the spec lists
+- [x] `web.md`:
   - the form, progress, report and `/docs` screenshots;
   - the job state diagram;
   - the `/api/stats` sequence diagram;
   - the `Host`-check flowchart, with a link on DNS rebinding;
   - the README's security text in full
-- [ ] Include `captured.md` on each page with a screenshot, and link external terms as in Task 5
+- [x] Include `captured.md` on each page with a screenshot, and link external terms as in Task 5
 
 **Acceptance Criteria:**
 
-- [ ] Each page has the diagrams and screenshots the spec's Pages table lists for it
-- [ ] The job states in the state diagram are the ones `src/wambatic/reports/web.py` uses
+- [x] Each page has the diagrams and screenshots the spec's Pages table lists for it
+- [x] The job states in the state diagram are the ones `src/wambatic/reports/web.py` uses
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] `uv sync --group docs` succeeds
-- [ ] `mkdocs build --strict` exits 0
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/test_docs.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] `uv sync --group docs` succeeds
+- [x] `mkdocs build --strict` exits 0
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/test_docs.py` passes
 
 **Notes:**
 

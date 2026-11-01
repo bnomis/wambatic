@@ -1,5 +1,7 @@
 # wambatic
 
+![The wambatic logo](assets/wambatic-mark-animated.svg){ align=right width="128" }
+
 Statistics from github.com for a user, an organisation or a single repository, as a report in your
 terminal, as one self-contained HTML page, as JSON or in a web app on your own machine.
 

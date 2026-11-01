@@ -298,7 +298,7 @@ stops as `blocked`, naming the command for the operator to run.
 
 ## Task 7: Write the guide pages on JSON and the metric groups
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** large
 **Spec Reference:** Pages (`guide/json.md`, `guide/activity.md`, `guide/flow.md`, `guide/delivery.md`, `guide/popularity.md`)
@@ -307,25 +307,25 @@ stops as `blocked`, naming the command for the operator to run.
 
 **Subtasks:**
 
-- [ ] `json.md`: an annotated example cut from a real `--format json` output of the docs cache (Material code annotations), the class diagram of its objects, and `jq` recipes. Check each recipe against that output
-- [ ] `activity.md`, from the README and the stats spec
-- [ ] `flow.md` with the pull-request timeline diagram
-- [ ] `delivery.md` with the deployment flowchart, the lead-time and failed-change timelines, and the delivery screenshots
-- [ ] `popularity.md` with the popularity and languages screenshots
-- [ ] Link each metric to its row in `reference/metrics.md`, and external terms as in Task 5
+- [x] `json.md`: an annotated example cut from a real `--format json` output of the docs cache (Material code annotations), the class diagram of its objects, and `jq` recipes. Check each recipe against that output
+- [x] `activity.md`, from the README and the stats spec
+- [x] `flow.md` with the pull-request timeline diagram
+- [x] `delivery.md` with the deployment flowchart, the lead-time and failed-change timelines, and the delivery screenshots
+- [x] `popularity.md` with the popularity and languages screenshots
+- [x] Link each metric to its row in `reference/metrics.md`, and external terms as in Task 5
 
 **Acceptance Criteria:**
 
-- [ ] Each page has the diagrams and screenshots the spec's Pages table lists for it
-- [ ] The JSON keys shown are those `wambatic.reports.base.result_to_dict` writes
+- [x] Each page has the diagrams and screenshots the spec's Pages table lists for it
+- [x] The JSON keys shown are those `wambatic.reports.base.result_to_dict` writes
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] `uv sync --group docs` succeeds
-- [ ] `mkdocs build --strict` exits 0
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/test_docs.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] `uv sync --group docs` succeeds
+- [x] `mkdocs build --strict` exits 0
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/test_docs.py` passes
 
 **Notes:**
 

@@ -156,8 +156,10 @@ A strict MkDocs build (below) catches broken internal links and nav entries.
   Its plugins are `search` only. There is no API reference: wambatic is a command, not a library.
 - **Theme.** `docs/assets/theme.css` copies metafopy's colour variables, header rule and search box,
   without the metafopy-only rules. Material styles the Mermaid diagrams to match.
-- **Logo.** `docs/assets/wambatic-mark.svg` and `favicon.svg`: a new, simple mark in the same style
-  (graphite on white, hairline box, Solarized blue `#268BD2` accent), suggesting a bar chart. No
+- **Logo.** `docs/assets/wambatic-mark.svg` and `favicon.svg`: a hairline white box (graphite
+  `#3D3F44` rule) holding a strip of three rows of seven small squares that darken left to right,
+  after the report's commits-by-day heatmap and in its light sequential ramp (`figures.py`), with
+  `#E8F1FC` for an empty cell. The favicon is the same idea in a 3 by 3 grid, legible at 16 px. No
   animation.
 - **Light and dark.** Material's palette toggle, with both schemes, so that the dark screenshots have
   a matching site.

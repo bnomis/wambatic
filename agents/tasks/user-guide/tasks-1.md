@@ -459,7 +459,7 @@ stops as `blocked`, naming the command for the operator to run.
 
 ## Task 11: Make the screenshot script write only the images the guide uses
 
-**Status:** todo
+**Status:** done
 **Priority:** low
 **Complexity:** small
 **Spec Reference:** Screenshots; Drift test (images)
@@ -468,17 +468,17 @@ stops as `blocked`, naming the command for the operator to run.
 
 **Subtasks:**
 
-- [ ] Write only the images listed in a table in the script (or reference the extras from a page)
-- [ ] Re-run the script and confirm `pytest src/tests/test_docs.py` and `src/tests/test_screenshots.py` pass
+- [x] Write only the images listed in a table in the script (or reference the extras from a page)
+- [x] Re-run the script and confirm `pytest src/tests/test_docs.py` and `src/tests/test_screenshots.py` pass
 
 **Acceptance Criteria:**
 
-- [ ] A re-run leaves `docs/images/` with no unreferenced file
+- [x] A re-run leaves `docs/images/` with no unreferenced file
 
 **Definition of Done:**
 
-- [ ] `mkdocs build --strict` exits 0
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `mkdocs build --strict` exits 0
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
 
 **Notes:**
 

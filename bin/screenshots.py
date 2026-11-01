@@ -9,10 +9,11 @@ then writes under `--out` (default docs/images):
   SELECTORS;
 - web/: the pages of `wambatic serve` as PNG.
 
-It also writes docs/snippets/captured.md, the dated note the guide pages include. Run it by
-hand when the output changes (bin/screenshots.sh). It needs GITHUB_TOKEN or `gh auth token`,
-and Playwright's Chromium (`playwright install chromium`). The token is read only through
-wambatic's own lookup and is never written out.
+Only the images listed in WANTED are written. It also writes docs/snippets/captured.md, the
+dated note the guide pages include. Run it by hand when the output changes
+(bin/screenshots.sh). It needs GITHUB_TOKEN or `gh auth token`, and Playwright's Chromium
+(`playwright install chromium`). The token is read only through wambatic's own lookup and is
+never written out.
 
 Every failure is one line on stderr and exit status 1; images the run has not reached are left
 as they were.
@@ -105,6 +106,33 @@ SELECTORS: tuple[Crop, ...] = (
     Crop('languages', 'figure:has(#popularity-languages)'),
 )
 
+# The images the guide pages use, relative to the image directory. The script writes these and no
+# others; `test_images_exist` in src/tests/test_docs.py fails on an image no page references, so a
+# page that starts to use another image adds it here.
+WANTED: frozenset[str] = frozenset(
+    {
+        'html/org-pallets-calendar.png',
+        'html/org-pallets-dark.png',
+        'html/org-pallets-languages.png',
+        'html/org-pallets-light.png',
+        'html/org-pallets-popularity-charts.png',
+        'html/org-pallets-switch.png',
+        'html/org-pallets-tiles.png',
+        'html/repo-pallets-click-delivery-charts.png',
+        'html/repo-pallets-click-light.png',
+        'html/repo-pallets-click-partial-period.png',
+        'terminal/cache-info.svg',
+        'terminal/org-pallets-full.svg',
+        'terminal/repo-pallets-click-overview.svg',
+        'terminal/repo-pallets-click-provenance.svg',
+        'terminal/repo-pallets-click-trends.svg',
+        'web/api-docs.png',
+        'web/form.png',
+        'web/progress.png',
+        'web/report.png',
+    }
+)
+
 EVERY_CHART_DRAWN = """() => {
   const plots = [...document.querySelectorAll('.plot')];
   return plots.length > 0 && plots.every((plot) => plot.querySelector('.main-svg'));
@@ -123,6 +151,11 @@ def slug(text: str) -> str:
 def subject_slug(subject: wambatic.fetch.base.Subject) -> str:
     """`repo-pallets-click` or `org-pallets`."""
     return wambatic.reports.html.report_filename(subject).removesuffix('.html')
+
+
+def is_wanted(out_dir: pathlib.Path, path: pathlib.Path) -> bool:
+    """Whether `path`, under `out_dir`, is an image the guide uses."""
+    return path.relative_to(out_dir).as_posix() in WANTED
 
 
 def check_size(path: pathlib.Path) -> pathlib.Path:
@@ -257,9 +290,14 @@ def capture_terminal(
 
     name = subject_slug(result.subject)
     folder = out_dir / 'terminal'
-    written = [write_text(folder / f'{name}-full.svg', whole_report(render))]
+    written = []
+    full = folder / f'{name}-full.svg'
+    if is_wanted(out_dir, full):
+        written.append(write_text(full, whole_report(render)))
     for section, svg in split_sections(render).items():
-        written.append(write_text(folder / f'{name}-{section}.svg', svg))
+        path = folder / f'{name}-{section}.svg'
+        if is_wanted(out_dir, path):
+            written.append(write_text(path, svg))
     return written
 
 
@@ -351,15 +389,18 @@ def capture_html(report_path: pathlib.Path, out_dir: pathlib.Path) -> list[pathl
     written = []
     with launch_chromium() as browser:
         for scheme in ('light', 'dark'):
+            path = folder / f'{name}-{scheme}.png'
+            if not is_wanted(out_dir, path):
+                continue
             context, page = open_report(browser, report_path, scheme, FULL_PAGE_SCALE)
             try:
-                written.append(save_png(page, folder / f'{name}-{scheme}.png'))
+                written.append(save_png(page, path))
             finally:
                 context.close()
         for crop in SELECTORS:
-            written.append(
-                crop_report(browser, report_path, crop, folder / f'{name}-{crop.name}.png')
-            )
+            path = folder / f'{name}-{crop.name}.png'
+            if is_wanted(out_dir, path):
+                written.append(crop_report(browser, report_path, crop, path))
     return written
 
 

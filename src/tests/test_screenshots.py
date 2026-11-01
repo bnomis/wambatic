@@ -122,6 +122,23 @@ def test_the_docs_cache_is_never_the_users_own() -> None:
     assert screenshots.DOCS_CACHE != wambatic.settings.FetchSettings().cache_path
 
 
+def test_wanted_images_are_those_the_guide_references() -> None:
+    docs = SCRIPT.parent.parent / 'docs'
+    link = re.compile(r'!\[[^\]]*\]\(([^)\s]+)')
+    referenced = set()
+    for page in docs.rglob('*.md'):
+        for target in link.findall(page.read_text(encoding='utf-8')):
+            if '://' not in target:
+                image = (page.parent / target).resolve()
+                referenced.add(image.relative_to((docs / 'images').resolve()).as_posix())
+    assert referenced == screenshots.WANTED
+
+
+def test_only_wanted_images_are_selected(tmp_path: pathlib.Path) -> None:
+    assert screenshots.is_wanted(tmp_path, tmp_path / 'web/form.png')
+    assert not screenshots.is_wanted(tmp_path, tmp_path / 'web/unused.png')
+
+
 def test_the_captured_note_names_the_date_and_version() -> None:
 
     note = screenshots.captured_note(datetime.date(2026, 11, 1))
@@ -133,8 +150,15 @@ def test_the_captured_note_names_the_date_and_version() -> None:
 
 @pytest.mark.browser
 def test_every_selector_matches_an_html_report(
-    stats_fetcher: wambatic.fetch.base.Fetcher, tmp_path: pathlib.Path
+    stats_fetcher: wambatic.fetch.base.Fetcher,
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    every_image = {f'html/org-octo-org-{crop.name}.png' for crop in screenshots.SELECTORS} | {
+        'html/org-octo-org-light.png',
+        'html/org-octo-org-dark.png',
+    }
+    monkeypatch.setattr(screenshots, 'WANTED', frozenset(every_image))
     report = tests.conftest.make_report(
         stats_fetcher,
         tests.fixtures.stats.ORG,

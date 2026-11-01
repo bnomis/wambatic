@@ -216,7 +216,7 @@ stops as `blocked`, naming the command for the operator to run.
 
 ## Task 5: Write the opening pages
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** medium
 **Spec Reference:** Pages (`index.md`, `install.md`, `token.md`, `getting-started.md`, `concepts.md`); Introduction (audience)
@@ -225,27 +225,27 @@ stops as `blocked`, naming the command for the operator to run.
 
 **Subtasks:**
 
-- [ ] `index.md`: the pitch, one command, the light HTML screenshot, where to start (every guide page linked), why wambatic, its limits in one line each
-- [ ] `install.md`: Python 3.14 and uv, each with a link to its installer; clone, `uv sync`, `source bin/activate.sh`, checking `wambatic --help`; shell completion; updating
-- [ ] `token.md`: what a token is; the classic scopes and the fine-grained permissions (repository metadata and contents read, pull requests, issues and Actions read, organisation members read); `gh auth token`; never stored or printed; when no token is needed. Add the token-lookup flowchart
-- [ ] `getting-started.md`: the first report on `repo:pallets/click`, one terminal section screenshot per part, each explained; a warm re-run; the same as HTML and JSON
-- [ ] `concepts.md`: the architecture flowchart, the incremental-sync sequence diagram, rate limits and `fetch.on_rate_limit`
-- [ ] Include `captured.md` (`--8<-- "captured.md"` in a `note` admonition) on every page with a screenshot
-- [ ] Link each external term to its primary source the first time it appears on a page, as the spec's Introduction lists
+- [x] `index.md`: the pitch, one command, the light HTML screenshot, where to start (every guide page linked), why wambatic, its limits in one line each
+- [x] `install.md`: Python 3.14 and uv, each with a link to its installer; clone, `uv sync`, `source bin/activate.sh`, checking `wambatic --help`; shell completion; updating
+- [x] `token.md`: what a token is; the classic scopes and the fine-grained permissions (repository metadata and contents read, pull requests, issues and Actions read, organisation members read); `gh auth token`; never stored or printed; when no token is needed. Add the token-lookup flowchart
+- [x] `getting-started.md`: the first report on `repo:pallets/click`, one terminal section screenshot per part, each explained; a warm re-run; the same as HTML and JSON
+- [x] `concepts.md`: the architecture flowchart, the incremental-sync sequence diagram, rate limits and `fetch.on_rate_limit`
+- [x] Include `captured.md` (`--8<-- "captured.md"` in a `note` admonition) on every page with a screenshot
+- [x] Link each external term to its primary source the first time it appears on a page, as the spec's Introduction lists
 
 **Acceptance Criteria:**
 
-- [ ] Each page has the diagrams and screenshots the spec's Pages table lists for it
-- [ ] Each command shown is one wambatic accepts: its options are in `reference/cli.md`
-- [ ] No sentence counts things a generator does not produce (the shared counts-in-prose rule): name the members or drop the number
+- [x] Each page has the diagrams and screenshots the spec's Pages table lists for it
+- [x] Each command shown is one wambatic accepts: its options are in `reference/cli.md`
+- [x] No sentence counts things a generator does not produce (the shared counts-in-prose rule): name the members or drop the number
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] `uv sync --group docs` succeeds
-- [ ] `mkdocs build --strict` exits 0
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/test_docs.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] `uv sync --group docs` succeeds
+- [x] `mkdocs build --strict` exits 0
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/test_docs.py` passes
 
 **Notes:**
 

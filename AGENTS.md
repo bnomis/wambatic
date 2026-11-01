@@ -49,7 +49,7 @@ Other deliberate test-layout exceptions: property tests, browser tests, live tes
 
 ## The user guide
 
-A change to user-visible behaviour (options, settings, defaults, output, errors) updates the guide in `docs` in the same commit. When the output changes, re-run `bin/screenshots.sh` and commit the new images. When the logo `docs/assets/wambatic-mark.svg` changes, re-run `bin/animate-logo.sh` to rebuild the rippling home-page logo; a test fails while it is stale.
+A change to user-visible behaviour (options, settings, defaults, output, errors) updates the guide in `docs` in the same commit. When the output changes, re-run `bin/screenshots.sh` and commit the new images. When the logo `docs/assets/wambatic-mark.svg` or the favicon `docs/assets/favicon.svg` changes, re-run `bin/animate-logo.sh` to rebuild their rippling versions; a test fails while either is stale.
 
 ## Checks
 

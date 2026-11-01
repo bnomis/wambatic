@@ -5,7 +5,7 @@ repo_url: https://github.com/bnomis/wambatic
 theme:
   name: material
   logo: assets/wambatic-mark.svg
-  favicon: assets/favicon.svg
+  favicon: assets/favicon-animated.svg
   # Mona Sans for text, Source Code Pro for code; both served by Google Fonts.
   # https://squidfunk.github.io/mkdocs-material/setup/changing-the-fonts/
   font:

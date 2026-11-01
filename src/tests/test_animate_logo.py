@@ -73,30 +73,55 @@ def test_unusable_mark_is_refused(still: str, message: str) -> None:
         animate_logo.animate(still)
 
 
-def test_missing_mark_is_one_line_and_status_1(
+def one_pair(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, still: str) -> pathlib.Path:
+    """Point the script at one still drawing in tmp_path, and return its animated file's path."""
+    source = tmp_path / 'still.svg'
+    source.write_text(still, encoding='utf-8')
+    target = tmp_path / 'animated.svg'
+    monkeypatch.setattr(animate_logo, 'PAIRS', ((source, target),))
+    return target
+
+
+def test_both_drawings_have_an_animated_version() -> None:
+    names = {(source.name, target.name) for source, target in animate_logo.PAIRS}
+    assert names == {
+        ('favicon.svg', 'favicon-animated.svg'),
+        ('wambatic-mark.svg', 'wambatic-mark-animated.svg'),
+    }
+
+
+def test_missing_drawing_is_one_line_and_status_1(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr(animate_logo, 'SOURCE', tmp_path / 'missing.svg')
+    target = one_pair(tmp_path, monkeypatch, mark())
+    monkeypatch.setattr(animate_logo, 'PAIRS', ((tmp_path / 'missing.svg', target),))
     assert animate_logo.main([]) == 1
     err = capsys.readouterr().err
     assert err.startswith('animate-logo: ') and err.count('\n') == 1
 
 
+def test_unusable_drawing_names_its_file(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    one_pair(tmp_path, monkeypatch, mark())
+    assert animate_logo.main([]) == 1
+    assert capsys.readouterr().err == 'animate-logo: still.svg: no squares besides the box\n'
+
+
 def test_check_reports_a_stale_file_without_writing(
     tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    target = tmp_path / 'animated.svg'
+    target = one_pair(tmp_path, monkeypatch, mark(SQUARE.format(x=10)))
     target.write_text('old', encoding='utf-8')
-    monkeypatch.setattr(animate_logo, 'TARGET', target)
     assert animate_logo.main(CHECK) == 1
     assert target.read_text(encoding='utf-8') == 'old'
-    assert 'is stale' in capsys.readouterr().err
+    assert 'animated.svg stale' in capsys.readouterr().err
 
 
-def test_writes_the_animated_logo(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    target = tmp_path / 'animated.svg'
-    monkeypatch.setattr(animate_logo, 'TARGET', target)
+def test_writes_the_animated_drawing(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    still = mark(SQUARE.format(x=10))
+    target = one_pair(tmp_path, monkeypatch, still)
     assert animate_logo.main([]) == 0
-    assert target.read_text(encoding='utf-8') == animate_logo.animate(
-        animate_logo.SOURCE.read_text(encoding='utf-8')
-    )
+    assert target.read_text(encoding='utf-8') == animate_logo.animate(still)

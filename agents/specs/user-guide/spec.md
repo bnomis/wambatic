@@ -159,12 +159,14 @@ A strict MkDocs build (below) catches broken internal links and nav entries.
 - **Logo.** `docs/assets/wambatic-mark.svg` and `favicon.svg`: a hairline white box (graphite
   `#3D3F44` rule) holding a strip of three rows of seven small squares that darken left to right,
   after the report's commits-by-day heatmap and in its light sequential ramp (`figures.py`), with
-  `#E8F1FC` for an empty cell. The favicon is the same idea in a 3 by 3 grid, legible at 16 px. Both are
-  still. `docs/assets/wambatic-mark-animated.svg` is the same strip with each square cycling through
-  three neighbouring steps of the ramp in a left-to-right ripple (CSS keyframes inside the SVG, so
-  it runs as an `<img>`; still under `prefers-reduced-motion`), built from the still mark by
-  `bin/animate-logo.sh` with a fixed seed; `src/tests/test_animate_logo.py` fails while it is stale. Only the home page shows it, floated
-  right beside the opening paragraph, so no other page has motion.
+  `#E8F1FC` for an empty cell. The favicon is the same idea in a 3 by 3 grid, legible at 16 px. Both
+  drawings are still; `bin/animate-logo.sh` builds a rippling version of each with a fixed seed
+  (`wambatic-mark-animated.svg`, `favicon-animated.svg`): each square cycles through three
+  neighbouring steps of the ramp in a left-to-right ripple, by CSS keyframes inside the SVG, so it
+  runs as an `<img>`, and is still under `prefers-reduced-motion`. `src/tests/test_animate_logo.py`
+  fails while either is stale. The header shows the still logo. The home page shows the rippling
+  logo, floated right beside the opening paragraph. The site's favicon is the rippling one: Firefox
+  animates it, and browsers that do not animate favicons show one still frame.
 - **Light and dark.** Material's palette toggle, with both schemes, so that the dark screenshots have
   a matching site.
 - **Dependencies.** A `docs` dependency group in `pyproject.toml` (`uv add --group docs mkdocs

@@ -45,7 +45,7 @@ Logins and repository names are logged by design: they are public identifiers th
 
 `src/tests/fetch/test_fetcher.py` is deliberately separate from `test_base.py`: it holds the `Fetcher` sync tests and is too long to merge into the module-level tests of `fetch/base.py` (audit review 1, F16).
 
-Other deliberate test-layout exceptions: property tests, browser tests, live tests, `test_layering.py`, `test_package.py`, the bin-script tests and the fixtures of the fake GitHub do not mirror a source module.
+Other deliberate test-layout exceptions: property tests, browser tests, live tests, `test_layering.py`, `test_package.py`, the bin-script tests, `test_docs.py` (the user guide against the code) and the fixtures of the fake GitHub do not mirror a source module.
 
 ## Checks
 

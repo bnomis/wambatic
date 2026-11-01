@@ -78,7 +78,7 @@ stops as `blocked`, naming the command for the operator to run.
 
 ## Task 2: Write the reference pages and the drift test
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** medium
 **Spec Reference:** Pages (`reference/*`); API (`test_docs.py`); Drift test
@@ -87,31 +87,31 @@ stops as `blocked`, naming the command for the operator to run.
 
 **Subtasks:**
 
-- [ ] Write `src/tests/test_docs.py`, with `doc_table(page, heading)` reading the first Markdown table under a heading, keyed by column header. It ignores backticks, and splits cells holding several names (`-v`, `--verbose`)
-- [ ] `test_cli_options_match`: each command's table in `docs/reference/cli.md` lists exactly the options of its dataclass in `wambatic.cli`. The tables are global (`Wambatic`), `report` (`Report`), `serve` (`Serve`) and `cache` (`CacheCommand`). Option names come from the `cappa.Arg` metadata (long form `--kebab-case`, any short form); positionals are the upper-case field name; `-h`/`--help` and `--completion` are allowed extra rows in the global table
-- [ ] `test_settings_match`: `docs/reference/settings.md` has a row per field of `FetchSettings`, `StatsSettings` and `ReportSettings`, named `section.field`, and no other rows. Each documented default parses back to the dataclass default as the spec's Drift test section says
-- [ ] `test_metrics_match`: each metric row in `docs/reference/metrics.md` has the name, group and unit of the following, and every metric has a row:
+- [x] Write `src/tests/test_docs.py`, with `doc_table(page, heading)` reading the first Markdown table under a heading, keyed by column header. It ignores backticks, and splits cells holding several names (`-v`, `--verbose`)
+- [x] `test_cli_options_match`: each command's table in `docs/reference/cli.md` lists exactly the options of its dataclass in `wambatic.cli`. The tables are global (`Wambatic`), `report` (`Report`), `serve` (`Serve`) and `cache` (`CacheCommand`). Option names come from the `cappa.Arg` metadata (long form `--kebab-case`, any short form); positionals are the upper-case field name; `-h`/`--help` and `--completion` are allowed extra rows in the global table
+- [x] `test_settings_match`: `docs/reference/settings.md` has a row per field of `FetchSettings`, `StatsSettings` and `ReportSettings`, named `section.field`, and no other rows. Each documented default parses back to the dataclass default as the spec's Drift test section says
+- [x] `test_metrics_match`: each metric row in `docs/reference/metrics.md` has the name, group and unit of the following, and every metric has a row:
   - `wambatic.stats.activity.TOTAL_METRICS`
   - `wambatic.stats.flow.FLOW_METRICS`
   - `wambatic.stats.delivery.DELIVERY_METRICS`
   - `wambatic.stats.popularity.POPULARITY_METRICS`
-- [ ] `test_groups_match`: the groups listed in `reference/metrics.md` equal `wambatic.stats.base.GROUPS`
-- [ ] Write `docs/reference/cli.md`, `settings.md` (with a Type column), `metrics.md` and `exit-statuses.md` from the README's tables, extending them where the drift test finds a gap. Write each metric's definition in full, so the guide pages can link to it
-- [ ] Run each new test once against a deliberately wrong page (a row removed, a default changed), and confirm it fails and names the row. Then restore the page
-- [ ] Add `test_docs.py` to `AGENTS.md`'s list of test-layout exceptions
+- [x] `test_groups_match`: the groups listed in `reference/metrics.md` equal `wambatic.stats.base.GROUPS`
+- [x] Write `docs/reference/cli.md`, `settings.md` (with a Type column), `metrics.md` and `exit-statuses.md` from the README's tables, extending them where the drift test finds a gap. Write each metric's definition in full, so the guide pages can link to it
+- [x] Run each new test once against a deliberately wrong page (a row removed, a default changed), and confirm it fails and names the row. Then restore the page
+- [x] Add `test_docs.py` to `AGENTS.md`'s list of test-layout exceptions
 
 **Acceptance Criteria:**
 
-- [ ] Every test in `src/tests/test_docs.py` passes, and fails when one documented row is removed or one default is changed
-- [ ] The test imports no MkDocs package, so it runs in CI's `check` job without the `docs` group
+- [x] Every test in `src/tests/test_docs.py` passes, and fails when one documented row is removed or one default is changed
+- [x] The test imports no MkDocs package, so it runs in CI's `check` job without the `docs` group
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] `uv sync --group docs` succeeds
-- [ ] `mkdocs build --strict` exits 0
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/test_docs.py src/tests/test_cli.py src/tests/test_settings.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] `uv sync --group docs` succeeds
+- [x] `mkdocs build --strict` exits 0
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/test_docs.py src/tests/test_cli.py src/tests/test_settings.py` passes
 
 **Notes:**
 

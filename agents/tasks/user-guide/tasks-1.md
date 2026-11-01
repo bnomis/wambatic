@@ -417,7 +417,7 @@ stops as `blocked`, naming the command for the operator to run.
 
 ## Task 10: Close the list
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** small
 **Spec Reference:** External dependencies (D2); all sections
@@ -426,27 +426,27 @@ stops as `blocked`, naming the command for the operator to run.
 
 **Subtasks:**
 
-- [ ] Run `bin/audit-check.sh`. If D2 flags `mkdocs` or `mkdocs-material` as declared but never imported, check `.agents/claude/skills/auditme/requests.md` for the open request "D2 should not flag dependencies that are only run as commands":
+- [x] Run `bin/audit-check.sh`. If D2 flags `mkdocs` or `mkdocs-material` as declared but never imported, check `.agents/claude/skills/auditme/requests.md` for the open request "D2 should not flag dependencies that are only run as commands":
   - If it is still open, accept each hit with a scoped marker as the dev tools were (`accept[<rule>]`, with the reason "run as a command by the docs workflow, never imported").
   - If it has shipped and the hit persists, stop as `blocked` and give the hit.
-- [ ] Add step 12, "User guide", to `agents/specs/implementation-order.md`, pointing at this task list, and mark step 11 done if it still says its tasks-2 is in progress (both audit task lists are merged)
-- [ ] Set the spec's `**Status:**` to `implemented`
-- [ ] Note in the final report that, after the first deploy, the operator sets the repository's Pages source to the `gh-pages` branch in the repository settings
+- [x] Add step 12, "User guide", to `agents/specs/implementation-order.md`, pointing at this task list, and mark step 11 done if it still says its tasks-2 is in progress (both audit task lists are merged)
+- [x] Set the spec's `**Status:**` to `implemented`
+- [x] Note in the final report that, after the first deploy, the operator sets the repository's Pages source to the `gh-pages` branch in the repository settings
 
 **Acceptance Criteria:**
 
-- [ ] Every check below passes on the whole tree
-- [ ] The spec says `implemented`
+- [x] Every check below passes on the whole tree
+- [x] The spec says `implemented`
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] `uv sync --group docs` succeeds
-- [ ] `mkdocs build --strict` exits 0
-- [ ] `pre-commit run --all-files` passes
-- [ ] `pre-commit run --hook-stage pre-push --all-files` passes
-- [ ] `pytest src/tests/test_docs.py src/tests/test_screenshots.py src/tests/test_package.py src/tests/test_cli.py src/tests/test_settings.py` passes
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `source bin/activate.sh` succeeds
+- [x] `uv sync --group docs` succeeds
+- [x] `mkdocs build --strict` exits 0
+- [x] `pre-commit run --all-files` passes
+- [x] `pre-commit run --hook-stage pre-push --all-files` passes
+- [x] `pytest src/tests/test_docs.py src/tests/test_screenshots.py src/tests/test_package.py src/tests/test_cli.py src/tests/test_settings.py` passes
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
 
 **Notes:**
 

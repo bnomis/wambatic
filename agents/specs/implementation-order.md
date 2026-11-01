@@ -28,9 +28,10 @@ The order in which wambatic is built, with what each step delivers, what it depe
 | 8 | Delivery data and stats (releases, Actions, DORA proxies) | [fetch](fetch/spec.md), [cache](cache/spec.md), [stats](stats/spec.md), [reports](reports/spec.md) | 6, 7 | done: [tasks-3](../tasks/stats/tasks-3.md) |
 | 9 | Local web app | [reports](reports/spec.md), [fetch](fetch/spec.md), [cache](cache/spec.md) | 7 | done: [tasks-3](../tasks/reports/tasks-3.md) |
 | 10 | Popularity data and stats (stars, forks, watchers, languages) | [fetch](fetch/spec.md), [cache](cache/spec.md), [stats](stats/spec.md), [reports](reports/spec.md) | 7 | done: [tasks-4](../tasks/stats/tasks-4.md) |
-| 11 | Audit work: errors, specs and code fixes from the two audit reviews | every spec | 10 | [tasks-1](../tasks/audit-reviews/tasks-1.md) done; [tasks-2](../tasks/audit-reviews/tasks-2.md) in progress |
+| 11 | Audit work: errors, specs and code fixes from the two audit reviews | every spec | 10 | done: [tasks-1](../tasks/audit-reviews/tasks-1.md), [tasks-2](../tasks/audit-reviews/tasks-2.md) |
+| 12 | User guide: MkDocs site, reference pages, screenshots, drift test | [user guide](user-guide/spec.md) | 11 | [tasks-1](../tasks/user-guide/tasks-1.md) |
 
-Steps 6 and 7 are independent and may be built in either order or in parallel once 5 is done. Step 10 was split from step 8 on 2026-10-30 (stats review 3), because its fetch resources were not specified and the two together were more than one task list; it was specified on 2026-10-30 (stats review 4). Steps 9 and 10 are independent of each other. Step 11 is the audit work after step 10; it changes no feature.
+Steps 6 and 7 are independent and may be built in either order or in parallel once 5 is done. Step 10 was split from step 8 on 2026-10-30 (stats review 3), because its fetch resources were not specified and the two together were more than one task list; it was specified on 2026-10-30 (stats review 4). Steps 9 and 10 are independent of each other. Step 11 is the audit work after step 10; it changes no feature. Step 12 is the user guide; it changes no source module.
 
 ## Step detail
 
@@ -89,6 +90,10 @@ Done when: an unchanged repo's stars and forks cost no request, a removed star l
 
 Deliver: the fixes for [review-1](../audit-reviews/review-1.md) ([tasks-1](../tasks/audit-reviews/tasks-1.md)) and [review-2](../audit-reviews/review-2.md) ([tasks-2](../tasks/audit-reviews/tasks-2.md)): every error that reaches a caller is typed and listed in its `Raises` section, the specs match the code, the fetch-and-cache spec is split into the fetch and cache specs, and the whole-tree audit check passes.
 Done when: `bin/audit-check.sh` reports no unaccepted hit and every task in both lists is done.
+### 12. User guide
+
+Deliver: the MkDocs site in `docs/` and `mkdocs.yml`, the reference pages and the drift test that checks them against the code, the screenshot script, the guide pages, the slimmed README and the `docs` workflow that deploys the site.
+Done when: `mkdocs build --strict` exits 0, `pytest src/tests/test_docs.py` passes and the README points at the guide.
 
 ## Not in scope for this order
 

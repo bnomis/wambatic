@@ -336,7 +336,7 @@ stops as `blocked`, naming the command for the operator to run.
 
 ## Task 8: Write the cache, configuration, recipes, troubleshooting and limits pages
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** medium
 **Spec Reference:** Pages (`guide/cache.md`, `guide/config.md`, `guide/recipes.md`, `guide/troubleshooting.md`, `limits.md`); Drift test (images)
@@ -345,28 +345,28 @@ stops as `blocked`, naming the command for the operator to run.
 
 **Subtasks:**
 
-- [ ] `cache.md` with the `cache info` screenshot and the sync-or-not flowchart
-- [ ] `config.md` with the layers flowchart and an annotated example
-- [ ] `recipes.md`:
+- [x] `cache.md` with the `cache info` screenshot and the sync-or-not flowchart
+- [x] `config.md` with the layers flowchart and an annotated example
+- [x] `recipes.md`:
   - the README's common workflows;
   - a nightly HTML report with `cron`, with a link to `crontab(5)`;
   - an offline report from the cache
-- [ ] `troubleshooting.md`: each one-line error message wambatic prints, found by searching `src/wambatic` for the error classes' messages, with what to do
-- [ ] `limits.md`: the README's limits, each with why
-- [ ] Add `test_images_exist` to `src/tests/test_docs.py`: every image path in `docs/**/*.md` resolves to a file, and every file under `docs/images/` is referenced. Run it once with an unreferenced image, and confirm it fails
+- [x] `troubleshooting.md`: each one-line error message wambatic prints, found by searching `src/wambatic` for the error classes' messages, with what to do
+- [x] `limits.md`: the README's limits, each with why
+- [x] Add `test_images_exist` to `src/tests/test_docs.py`: every image path in `docs/**/*.md` resolves to a file, and every file under `docs/images/` is referenced. Run it once with an unreferenced image, and confirm it fails
 
 **Acceptance Criteria:**
 
-- [ ] Each page has the diagrams and screenshots the spec's Pages table lists for it
-- [ ] `test_images_exist` passes, and fails on an unreferenced image
+- [x] Each page has the diagrams and screenshots the spec's Pages table lists for it
+- [x] `test_images_exist` passes, and fails on an unreferenced image
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] `uv sync --group docs` succeeds
-- [ ] `mkdocs build --strict` exits 0
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/test_docs.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] `uv sync --group docs` succeeds
+- [x] `mkdocs build --strict` exits 0
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/test_docs.py` passes
 
 **Notes:**
 
@@ -454,3 +454,32 @@ stops as `blocked`, naming the command for the operator to run.
 - The project has no affected-tests tool. No source module under `src/wambatic` changes in this list, so the tests above are the ones it can affect
 
 ---
+
+---
+
+## Task 11: Make the screenshot script write only the images the guide uses
+
+**Status:** todo
+**Priority:** low
+**Complexity:** small
+**Spec Reference:** Screenshots; Drift test (images)
+
+**Technical Goal:** `bin/screenshots.sh` writes no image that no page references, so `test_images_exist` still passes after a re-run. Found in Task 8: the script writes the full set of terminal sections, crops and themes for both `repo:pallets/click` and `org:pallets`, and the guide uses a subset; the unreferenced files were deleted by hand.
+
+**Subtasks:**
+
+- [ ] Write only the images listed in a table in the script (or reference the extras from a page)
+- [ ] Re-run the script and confirm `pytest src/tests/test_docs.py` and `src/tests/test_screenshots.py` pass
+
+**Acceptance Criteria:**
+
+- [ ] A re-run leaves `docs/images/` with no unreferenced file
+
+**Definition of Done:**
+
+- [ ] `mkdocs build --strict` exits 0
+- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
+
+**Notes:**
+
+- Depends on Task 8

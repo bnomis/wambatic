@@ -160,3 +160,20 @@ def test_groups_match() -> None:
     rows = doc_table(REFERENCE / 'metrics.md', 'Groups')
     documented = {names_in(row['Group'])[0] for row in rows}
     assert documented == set(wambatic.stats.base.GROUPS)
+
+
+IMAGE_LINK = re.compile(r'!\[[^\]]*\]\(([^)\s]+)')
+
+
+def test_images_exist() -> None:
+    referenced: set[pathlib.Path] = set()
+    for page in DOCS.rglob('*.md'):
+        for link in IMAGE_LINK.findall(page.read_text(encoding='utf-8')):
+            if '://' in link:
+                continue
+            image = (page.parent / link).resolve()
+            assert image.is_file(), f'{page.relative_to(DOCS)} references {link}, which is missing'
+            referenced.add(image)
+    on_disk = {path.resolve() for path in (DOCS / 'images').rglob('*') if path.is_file()}
+    unreferenced = sorted(str(path.relative_to(DOCS.resolve())) for path in on_disk - referenced)
+    assert not unreferenced, f'unreferenced images: {unreferenced}'

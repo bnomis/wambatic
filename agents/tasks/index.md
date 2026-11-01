@@ -14,3 +14,4 @@
 | [Stats](../specs/stats/spec.md) | [tasks-4.md](stats/tasks-4.md) | 4 | 2026-10-30 |
 | [Audit review 1](../audit-reviews/review-1.md) | [tasks-1.md](audit-reviews/tasks-1.md) | 1 | 2026-10-31 |
 | [Audit review 2](../audit-reviews/review-2.md) | [tasks-2.md](audit-reviews/tasks-2.md) | 2 | 2026-10-31 |
+| [User guide](../specs/user-guide/spec.md) | [tasks-1.md](user-guide/tasks-1.md) | 1 | 2026-11-01 |

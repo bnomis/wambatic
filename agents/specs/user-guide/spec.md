@@ -162,7 +162,8 @@ A strict MkDocs build (below) catches broken internal links and nav entries.
   `#E8F1FC` for an empty cell. The favicon is the same idea in a 3 by 3 grid, legible at 16 px. Both are
   still. `docs/assets/wambatic-mark-animated.svg` is the same strip with each square cycling through
   three neighbouring steps of the ramp in a left-to-right ripple (CSS keyframes inside the SVG, so
-  it runs as an `<img>`; still under `prefers-reduced-motion`). Only the home page shows it, floated
+  it runs as an `<img>`; still under `prefers-reduced-motion`), built from the still mark by
+  `bin/animate-logo.sh` with a fixed seed; `src/tests/test_animate_logo.py` fails while it is stale. Only the home page shows it, floated
   right beside the opening paragraph, so no other page has motion.
 - **Light and dark.** Material's palette toggle, with both schemes, so that the dark screenshots have
   a matching site.

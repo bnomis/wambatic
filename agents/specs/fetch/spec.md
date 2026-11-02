@@ -1,7 +1,7 @@
 # Fetch
 
 **Version:** 1.16
-**Status:** proposed
+**Status:** implemented
 **Date:** 2026-11-02
 
 Fetches raw data about a GitHub user, repository or organisation and hands it to the [Cache](../cache/spec.md), the local SQLite store that keeps repeated and incremental runs inside the API rate limits. It uses the [GraphQL API](https://docs.github.com/en/graphql) for almost everything and the [REST API](https://docs.github.com/en/rest) only where GraphQL has no equivalent (workflow runs, the `stats/*` endpoints, comparing two commits, and the list of a repository's forks). It knows nothing about metrics; [Stats](../stats/spec.md) consumes its output.

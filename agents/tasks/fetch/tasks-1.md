@@ -329,7 +329,7 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 ## Task 10: Document Enterprise Server and close the list
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** medium
 **Spec Reference:** system spec 1.10 (Limits accepted, Settings); implementation order 1.11, step 13; every spec section above (closing)
@@ -338,27 +338,27 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 **Subtasks:**
 
-- [ ] Add a guide page on GitHub Enterprise Server under `docs/guide/` (the host setting and flag, the token variables, the minimum server version, the cache file per host, rate limits switched off, what is not supported: `*.ghe.com`), and add it to the `nav` in `mkdocs.yml`
-- [ ] Update `docs/token.md` with the Enterprise variables and `gh auth login --hostname`, `docs/limits.md` (Enterprise Server is supported from 3.19; Enterprise Cloud with data residency is not), `docs/guide/cache.md` (one file per host, `CacheHostError`) and `docs/reference/exit-statuses.md` (`ServerVersionError` and `CacheHostError`, both exit 1)
-- [ ] Mark step 13 `done` in `agents/specs/implementation-order.md`, linking this list, and set its `**Status:**` to `implemented`
-- [ ] Set the `**Status:**` of each amended spec to `implemented`: fetch, cache, system, CLI, reports, terminal report and HTML report
-- [ ] Move the `TODO.md` item "GitHub Enterprise Server is not supported" to the end of `DONE.md`: append its heading and body unchanged, then `Done: <date> - built by agents/tasks/fetch/tasks-1.md against fetch spec 1.16.`, and remove it from `TODO.md`
-- [ ] Add the list to `agents/tasks/index.md` if it is not there
+- [x] Add a guide page on GitHub Enterprise Server under `docs/guide/` (the host setting and flag, the token variables, the minimum server version, the cache file per host, rate limits switched off, what is not supported: `*.ghe.com`), and add it to the `nav` in `mkdocs.yml`
+- [x] Update `docs/token.md` with the Enterprise variables and `gh auth login --hostname`, `docs/limits.md` (Enterprise Server is supported from 3.19; Enterprise Cloud with data residency is not), `docs/guide/cache.md` (one file per host, `CacheHostError`) and `docs/reference/exit-statuses.md` (`ServerVersionError` and `CacheHostError`, both exit 1)
+- [x] Mark step 13 `done` in `agents/specs/implementation-order.md`, linking this list, and set its `**Status:**` to `implemented`
+- [x] Set the `**Status:**` of each amended spec to `implemented`: fetch, cache, system, CLI, reports, terminal report and HTML report
+- [x] Move the `TODO.md` item "GitHub Enterprise Server is not supported" to the end of `DONE.md`: append its heading and body unchanged, then `Done: <date> - built by agents/tasks/fetch/tasks-1.md against fetch spec 1.16.`, and remove it from `TODO.md`
+- [x] Add the list to `agents/tasks/index.md` if it is not there
 
 **Acceptance Criteria:**
 
-- [ ] The guide explains how to use an Enterprise server, from setting the host to the first report
-- [ ] `TODO.md` no longer holds the Enterprise item, and `DONE.md` ends with it and its `Done:` line
+- [x] The guide explains how to use an Enterprise server, from setting the host to the first report
+- [x] `TODO.md` no longer holds the Enterprise item, and `DONE.md` ends with it and its `Done:` line
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] `uv sync --group docs` succeeds
-- [ ] `mkdocs build --strict` exits 0
-- [ ] `pre-commit run --all-files` exits 0
-- [ ] `bin/audit-check.sh` exits 0
-- [ ] `python3 ~/.claude/skills/todo-review/verify_bodies.py <before> TODO.md DONE.md` exits 0, where `<before>` is `TODO.md` as of the commit that added this list (`git show "$(git log --diff-filter=A --format=%H -- agents/tasks/fetch/tasks-1.md)":TODO.md`)
-- [ ] `pytest src/tests/fetch src/tests/reports src/tests/stats src/tests/test_cli.py src/tests/test_settings.py src/tests/test_docs.py src/tests/test_layering.py src/tests/test_package.py src/tests/test_screenshots.py` passes: every test that reaches `settings`, `fetch` or `reports`, the modules this list changes
+- [x] `source bin/activate.sh` succeeds
+- [x] `uv sync --group docs` succeeds
+- [x] `mkdocs build --strict` exits 0
+- [x] `pre-commit run --all-files` exits 0
+- [x] `bin/audit-check.sh` exits 0
+- [x] `python3 ~/.claude/skills/todo-review/verify_bodies.py <before> TODO.md DONE.md` exits 0, where `<before>` is `TODO.md` as of the commit that added this list (`git show "$(git log --diff-filter=A --format=%H -- agents/tasks/fetch/tasks-1.md)":TODO.md`)
+- [x] `pytest src/tests/fetch src/tests/reports src/tests/stats src/tests/test_cli.py src/tests/test_settings.py src/tests/test_docs.py src/tests/test_layering.py src/tests/test_package.py src/tests/test_screenshots.py` passes: every test that reaches `settings`, `fetch` or `reports`, the modules this list changes
 
 **Notes:**
 

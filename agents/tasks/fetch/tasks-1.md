@@ -297,7 +297,7 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 ## Task 9: Name an Enterprise host in the reports
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** small
 **Spec Reference:** terminal-report spec 1.1, Implementation (item 14); HTML-report spec 1.1, Implementation (Layout, item 8)
@@ -306,19 +306,19 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 **Subtasks:**
 
-- [ ] The terminal provenance footer starts with `GitHub host: <host> (Enterprise Server <server_version>)` when `provenance['github_host']` is not `github.com`, in `src/wambatic/reports/terminal.py`
-- [ ] The HTML footer shows the same line, in `src/wambatic/reports/html.py` and its template
-- [ ] Tests in `src/tests/reports/test_terminal.py` and `src/tests/reports/test_html.py`: the line appears for an Enterprise host and is absent for github.com, whose output is unchanged byte for byte
+- [x] The terminal provenance footer starts with `GitHub host: <host> (Enterprise Server <server_version>)` when `provenance['github_host']` is not `github.com`, in `src/wambatic/reports/terminal.py`
+- [x] The HTML footer shows the same line, in `src/wambatic/reports/html.py` and its template
+- [x] Tests in `src/tests/reports/test_terminal.py` and `src/tests/reports/test_html.py`: the line appears for an Enterprise host and is absent for github.com, whose output is unchanged byte for byte
 
 **Acceptance Criteria:**
 
-- [ ] The existing terminal, HTML and JSON tests pass unchanged for github.com results
+- [x] The existing terminal, HTML and JSON tests pass unchanged for github.com results
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/reports/test_terminal.py src/tests/reports/test_html.py src/tests/reports/test_base.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/reports/test_terminal.py src/tests/reports/test_html.py src/tests/reports/test_base.py` passes
 
 **Notes:**
 

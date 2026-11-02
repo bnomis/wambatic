@@ -469,6 +469,10 @@ def provenance_lines(result: wambatic.stats.base.StatsResult) -> list[str]:
     keys = ['computed_at', *sorted(k for k in provenance if k.startswith('fetched_at:'))]
     keys += ['wambatic_version', 'schema_version']
     lines = [f'{key}: {provenance[key]}' for key in keys if key in provenance]
+    host = provenance.get('github_host', 'github.com')
+    if host != 'github.com':
+        version = provenance.get('server_version', 'unknown version')
+        lines.insert(0, f'GitHub host: {host} (Enterprise Server {version})')
     if 'version_override_at' in provenance:
         lines.append(
             f'Warning: the cache was read with --ignore-cache-version at '

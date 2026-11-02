@@ -217,6 +217,23 @@ def test_the_provenance_footer_lists_the_run_and_the_versions(
     ]
 
 
+def test_the_provenance_footer_names_an_enterprise_host_first(
+    org_result: wambatic.stats.base.StatsResult,
+) -> None:
+    provenance = {
+        **org_result.provenance,
+        'github_host': 'ghe.example.com',
+        'server_version': '3.19.1',
+    }
+    lines = render(dataclasses.replace(org_result, provenance=provenance)).splitlines()
+    footer = lines[lines.index('Provenance') + 1 :]
+    assert footer[0] == 'GitHub host: ghe.example.com (Enterprise Server 3.19.1)'
+    assert footer[1].startswith('computed_at: ')
+    assert 'GitHub host' not in render(org_result)
+    dotcom = {**org_result.provenance, 'github_host': 'github.com'}
+    assert render(dataclasses.replace(org_result, provenance=dotcom)) == render(org_result)
+
+
 def without_trailing_spaces(text: str) -> str:
     return '\n'.join(line.rstrip() for line in text.split('\n'))
 

@@ -342,7 +342,7 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 ## Task 10: Check a real clone sync against GitHub's totals
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** small
 **Spec Reference:** commit sync 1.0, Testing (the opt-in live test); review-1.md item 14
@@ -351,19 +351,19 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 **Subtasks:**
 
-- [ ] In `src/tests/fetch/test_live.py`, make the existing `octocat/Hello-World` live sync go through a real clone (a public repository) in a temporary clones directory, and keep its check that summed non-merge additions and deletions equal REST `stats/code_frequency`
-- [ ] Add a live check of the `api-files` method: sync the same repository with `fetch.api_history = 'files'` and its `Repo` built with `visibility='PRIVATE'`, so it is not cloned, and check that each commit's per-file sums equal its totals
-- [ ] Run the live tests once with a token; if no token is set (`[ -n "${GITHUB_TOKEN:-}" ]` prints no and `gh auth token` fails), stop as `blocked`, naming this task's live run
+- [x] In `src/tests/fetch/test_live.py`, make the existing `octocat/Hello-World` live sync go through a real clone (a public repository) in a temporary clones directory, and keep its check that summed non-merge additions and deletions equal REST `stats/code_frequency`
+- [x] Add a live check of the `api-files` method: sync the same repository with `fetch.api_history = 'files'` and its `Repo` built with `visibility='PRIVATE'`, so it is not cloned, and check that each commit's per-file sums equal its totals
+- [x] Run the live tests once with a token; if no token is set (`[ -n "${GITHUB_TOKEN:-}" ]` prints no and `gh auth token` fails), stop as `blocked`, naming this task's live run
 
 **Acceptance Criteria:**
 
-- [ ] `pytest -m live src/tests/fetch/test_live.py` passes with a token
+- [x] `pytest -m live src/tests/fetch/test_live.py` passes with a token
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest -m live src/tests/fetch/test_live.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest -m live src/tests/fetch/test_live.py` passes
 
 **Notes:**
 

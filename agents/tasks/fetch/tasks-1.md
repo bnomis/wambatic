@@ -53,7 +53,7 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 ## Task 2: Add `hosts.py` and `ServerVersionError`
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** small
 **Spec Reference:** fetch spec 1.16, Module location (`hosts.py`), API (hosts.py), Error handling (`ServerVersionError`), GitHub hosts (Addresses, Server version)
@@ -62,21 +62,21 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 **Subtasks:**
 
-- [ ] Create `src/wambatic/fetch/hosts.py` with `GitHubHost` (frozen, slots: `name`, `rest_url`, `graphql_url`, and the `is_dotcom` property), `GITHUB_COM`, `MIN_SERVER_VERSION = (3, 19)` with a comment naming 2026-11-02 and the oldest supported release, `parse_host` and `parse_server_version`, as the spec's API gives them
-- [ ] `parse_host('github.com')` gives `https://api.github.com` and `https://api.github.com/graphql`; any other checked name gives `https://<name>/api/v3` and `https://<name>/api/graphql`; text that fails the settings' rules raises `InvalidRequestError`
-- [ ] Add `ServerVersionError(FetchError)` to `src/wambatic/fetch/errors.py`, carrying the host, the version found (or none) and `MIN_SERVER_VERSION`, with a message naming all three
-- [ ] Tests in a new `src/tests/fetch/test_hosts.py` (both kinds of host, a port, a refused name, `'3.19.2'`, `'3.19'`, `'3'`, `'x.y'`, `''`), and the new error in `src/tests/fetch/test_errors.py`
+- [x] Create `src/wambatic/fetch/hosts.py` with `GitHubHost` (frozen, slots: `name`, `rest_url`, `graphql_url`, and the `is_dotcom` property), `GITHUB_COM`, `MIN_SERVER_VERSION = (3, 19)` with a comment naming 2026-11-02 and the oldest supported release, `parse_host` and `parse_server_version`, as the spec's API gives them
+- [x] `parse_host('github.com')` gives `https://api.github.com` and `https://api.github.com/graphql`; any other checked name gives `https://<name>/api/v3` and `https://<name>/api/graphql`; text that fails the settings' rules raises `InvalidRequestError`
+- [x] Add `ServerVersionError(FetchError)` to `src/wambatic/fetch/errors.py`, carrying the host, the version found (or none) and `MIN_SERVER_VERSION`, with a message naming all three
+- [x] Tests in a new `src/tests/fetch/test_hosts.py` (both kinds of host, a port, a refused name, `'3.19.2'`, `'3.19'`, `'3'`, `'x.y'`, `''`), and the new error in `src/tests/fetch/test_errors.py`
 
 **Acceptance Criteria:**
 
-- [ ] `parse_host('ghe.example.com').graphql_url == 'https://ghe.example.com/api/graphql'`
-- [ ] `parse_server_version('3.19.2') == (3, 19)`; `parse_server_version('3')` raises `ServerVersionError`
+- [x] `parse_host('ghe.example.com').graphql_url == 'https://ghe.example.com/api/graphql'`
+- [x] `parse_server_version('3.19.2') == (3, 19)`; `parse_server_version('3')` raises `ServerVersionError`
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/fetch/test_hosts.py src/tests/fetch/test_errors.py src/tests/test_package.py src/tests/test_layering.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/fetch/test_hosts.py src/tests/fetch/test_errors.py src/tests/test_package.py src/tests/test_layering.py` passes
 
 **Notes:**
 

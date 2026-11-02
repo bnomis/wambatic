@@ -18,6 +18,7 @@ SCHEMA_DIFFERENCE = ('1', '2')
         wambatic.fetch.errors.GraphQLError,
         wambatic.fetch.errors.NotFoundError,
         wambatic.fetch.errors.RateLimitError,
+        wambatic.fetch.errors.ServerVersionError,
         wambatic.fetch.errors.StatsPendingError,
     ],
 )
@@ -55,6 +56,16 @@ def test_cache_version_error_names_each_key_with_both_values_and_the_remedies() 
     assert 'wambatic cache clear' in message
     assert '--ignore-cache-version' in message
     assert error.differences['schema_version'] == SCHEMA_DIFFERENCE
+
+
+def test_server_version_error_names_host_version_and_minimum() -> None:
+    error = wambatic.fetch.errors.ServerVersionError('ghe.example.com', '3.2.1', (3, 19))
+    assert isinstance(error, wambatic.fetch.errors.FetchError)
+    assert 'ghe.example.com' in str(error)
+    assert '3.2.1' in str(error)
+    assert '3.19' in str(error)
+    missing = wambatic.fetch.errors.ServerVersionError('ghe.example.com', None, (3, 19))
+    assert 'no version' in str(missing)
 
 
 def test_graphql_error_keeps_its_own_copy_of_the_pairs() -> None:

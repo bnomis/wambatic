@@ -37,6 +37,29 @@ class StatsPendingError(FetchError):
     pass
 
 
+class ServerVersionError(FetchError):
+    """An Enterprise Server host reports no usable version, or one older than `minimum`.
+
+    `host` is None where the version text is parsed without a host to hand.
+    """
+
+    def __init__(
+        self,
+        host: str | None,
+        found: str | None,
+        minimum: tuple[int, int],
+    ) -> None:
+        self.host = host
+        self.found = found
+        self.minimum = minimum
+        where = host or 'the GitHub host'
+        seen = f'version {found!r}' if found else 'no version'
+        super().__init__(
+            f'{where} reports {seen}; wambatic needs GitHub Enterprise Server '
+            f'{minimum[0]}.{minimum[1]} or newer'
+        )
+
+
 class CacheError(FetchError):
     """The cache file cannot be opened, read or written (a locked or corrupt file, a full
     disc, a directory that cannot be created)."""

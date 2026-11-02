@@ -2,16 +2,21 @@
 
 What wambatic does not do, and why.
 
-- **Only the default branch's history is read.** Commits on other branches and unmerged work are not
-  counted. GitHub's own commit history for a branch is the one cheap, complete record; reading every branch
-  would multiply the requests and double count commits that are later merged.
+- **Only the default branch's history is read, unless you ask for more.** Commits on other branches and
+  unmerged work are not counted unless `fetch.branches` names them, for a repository that is cloned or
+  read with `fetch.api_history` set to `files`.
 - **A pull request's first review time can be missing.** The first review is found among a pull request's
   first reviews on GitHub. When the author or bots leave more than a few before the first other reviewer,
   the other reviewer's review is not among them and the pull request has no review time. Reading every
   review of every pull request would cost many requests for a small gain.
-- **Line counts are not filtered for generated files.** A commit that adds a lock file or a vendored
-  library adds its lines. GitHub does not mark generated files, and any list of patterns wambatic kept
-  would be a guess that differs between projects.
+- **Line counts are filtered only where wambatic can see each commit's files.** A public repository, or
+  one `fetch.clone_repos` allows, is cloned and its generated files are left out (`stats.exclude_paths`
+  and `stats.linguist`). Any other repository keeps the default branch and unfiltered totals unless
+  `fetch.api_history` is `files`, a slow per-commit read that applies `stats.exclude_paths` only. The
+  report lists the repositories it could not filter. A repository's attributes are read at its default
+  branch's head, and pull request sizes still include generated files.
+- **Clones need disk space and `git`.** Bare clones are kept beside the cache until
+  `wambatic cache clear`.
 - **A report uses one time zone.** Periods are cut by the zone in `--tz` or `stats.timezone`, so all
   numbers in a report agree on where a day, week or month begins. A different zone means a different report.
 - **Only some GitHub Enterprise servers are supported.** Enterprise Server is supported from 3.19, as

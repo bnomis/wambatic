@@ -1,7 +1,7 @@
 # Cache
 
 **Version:** 1.2
-**Status:** proposed
+**Status:** implemented
 **Date:** 2026-11-02
 
 The local SQLite store behind [Fetch](../fetch/spec.md): repositories, commits, pull requests, issues, releases, workflow runs, stars and forks, the per-repository sync state that makes a later sync incremental, REST ETags, and the identity (schema, wambatic and query versions) that refuses a cache written by different code. It knows nothing about GitHub requests or metrics; `Fetcher` writes it and reads it back for [Stats](../stats/spec.md).

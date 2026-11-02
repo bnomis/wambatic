@@ -1,7 +1,7 @@
 # Stats
 
 **Version:** 1.11
-**Status:** proposed
+**Status:** implemented
 **Date:** 2026-11-02
 
 Turns the raw records from [Fetch](../fetch/spec.md) and [Cache](../cache/spec.md) into statistics for a user, repository or organisation, optionally bucketed by year, month, week or day. It does no network or rendering of its own: `compute` reads the cache through the fetcher, and the aggregation functions it calls are pure. [Reports](../reports/spec.md) consumes its output.

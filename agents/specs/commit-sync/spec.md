@@ -1,7 +1,7 @@
 # Commit sync
 
 **Version:** 1.0
-**Status:** proposed
+**Status:** implemented
 **Date:** 2026-11-02
 
 How the `commits` resource is synced from 1.0 of this spec ([Fetch](../fetch/spec.md) 1.17). Each repository's commits are read by one of three methods, chosen per repository at each sync:

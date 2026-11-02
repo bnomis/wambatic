@@ -7,7 +7,8 @@ How to install wambatic from a clone of its repository and check that it runs.
 - Python 3.14.7 or a later 3.14 release. [uv](https://docs.astral.sh/uv/) can install it for you.
 - [uv](https://docs.astral.sh/uv/getting-started/installation/), which creates the environment and
   installs the dependencies.
-- [git](https://git-scm.com/downloads), to clone the repository.
+- [git](https://git-scm.com/downloads) 2.40 or later, to clone the repository and, at run time, to read
+  commits from bare clones of the repositories you report on.
 
 ## Install
 

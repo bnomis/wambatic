@@ -375,7 +375,7 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 ## Task 11: Document the commit sync and close the list
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** medium
 **Spec Reference:** system 1.11 (Limits accepted, External dependencies); implementation order 1.12, step 14; every spec section above (closing)
@@ -384,27 +384,27 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 **Subtasks:**
 
-- [ ] Update `docs/guide/activity.md` (line counts leave out generated files; the patterns and linguist attributes; what an unavailable row means), `docs/guide/cache.md` (the clones, their size, `cache clear`), `docs/guide/config.md` (`fetch.branches`, `fetch.clone_repos`, `fetch.api_history`, `fetch.clone_dir`, `stats.exclude_paths`, `stats.linguist`), `docs/limits.md` (the limits of system spec 1.11), `docs/install.md` (`git` 2.40 or later) and `docs/reference/exit-statuses.md` (`GitError` and `BranchesMismatchError`)
-- [ ] Re-run `bin/screenshots.sh` for the new footer lines and commit the new images; it rebuilds its cache through clones, so it needs a token and the network; if either is missing, stop as `blocked`, naming the screenshots
-- [ ] Mark step 14 `done` in `agents/specs/implementation-order.md`, linking this list, and set its `**Status:**` to `implemented`
-- [ ] Set the spec's `**Status:**` to `implemented` in `agents/specs/commit-sync/spec.md`, and in each amended spec: fetch, cache, stats, metric groups, system, CLI, terminal report and HTML report
-- [ ] Move the `TODO.md` item "The commit sync reads only default-branch totals" to the end of `DONE.md`: append its heading and body unchanged, then `Done: <date> - built by agents/tasks/commit-sync/tasks-1.md against commit sync spec 1.0.`, and remove it from `TODO.md`
-- [ ] Add the list to `agents/tasks/index.md` if it is not there
+- [x] Update `docs/guide/activity.md` (line counts leave out generated files; the patterns and linguist attributes; what an unavailable row means), `docs/guide/cache.md` (the clones, their size, `cache clear`), `docs/guide/config.md` (`fetch.branches`, `fetch.clone_repos`, `fetch.api_history`, `fetch.clone_dir`, `stats.exclude_paths`, `stats.linguist`), `docs/limits.md` (the limits of system spec 1.11), `docs/install.md` (`git` 2.40 or later) and `docs/reference/exit-statuses.md` (`GitError` and `BranchesMismatchError`)
+- [x] Re-run `bin/screenshots.sh` for the new footer lines and commit the new images; it rebuilds its cache through clones, so it needs a token and the network; if either is missing, stop as `blocked`, naming the screenshots
+- [x] Mark step 14 `done` in `agents/specs/implementation-order.md`, linking this list, and set its `**Status:**` to `implemented`
+- [x] Set the spec's `**Status:**` to `implemented` in `agents/specs/commit-sync/spec.md`, and in each amended spec: fetch, cache, stats, metric groups, system, CLI, terminal report and HTML report
+- [x] Move the `TODO.md` item "The commit sync reads only default-branch totals" to the end of `DONE.md`: append its heading and body unchanged, then `Done: <date> - built by agents/tasks/commit-sync/tasks-1.md against commit sync spec 1.0.`, and remove it from `TODO.md`
+- [x] Add the list to `agents/tasks/index.md` if it is not there
 
 **Acceptance Criteria:**
 
-- [ ] The guide explains the three methods, how to allow a clone and what the footer lines mean
-- [ ] `TODO.md` no longer holds the commit sync item, and `DONE.md` ends with it and its `Done:` line
+- [x] The guide explains the three methods, how to allow a clone and what the footer lines mean
+- [x] `TODO.md` no longer holds the commit sync item, and `DONE.md` ends with it and its `Done:` line
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] `uv sync --group docs` succeeds
-- [ ] `mkdocs build --strict` exits 0
-- [ ] `pre-commit run --all-files` exits 0
-- [ ] `bin/audit-check.sh` exits 0
-- [ ] `python3 ~/.claude/skills/todo-review/verify_bodies.py <before> TODO.md DONE.md` exits 0, where `<before>` is `TODO.md` as of the commit that added this list (`git show "$(git log --diff-filter=A --format=%H -- agents/tasks/commit-sync/tasks-1.md)":TODO.md`)
-- [ ] `pytest src/tests/fetch src/tests/reports src/tests/stats src/tests/test_cli.py src/tests/test_settings.py src/tests/test_docs.py src/tests/test_layering.py src/tests/test_package.py src/tests/test_screenshots.py src/tests/test_record_fixtures.py` passes: every test that reaches `settings`, `fetch`, `stats` or `reports`, the modules this list changes
+- [x] `source bin/activate.sh` succeeds
+- [x] `uv sync --group docs` succeeds
+- [x] `mkdocs build --strict` exits 0
+- [x] `pre-commit run --all-files` exits 0
+- [x] `bin/audit-check.sh` exits 0
+- [x] `python3 ~/.claude/skills/todo-review/verify_bodies.py <before> TODO.md DONE.md` exits 0, where `<before>` is `TODO.md` as of the commit that added this list (`git show "$(git log --diff-filter=A --format=%H -- agents/tasks/commit-sync/tasks-1.md)":TODO.md`)
+- [x] `pytest src/tests/fetch src/tests/reports src/tests/stats src/tests/test_cli.py src/tests/test_settings.py src/tests/test_docs.py src/tests/test_layering.py src/tests/test_package.py src/tests/test_screenshots.py src/tests/test_record_fixtures.py` passes: every test that reaches `settings`, `fetch`, `stats` or `reports`, the modules this list changes
 
 **Notes:**
 

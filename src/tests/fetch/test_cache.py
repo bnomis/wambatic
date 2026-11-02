@@ -333,6 +333,131 @@ def test_version_override_at_is_the_recorded_time_after_an_override(
     assert before <= wambatic.fetch.cache.from_text(recorded) <= datetime.datetime.now(datetime.UTC)
 
 
+# Host and server version
+
+ENTERPRISE = 'ghe.example.com'
+
+
+def make_cache_before_the_host_row(path: pathlib.Path) -> None:
+    """A cache as the code wrote it before `github_host` existed."""
+    wambatic.fetch.cache.Cache.open(path).close()
+    connection = sqlite3.connect(path)
+    try:
+        with connection:
+            connection.execute("DELETE FROM meta WHERE key = 'github_host'")
+    finally:
+        connection.close()
+
+
+def test_a_cache_without_the_host_row_opens_as_github_com_and_gains_it(
+    cache_path: pathlib.Path,
+) -> None:
+    make_cache_before_the_host_row(cache_path)
+    assert 'github_host' not in {row[0] for row in table_rows(cache_path, 'meta')}
+    opened = wambatic.fetch.cache.Cache.open(cache_path)
+    try:
+        assert opened.identity()['github_host'] == 'github.com'
+    finally:
+        opened.close()
+    assert ('github_host', 'github.com') in table_rows(cache_path, 'meta')
+
+
+def test_a_new_cache_records_its_host(cache_path: pathlib.Path) -> None:
+    opened = wambatic.fetch.cache.Cache.open(cache_path, host=ENTERPRISE)
+    try:
+        assert opened.identity()['github_host'] == ENTERPRISE
+        assert opened.identity() == wambatic.fetch.cache.expected_identity(ENTERPRISE)
+    finally:
+        opened.close()
+
+
+@pytest.mark.parametrize('ignore_version', [False, True])
+def test_a_github_com_cache_opened_for_an_enterprise_host_raises(
+    cache_path: pathlib.Path, ignore_version: bool
+) -> None:
+    wambatic.fetch.cache.Cache.open(cache_path).close()
+    with pytest.raises(wambatic.fetch.errors.CacheHostError) as caught:
+        wambatic.fetch.cache.Cache.open(cache_path, host=ENTERPRISE, ignore_version=ignore_version)
+    message = str(caught.value)
+    assert str(cache_path) in message
+    assert 'github.com' in message
+    assert ENTERPRISE in message
+    assert 'fetch.cache_path' in message
+    assert 'wambatic cache clear' in message
+    assert isinstance(caught.value, wambatic.fetch.errors.CacheError)
+
+
+def test_an_unmarked_cache_opened_for_an_enterprise_host_raises(
+    cache_path: pathlib.Path,
+) -> None:
+    make_cache_before_the_host_row(cache_path)
+    with pytest.raises(wambatic.fetch.errors.CacheHostError):
+        wambatic.fetch.cache.Cache.open(cache_path, host=ENTERPRISE)
+
+
+def test_the_host_is_checked_before_the_other_identity_keys(
+    cache_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    wambatic.fetch.cache.Cache.open(cache_path).close()
+    monkeypatch.setattr(wambatic.fetch.cache, 'SCHEMA_VERSION', NEXT_SCHEMA_VERSION)
+    with pytest.raises(wambatic.fetch.errors.CacheHostError):
+        wambatic.fetch.cache.Cache.open(cache_path, host=ENTERPRISE)
+
+
+def test_an_enterprise_cache_reopens_for_its_host(cache_path: pathlib.Path) -> None:
+    wambatic.fetch.cache.Cache.open(cache_path, host=ENTERPRISE).close()
+    wambatic.fetch.cache.Cache.open(cache_path, host=ENTERPRISE).close()
+    with pytest.raises(wambatic.fetch.errors.CacheHostError):
+        wambatic.fetch.cache.Cache.open(cache_path)
+
+
+def test_server_version_survives_a_reopen_and_leaves_the_identity_alone(
+    cache_path: pathlib.Path,
+) -> None:
+    first = wambatic.fetch.cache.Cache.open(cache_path, host=ENTERPRISE)
+    try:
+        assert first.server_version() is None
+        before = first.identity()
+        first.write_server_version('3.19.1')
+        assert first.identity() == before
+    finally:
+        first.close()
+    second = wambatic.fetch.cache.Cache.open(cache_path, host=ENTERPRISE)
+    try:
+        assert second.server_version() == '3.19.1'
+        assert second.identity() == before
+        second.write_server_version('3.20.0')
+        assert second.server_version() == '3.20.0'
+    finally:
+        second.close()
+
+
+def test_inspect_cache_reports_the_host_and_the_server_version(
+    cache_path: pathlib.Path,
+) -> None:
+    opened = wambatic.fetch.cache.Cache.open(cache_path, host=ENTERPRISE)
+    try:
+        opened.write_server_version('3.19.1')
+    finally:
+        opened.close()
+    info = wambatic.fetch.cache.inspect_cache(cache_path)
+    assert info is not None
+    assert (info.github_host, info.server_version) == (ENTERPRISE, '3.19.1')
+    assert info.identity['github_host'] == ENTERPRISE
+    assert 'server_version' not in info.identity
+    assert info.differences == {}
+
+
+def test_inspect_cache_reads_a_cache_without_the_host_row_as_github_com(
+    cache_path: pathlib.Path,
+) -> None:
+    make_cache_before_the_host_row(cache_path)
+    info = wambatic.fetch.cache.inspect_cache(cache_path)
+    assert info is not None
+    assert (info.github_host, info.server_version) == ('github.com', None)
+    assert info.differences == {}
+
+
 # Repos
 
 

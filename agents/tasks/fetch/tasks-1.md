@@ -192,7 +192,7 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 ## Task 6: Record the host and the server version in the cache
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** medium
 **Spec Reference:** cache spec 1.1, API (`Cache.open`, `server_version`, `write_server_version`), Error handling (`CacheHostError`), Implementation (The host); fetch spec 1.16, GitHub hosts (Provenance)
@@ -201,23 +201,23 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 **Subtasks:**
 
-- [ ] `Cache.open(path, *, host='github.com', ignore_version=False)`: a file without a `github_host` row gets `github.com` written; a recorded host other than `host` raises `CacheHostError` before the other identity keys are compared, whatever `ignore_version` says; a new file records `host`
-- [ ] Add `CacheHostError(CacheError)` naming the cache path and both hosts and saying to set `fetch.cache_path` or run `wambatic cache clear` with that host
-- [ ] `github_host` is part of `Cache.identity()`; `server_version` is a `meta` row outside it, with `Cache.server_version()` and `Cache.write_server_version(version)`
-- [ ] `inspect_cache` and `CacheInfo` report both rows
-- [ ] Every `Cache.open` caller passes `settings.fetch.github_host` (`src/wambatic/cli.py`, `src/wambatic/reports/web.py`)
-- [ ] Tests in `src/tests/fetch/test_cache.py`: a cache without the row (made by the current code before the change, built in the test) opens as github.com and gains the row; a github.com cache opened for an Enterprise host raises `CacheHostError` with and without `ignore_version`; `server_version` survives a reopen and does not change the identity
+- [x] `Cache.open(path, *, host='github.com', ignore_version=False)`: a file without a `github_host` row gets `github.com` written; a recorded host other than `host` raises `CacheHostError` before the other identity keys are compared, whatever `ignore_version` says; a new file records `host`
+- [x] Add `CacheHostError(CacheError)` naming the cache path and both hosts and saying to set `fetch.cache_path` or run `wambatic cache clear` with that host
+- [x] `github_host` is part of `Cache.identity()`; `server_version` is a `meta` row outside it, with `Cache.server_version()` and `Cache.write_server_version(version)`
+- [x] `inspect_cache` and `CacheInfo` report both rows
+- [x] Every `Cache.open` caller passes `settings.fetch.github_host` (`src/wambatic/cli.py`, `src/wambatic/reports/web.py`)
+- [x] Tests in `src/tests/fetch/test_cache.py`: a cache without the row (made by the current code before the change, built in the test) opens as github.com and gains the row; a github.com cache opened for an Enterprise host raises `CacheHostError` with and without `ignore_version`; `server_version` survives a reopen and does not change the identity
 
 **Acceptance Criteria:**
 
-- [ ] A github.com cache written before this task opens unchanged, with no `CacheVersionError`
-- [ ] `--ignore-cache-version` never lets a cache made for one host be read for another
+- [x] A github.com cache written before this task opens unchanged, with no `CacheVersionError`
+- [x] `--ignore-cache-version` never lets a cache made for one host be read for another
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/fetch/test_cache.py src/tests/fetch/test_errors.py src/tests/test_cli.py src/tests/reports/test_web.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/fetch/test_cache.py src/tests/fetch/test_errors.py src/tests/test_cli.py src/tests/reports/test_web.py` passes
 
 **Notes:**
 

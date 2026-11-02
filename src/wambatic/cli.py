@@ -252,7 +252,9 @@ async def run_report(
     request = build_request(report, settings, clock())
     wambatic.stats.engine.resources_for(request.groups)
     cache = wambatic.fetch.cache.Cache.open(
-        wambatic.settings.cache_path_for(settings.fetch), ignore_version=report.ignore_cache_version
+        wambatic.settings.cache_path_for(settings.fetch),
+        host=settings.fetch.github_host,
+        ignore_version=report.ignore_cache_version,
     )
     as_html = settings.report.format == 'html'
     requests = wambatic.reports.html.period_requests(request) if as_html else [request]
@@ -291,6 +293,8 @@ def cache_info_table(info: wambatic.fetch.cache.CacheInfo) -> rich.table.Table:
         rows.append((f'differs: {key}', f'{recorded or "nothing"} -> {running or "nothing"}'))
     if not info.differences:
         rows.append(('differences', 'none'))
+    if info.server_version is not None:
+        rows.append(('server_version', info.server_version))
     if info.version_override_at is not None:
         rows.append(('version_override_at', info.version_override_at))
     rows += [

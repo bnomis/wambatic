@@ -118,6 +118,7 @@ class FakeRepo:
     watchers: int = 0
     languages: list[tuple[str, int]] | None = None
     has_forks: bool = True
+    visibility: str = 'PRIVATE'
 
     @property
     def head(self) -> str | None:
@@ -141,6 +142,7 @@ class FakeRepo:
             fork_count=len(self.forks) + self.forks_of_forks,
             watcher_count=self.watchers,
             languages=self.languages,
+            visibility=self.visibility,
         )
 
     def push(self, *commits: FakeCommit) -> None:
@@ -537,6 +539,7 @@ class Upstream:
             'query OwnerRepositories': 'listing',
             'query Repository(': 'repository',
             'query CommitHistory': 'history',
+            'query CommitAuthors': 'authors',
             'query CommitCounts': 'nodes',
             'query PullRequests': 'pull_requests',
             'query Issues': 'issues',

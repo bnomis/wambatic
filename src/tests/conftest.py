@@ -18,6 +18,7 @@ import tests.fixtures.stats
 import wambatic.fetch.base
 import wambatic.fetch.cache
 import wambatic.fetch.client
+import wambatic.fetch.git
 import wambatic.reports.html
 import wambatic.settings
 import wambatic.stats.base
@@ -135,12 +136,13 @@ def make_fetcher(
         server: tests.fixtures.fetch.server.ReplayServer,
         settings: wambatic.settings.FetchSettings = fetch_settings,
         cache: wambatic.fetch.cache.Cache | None = None,
+        git: wambatic.fetch.git.Git | None = None,
     ) -> wambatic.fetch.base.Fetcher:
         if cache is None:
             cache = wambatic.fetch.cache.Cache.open(tmp_path / 'cache' / 'cache.sqlite3')
             caches.append(cache)
         return wambatic.fetch.base.Fetcher(
-            'test-token', cache, settings, client=make_client(server, settings)
+            'test-token', cache, settings, client=make_client(server, settings), git=git
         )
 
     yield make

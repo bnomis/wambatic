@@ -49,7 +49,7 @@ def repo_node(
     watcher_count: int = 0,
     languages: list[tuple[str, int]] | None = None,
     languages_size: int | None = None,
-    visibility: str = 'PUBLIC',
+    visibility: str = 'PRIVATE',
 ) -> dict[str, object]:
     """A repository node as `OWNER_REPOSITORIES` and `REPOSITORY` select it. `languages` None is
     a `null` connection; `languages_size` None is the sum of the listed languages."""

@@ -3,10 +3,10 @@ import base64
 import collections.abc
 import pathlib
 import stat
-import subprocess
 
 import pytest
 
+import tests.fixtures.fetch.gitrepo
 import wambatic.fetch.errors
 import wambatic.fetch.git
 import wambatic.fetch.hosts
@@ -17,65 +17,12 @@ REPO = 'octo/widgets'
 
 @pytest.fixture(autouse=True)
 def isolated_git(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv('GIT_CONFIG_GLOBAL', '/dev/null')
-    monkeypatch.setenv('GIT_CONFIG_NOSYSTEM', '1')
-    monkeypatch.setenv('GIT_AUTHOR_NAME', 'Tester')
-    monkeypatch.setenv('GIT_AUTHOR_EMAIL', 'tester@example.com')
-    monkeypatch.setenv('GIT_COMMITTER_NAME', 'Tester')
-    monkeypatch.setenv('GIT_COMMITTER_EMAIL', 'tester@example.com')
-    monkeypatch.setenv('GIT_AUTHOR_DATE', '2026-01-02T03:04:05+02:00')
-    monkeypatch.setenv('GIT_COMMITTER_DATE', '2026-01-02T03:04:05+02:00')
+    tests.fixtures.fetch.gitrepo.isolate(monkeypatch)
 
 
-def run_git(cwd: pathlib.Path, *args: str) -> str:
-    result = subprocess.run(
-        ['git', *args],
-        cwd=cwd,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    return result.stdout.strip()
-
-
-class Upstream:
-    """A working repository pushing to a local bare remote that `Git` clones from."""
-
+class Upstream(tests.fixtures.fetch.gitrepo.LocalRemote):
     def __init__(self, root: pathlib.Path) -> None:
-        self.remote_root = root / 'remotes'
-        self.remote = self.remote_root / f'{REPO}.git'
-        self.work = root / 'work'
-
-    def create(self) -> None:
-        self.remote.parent.mkdir(parents=True)
-        run_git(self.remote_root, 'init', '--bare', '-b', 'main', str(self.remote))
-        self.work.mkdir()
-        run_git(self.work, 'init', '-b', 'main')
-        run_git(self.work, 'remote', 'add', 'origin', str(self.remote))
-
-    def url_for(self, repo: str) -> str:
-        return str(self.remote_root / f'{repo}.git')
-
-    def write(self, name: str, text: str | bytes) -> None:
-        path = self.work / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if isinstance(text, bytes):
-            path.write_bytes(text)
-        else:
-            path.write_text(text)
-
-    def commit(self, message: str = 'change') -> str:
-        run_git(self.work, 'add', '-A')
-        run_git(self.work, 'commit', '-m', message)
-        return run_git(self.work, 'rev-parse', 'HEAD')
-
-    def add_and_push(self, name: str, text: str) -> None:
-        self.write(name, text)
-        self.commit('later')
-        self.push()
-
-    def push(self, *refspecs: str) -> None:
-        run_git(self.work, 'push', '--force', 'origin', *(refspecs or ('main',)))
+        super().__init__(root, REPO)
 
 
 @pytest.fixture
@@ -152,17 +99,19 @@ def test_commit_counts_rename_binary_and_merge(upstream: Upstream, tmp_path: pat
     upstream.write('é.txt', 'x\n')
     upstream.write('blob.bin', b'\x00\x01\x02\x03')
     added = upstream.commit('add binary and unicode')
-    run_git(upstream.work, 'mv', 'old name.py', 'new name.py')
+    tests.fixtures.fetch.gitrepo.run_git(upstream.work, 'mv', 'old name.py', 'new name.py')
     upstream.write('new name.py', ''.join(f'line {n}\n' for n in range(10)) + 'extra\n')
     renamed = upstream.commit('rename')
-    run_git(upstream.work, 'checkout', '-b', 'feature')
+    tests.fixtures.fetch.gitrepo.run_git(upstream.work, 'checkout', '-b', 'feature')
     upstream.write('feature.txt', 'a\nb\nc\n')
     upstream.commit('feature work')
-    run_git(upstream.work, 'checkout', 'main')
+    tests.fixtures.fetch.gitrepo.run_git(upstream.work, 'checkout', 'main')
     upstream.write('main-only.txt', 'z\n')
     upstream.commit('main work')
-    run_git(upstream.work, 'merge', '--no-ff', '-m', 'merge feature', 'feature')
-    merge = run_git(upstream.work, 'rev-parse', 'HEAD')
+    tests.fixtures.fetch.gitrepo.run_git(
+        upstream.work, 'merge', '--no-ff', '-m', 'merge feature', 'feature'
+    )
+    merge = tests.fixtures.fetch.gitrepo.run_git(upstream.work, 'rev-parse', 'HEAD')
     upstream.push('main', 'feature')
     git = make_git(upstream, tmp_path)
 
@@ -194,10 +143,10 @@ def test_commit_counts_rename_binary_and_merge(upstream: Upstream, tmp_path: pat
 def test_force_pushed_and_deleted_branches(upstream: Upstream, tmp_path: pathlib.Path) -> None:
     upstream.write('a.txt', 'a\n')
     root = upstream.commit('root')
-    run_git(upstream.work, 'checkout', '-b', 'topic')
+    tests.fixtures.fetch.gitrepo.run_git(upstream.work, 'checkout', '-b', 'topic')
     upstream.write('t.txt', 't\n')
     topic = upstream.commit('topic')
-    run_git(upstream.work, 'checkout', 'main')
+    tests.fixtures.fetch.gitrepo.run_git(upstream.work, 'checkout', 'main')
     upstream.write('a.txt', 'a\nb\n')
     old_main = upstream.commit('old main')
     upstream.push('main', 'topic')
@@ -208,11 +157,11 @@ def test_force_pushed_and_deleted_branches(upstream: Upstream, tmp_path: pathlib
         return await git.reachable(REPO, list((await git.branches(REPO)).values()))
 
     assert asyncio.run(reach()) == {root, topic, old_main}
-    run_git(upstream.work, 'reset', '--hard', root)
+    tests.fixtures.fetch.gitrepo.run_git(upstream.work, 'reset', '--hard', root)
     upstream.write('a.txt', 'rewritten\n')
     new_main = upstream.commit('new main')
     upstream.push('main')
-    run_git(upstream.work, 'push', 'origin', '--delete', 'topic')
+    tests.fixtures.fetch.gitrepo.run_git(upstream.work, 'push', 'origin', '--delete', 'topic')
     assert asyncio.run(reach()) == {root, new_main}
     assert asyncio.run(git.branches(REPO)) == {'main': new_main}
 

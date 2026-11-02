@@ -161,7 +161,7 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 ## Task 5: Choose the method and sync cloned repositories
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** large
 **Spec Reference:** commit sync 1.0, Choosing the method, Where clones live, The skip rule, The `clone` method, The `api` method, `--full-refresh`, Cost; fetch 1.17, Fetcher
@@ -170,26 +170,26 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 **Subtasks:**
 
-- [ ] Add `CommitMethod` and `commit_method(repo, settings)` to `src/wambatic/fetch/base.py`: `clone` for `PUBLIC` or a lower-cased `owner/name` matching a `fetch.clone_repos` pattern (`fnmatch.fnmatchcase`), else `api-files` when `fetch.api_history == 'files'`, else `api`
-- [ ] Write and parse the commit state's `probe` (`method=<method>`, then `attrs=<probe>` and `branches=<JSON list>` where the method has them), and add `Fetcher.commit_method(repo)` reading it from the cache
-- [ ] Extend the commit skip rule: unchanged only when `pushedAt` and `updatedAt` match, the recorded method equals `commit_method`, and for `clone` and `api-files` the recorded branches equal `fetch.branches`
-- [ ] A method different from the recorded one reads the repository in full in the new method, replacing its rows; a repository leaving `clone` has its clone removed (`Git.remove`)
-- [ ] Give `Fetcher.__init__` its `git: Git | None = None`, built by default from the token, the host and `clones_dir_for(settings)`; check the git version once, before the first clone of a sync
-- [ ] Implement the `clone` method's steps 1 to 6: update, followed branches, the reachable set difference (new and gone), `Git.commits` with the Task 4 logins, generated paths (all paths when the attributes probe changed, else the new files'), and one `Cache.write_commits` with `gone`, `branch_heads` and `generated`; name a repository with gone commits in `SyncReport.full_refetches`
-- [ ] Leave the `api` method as the fetch 1.16 sync, with `probe` `method=api`; `--full-refresh` re-clones a `clone` repository and replaces its rows
-- [ ] Tests in `src/tests/fetch/test_fetcher.py`, with local repositories through `url_for` and the replay server for the listing and authors: `commit_method` for a public, a private and an internal repository, with and without a matching pattern, and for each `fetch.api_history`; a first clone sync, an incremental one, a force-push, a deleted branch, a pattern added to `fetch.branches` (not skipped), a `.gitattributes` change (every flag rewritten); a repository made private and not allowed (read by `api`, clone removed); `--full-refresh`
+- [x] Add `CommitMethod` and `commit_method(repo, settings)` to `src/wambatic/fetch/base.py`: `clone` for `PUBLIC` or a lower-cased `owner/name` matching a `fetch.clone_repos` pattern (`fnmatch.fnmatchcase`), else `api-files` when `fetch.api_history == 'files'`, else `api`
+- [x] Write and parse the commit state's `probe` (`method=<method>`, then `attrs=<probe>` and `branches=<JSON list>` where the method has them), and add `Fetcher.commit_method(repo)` reading it from the cache
+- [x] Extend the commit skip rule: unchanged only when `pushedAt` and `updatedAt` match, the recorded method equals `commit_method`, and for `clone` and `api-files` the recorded branches equal `fetch.branches`
+- [x] A method different from the recorded one reads the repository in full in the new method, replacing its rows; a repository leaving `clone` has its clone removed (`Git.remove`)
+- [x] Give `Fetcher.__init__` its `git: Git | None = None`, built by default from the token, the host and `clones_dir_for(settings)`; check the git version once, before the first clone of a sync
+- [x] Implement the `clone` method's steps 1 to 6: update, followed branches, the reachable set difference (new and gone), `Git.commits` with the Task 4 logins, generated paths (all paths when the attributes probe changed, else the new files'), and one `Cache.write_commits` with `gone`, `branch_heads` and `generated`; name a repository with gone commits in `SyncReport.full_refetches`
+- [x] Leave the `api` method as the fetch 1.16 sync, with `probe` `method=api`; `--full-refresh` re-clones a `clone` repository and replaces its rows
+- [x] Tests in `src/tests/fetch/test_fetcher.py`, with local repositories through `url_for` and the replay server for the listing and authors: `commit_method` for a public, a private and an internal repository, with and without a matching pattern, and for each `fetch.api_history`; a first clone sync, an incremental one, a force-push, a deleted branch, a pattern added to `fetch.branches` (not skipped), a `.gitattributes` change (every flag rewritten); a repository made private and not allowed (read by `api`, clone removed); `--full-refresh`
 
 **Acceptance Criteria:**
 
-- [ ] A private repository is cloned only when `fetch.clone_repos` matches it
-- [ ] After a force-push, the cache holds exactly the commits reachable from the followed heads
-- [ ] A repository's rows never come from two methods
+- [x] A private repository is cloned only when `fetch.clone_repos` matches it
+- [x] After a force-push, the cache holds exactly the commits reachable from the followed heads
+- [x] A repository's rows never come from two methods
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/fetch/test_fetcher.py src/tests/fetch/test_git.py src/tests/fetch/test_cache.py src/tests/fetch/test_base.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/fetch/test_fetcher.py src/tests/fetch/test_git.py src/tests/fetch/test_cache.py src/tests/fetch/test_base.py` passes
 
 **Notes:**
 

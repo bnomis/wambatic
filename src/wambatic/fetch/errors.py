@@ -62,6 +62,10 @@ class ServerVersionError(FetchError):
         )
 
 
+class GitError(FetchError):
+    """`git` is missing or too old, a command failed or timed out, or its output did not parse."""
+
+
 class CacheError(FetchError):
     """The cache file cannot be opened, read or written (a locked or corrupt file, a full
     disc, a directory that cannot be created)."""

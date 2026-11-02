@@ -91,7 +91,7 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 ## Task 3: Add the git runner and bare clones
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** large
 **Spec Reference:** commit sync 1.0, API (`git.py`), Error handling (`GitError`), Running git, Testing; External dependencies
@@ -100,23 +100,23 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 **Subtasks:**
 
-- [ ] Add `GitError(FetchError)` to `src/wambatic/fetch/errors.py`
-- [ ] Create `src/wambatic/fetch/git.py` with `MIN_GIT_VERSION`, `GIT_TIMEOUT`, `clone_url`, `GitCommit` and `Git` as commit sync 1.0 API says
-- [ ] Run every command with `asyncio.create_subprocess_exec` (never a shell), `GIT_TERMINAL_PROMPT=0`, `-c credential.helper=` and `-c core.quotePath=false`, and the token only in `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_0=http.extraHeader` and `GIT_CONFIG_VALUE_0=Authorization: Basic <base64 of x-access-token:TOKEN>`; give the runner a seam tests can record through
-- [ ] Implement `check_version`, `path`, `update` (clone `--bare --no-tags`, else `fetch --prune --no-tags origin '+refs/heads/*:refs/heads/*'`), `branches`, `reachable`, `commits` (`git log --no-walk=unsorted --stdin -z -M --diff-merges=first-parent --numstat` with the spec's format, renames stored under the new path, `-` counts as 0 and `binary`), `attributes_probe`, `generated_paths` (`check-attr -z --stdin --source`) and `remove`
-- [ ] Kill a command past `GIT_TIMEOUT` and raise `GitError`; pass standard error through `redact` for the token and its base64 form before raising or logging it
-- [ ] Tests in a new `src/tests/fetch/test_git.py`, with repositories made by `git init` and pushed to a local bare remote named by `url_for`: first clone and incremental fetch; a rename, a binary file and a merge's first-parent counts; a force-pushed and a deleted branch; `.gitattributes` added and changed (probe changes, generated paths); git missing (an empty `PATH`) and too old (a fake `git` script printing `git version 2.39.0`); a failing command whose standard error holds the token (redacted); and, through the recording runner, that no argument holds the token
+- [x] Add `GitError(FetchError)` to `src/wambatic/fetch/errors.py`
+- [x] Create `src/wambatic/fetch/git.py` with `MIN_GIT_VERSION`, `GIT_TIMEOUT`, `clone_url`, `GitCommit` and `Git` as commit sync 1.0 API says
+- [x] Run every command with `asyncio.create_subprocess_exec` (never a shell), `GIT_TERMINAL_PROMPT=0`, `-c credential.helper=` and `-c core.quotePath=false`, and the token only in `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_0=http.extraHeader` and `GIT_CONFIG_VALUE_0=Authorization: Basic <base64 of x-access-token:TOKEN>`; give the runner a seam tests can record through
+- [x] Implement `check_version`, `path`, `update` (clone `--bare --no-tags`, else `fetch --prune --no-tags origin '+refs/heads/*:refs/heads/*'`), `branches`, `reachable`, `commits` (`git log --no-walk=unsorted --stdin -z -M --diff-merges=first-parent --numstat` with the spec's format, renames stored under the new path, `-` counts as 0 and `binary`), `attributes_probe`, `generated_paths` (`check-attr -z --stdin --source`) and `remove`
+- [x] Kill a command past `GIT_TIMEOUT` and raise `GitError`; pass standard error through `redact` for the token and its base64 form before raising or logging it
+- [x] Tests in a new `src/tests/fetch/test_git.py`, with repositories made by `git init` and pushed to a local bare remote named by `url_for`: first clone and incremental fetch; a rename, a binary file and a merge's first-parent counts; a force-pushed and a deleted branch; `.gitattributes` added and changed (probe changes, generated paths); git missing (an empty `PATH`) and too old (a fake `git` script printing `git version 2.39.0`); a failing command whose standard error holds the token (redacted); and, through the recording runner, that no argument holds the token
 
 **Acceptance Criteria:**
 
-- [ ] `Git.commits` on the test repositories gives the counts `git log --numstat` prints, with renames under their new paths
-- [ ] No recorded argument, and no file in a clone's `config`, contains the token
+- [x] `Git.commits` on the test repositories gives the counts `git log --numstat` prints, with renames under their new paths
+- [x] No recorded argument, and no file in a clone's `config`, contains the token
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/fetch/test_git.py src/tests/fetch/test_errors.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/fetch/test_git.py src/tests/fetch/test_errors.py` passes
 
 **Notes:**
 

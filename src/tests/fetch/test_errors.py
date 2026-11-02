@@ -15,6 +15,7 @@ SCHEMA_DIFFERENCE = ('1', '2')
     [
         wambatic.fetch.errors.AuthError,
         wambatic.fetch.errors.CacheVersionError,
+        wambatic.fetch.errors.GitError,
         wambatic.fetch.errors.GraphQLError,
         wambatic.fetch.errors.NotFoundError,
         wambatic.fetch.errors.RateLimitError,

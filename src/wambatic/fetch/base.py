@@ -11,6 +11,7 @@ import loguru
 
 import wambatic.fetch.client
 import wambatic.fetch.errors
+import wambatic.fetch.hosts
 import wambatic.fetch.queries
 import wambatic.settings
 
@@ -577,7 +578,9 @@ class Fetcher:
             )
         self.cache = cache
         self.settings = settings
-        self.client = client or wambatic.fetch.client.GitHubClient(token, settings)
+        self.client = client or wambatic.fetch.client.GitHubClient(
+            token, settings, host=wambatic.fetch.hosts.parse_host(settings.github_host)
+        )
         self.semaphore = asyncio.Semaphore(settings.workers)
 
     async def __aenter__(self) -> Fetcher:

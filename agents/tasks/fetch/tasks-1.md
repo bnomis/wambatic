@@ -87,7 +87,7 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 ## Task 3: Point `GitHubClient` at a `GitHubHost`
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** medium
 **Spec Reference:** fetch spec 1.16, API (`GitHubClient`), GitHub hosts (Addresses)
@@ -96,22 +96,22 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 **Subtasks:**
 
-- [ ] Replace `GitHubClient`'s `api_url` with `host: GitHubHost = GITHUB_COM`; `graphql` posts to `host.graphql_url` and `rest_get` gets `{host.rest_url}{path}`
-- [ ] `Fetcher` builds its client with `parse_host(settings.github_host)` when it is given none
-- [ ] Change every test and fixture that passed `api_url` (`src/tests/conftest.py`, `src/tests/test_cli.py`, the fetch tests) to build a `GitHubHost` directly with the replay server's URLs
-- [ ] Teach the replay server (`src/tests/fixtures/fetch/server.py`) an Enterprise layout that serves REST under `/api/v3` and GraphQL at `/api/graphql`, and records each request's path
-- [ ] Tests in `src/tests/fetch/test_client.py`: a github.com host and an Enterprise host each send GraphQL and REST to their own paths
+- [x] Replace `GitHubClient`'s `api_url` with `host: GitHubHost = GITHUB_COM`; `graphql` posts to `host.graphql_url` and `rest_get` gets `{host.rest_url}{path}`
+- [x] `Fetcher` builds its client with `parse_host(settings.github_host)` when it is given none
+- [x] Change every test and fixture that passed `api_url` (`src/tests/conftest.py`, `src/tests/test_cli.py`, the fetch tests) to build a `GitHubHost` directly with the replay server's URLs
+- [x] Teach the replay server (`src/tests/fixtures/fetch/server.py`) an Enterprise layout that serves REST under `/api/v3` and GraphQL at `/api/graphql`, and records each request's path
+- [x] Tests in `src/tests/fetch/test_client.py`: a github.com host and an Enterprise host each send GraphQL and REST to their own paths
 
 **Acceptance Criteria:**
 
-- [ ] Against the Enterprise layout, a GraphQL query reaches `/api/graphql` and a REST request `/api/v3/...`; no request reaches `/api/v3/graphql`
-- [ ] No source or test file mentions `api_url` (`grep -rn api_url src` prints nothing)
+- [x] Against the Enterprise layout, a GraphQL query reaches `/api/graphql` and a REST request `/api/v3/...`; no request reaches `/api/v3/graphql`
+- [x] No source or test file mentions `api_url` (`grep -rn api_url src` prints nothing)
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/fetch/test_client.py src/tests/fetch/test_server.py src/tests/fetch/test_base.py src/tests/fetch/test_fetcher.py src/tests/test_cli.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/fetch/test_client.py src/tests/fetch/test_server.py src/tests/fetch/test_base.py src/tests/fetch/test_fetcher.py src/tests/test_cli.py` passes
 
 **Notes:**
 

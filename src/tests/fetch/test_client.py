@@ -355,6 +355,44 @@ def test_graphql_returns_data_and_tracks_limit(make_client: tests.conftest.MakeC
     assert sent == {'query': wambatic.fetch.queries.OWNER_REPOSITORIES, 'variables': VARIABLES}
 
 
+def paths_requested(layout: str) -> list[tuple[str, str]]:
+    """The `(method, path)` of a GraphQL query and a REST request against the named layout."""
+
+    def answer(
+        received: tests.fixtures.fetch.server.Received,
+    ) -> tests.fixtures.fetch.server.Canned:
+        if received.path.endswith('graphql'):
+            return graphql_ok()
+        return tests.fixtures.fetch.server.Canned(200, {})
+
+    async def scenario() -> list[tuple[str, str]]:
+        async with tests.fixtures.fetch.server.ReplayServer({}, default=answer) as server:
+            host = server.enterprise_host if layout == 'enterprise' else server.host
+            client = wambatic.fetch.client.GitHubClient(
+                'test-token',
+                wambatic.settings.FetchSettings(),
+                host=host,
+                clock=lambda: tests.fixtures.fetch.responses.NOW,
+            )
+            async with client:
+                await client.graphql(wambatic.fetch.queries.OWNER_REPOSITORIES, VARIABLES)
+                await client.rest_get(REPO[1])
+            return [(received.method, received.path) for received in server.received]
+
+    return asyncio.run(scenario())
+
+
+def test_dotcom_layout_sends_graphql_and_rest_to_their_own_paths() -> None:
+    assert paths_requested('dotcom') == [GRAPHQL, REPO]
+
+
+def test_enterprise_layout_sends_graphql_outside_api_v3() -> None:
+    assert paths_requested('enterprise') == [
+        ('POST', '/api/graphql'),
+        ('GET', f'/api/v3{REPO[1]}'),
+    ]
+
+
 def test_graphql_not_found(make_client: tests.conftest.MakeClient) -> None:
     with pytest.raises(wambatic.fetch.errors.NotFoundError):
         run_graphql(

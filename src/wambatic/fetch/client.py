@@ -12,6 +12,7 @@ import loguru
 
 import wambatic.fetch.auth
 import wambatic.fetch.errors
+import wambatic.fetch.hosts
 import wambatic.fetch.ratelimit
 import wambatic.settings
 import wambatic.version
@@ -106,14 +107,14 @@ class GitHubClient:
         token: str,
         settings: wambatic.settings.FetchSettings,
         *,
-        api_url: str = 'https://api.github.com',
+        host: wambatic.fetch.hosts.GitHubHost = wambatic.fetch.hosts.GITHUB_COM,
         sleep: collections.abc.Callable[[float], collections.abc.Awaitable[None]] = asyncio.sleep,
         clock: collections.abc.Callable[[], datetime.datetime] | None = None,
         rng: random.Random | None = None,
     ) -> None:
         self.token = token
         self.settings = settings
-        self.api_url = api_url
+        self.host = host
         self.sleep = sleep
         self.clock = clock or wambatic.fetch.ratelimit.utc_now
         self.rng = rng or random.Random()
@@ -160,7 +161,7 @@ class GitHubClient:
     async def graphql(
         self, query: str, variables: collections.abc.Mapping[str, object]
     ) -> dict[str, object]:
-        """POST `{api_url}/graphql`; returns `data`; raises the typed errors."""
+        """POST the host's GraphQL address; returns `data`; raises the typed errors."""
         data, response_date = await self.graphql_dated(query, variables)
         return data
 
@@ -198,7 +199,7 @@ class GitHubClient:
         params: collections.abc.Mapping[str, str] | None = None,
         etag: str | None = None,
     ) -> RestResponse:
-        """GET `{api_url}{path}` with `If-None-Match: etag` when given.
+        """GET the host's REST address plus `path` with `If-None-Match: etag` when given.
 
         Raises:
             StatsPendingError: GitHub is still computing the statistics.
@@ -228,11 +229,18 @@ class GitHubClient:
             date=header_date(response),
         )
 
+    def url_for(self, endpoint: str, path: str) -> str:
+        """The host's GraphQL address, or its REST address followed by `path`."""
+        if endpoint == 'graphql':
+            return self.host.graphql_url
+        return f'{self.host.rest_url}{path}'
+
     async def send(
         self,
         method: str,
         path: str,
         *,
+        url: str,
         json: object = None,
         params: collections.abc.Mapping[str, str] | None = None,
         headers: collections.abc.Mapping[str, str] | None = None,
@@ -245,7 +253,6 @@ class GitHubClient:
         """
         if self.session is None:
             raise wambatic.fetch.errors.FetchError('GitHubClient must be used inside `async with`')
-        url = f'{self.api_url}{path}'
         async with self.session.request(
             method, url, json=json, params=params, headers=headers
         ) as raw:
@@ -337,7 +344,14 @@ class GitHubClient:
             if state.reset_at is not None and state.exhausted(self.clock()):
                 await self.wait_for_reset(endpoint, state.reset_at)
             try:
-                response = await self.send(method, path, json=json, params=params, headers=headers)
+                response = await self.send(
+                    method,
+                    path,
+                    url=self.url_for(endpoint, path),
+                    json=json,
+                    params=params,
+                    headers=headers,
+                )
             except (aiohttp.ClientConnectionError, TimeoutError) as error:
                 if retries >= max_retries:
                     raise wambatic.fetch.errors.FetchError(

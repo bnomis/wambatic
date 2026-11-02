@@ -8,6 +8,8 @@ import aiohttp.test_utils
 import aiohttp.web
 import pytest
 
+import wambatic.fetch.hosts
+
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class Canned:
@@ -52,6 +54,18 @@ class ReplayServer:
     def url(self) -> str:
         assert self.server is not None
         return str(self.server.make_url('')).rstrip('/')
+
+    @property
+    def host(self) -> wambatic.fetch.hosts.GitHubHost:
+        """A github.com-style layout: REST at the root, GraphQL at `/graphql`."""
+        return wambatic.fetch.hosts.GitHubHost('github.com', self.url, f'{self.url}/graphql')
+
+    @property
+    def enterprise_host(self) -> wambatic.fetch.hosts.GitHubHost:
+        """An Enterprise layout: REST under `/api/v3`, GraphQL at `/api/graphql`."""
+        return wambatic.fetch.hosts.GitHubHost(
+            'ghe.example.com', f'{self.url}/api/v3', f'{self.url}/api/graphql'
+        )
 
     async def handle(self, request: aiohttp.web.Request) -> aiohttp.web.StreamResponse:
         body = await request.read()

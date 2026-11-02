@@ -38,6 +38,7 @@ import wambatic.fetch.base
 import wambatic.fetch.cache
 import wambatic.fetch.client
 import wambatic.fetch.errors
+import wambatic.fetch.hosts
 import wambatic.fetch.ratelimit
 import wambatic.reports.errors
 import wambatic.reports.service
@@ -1002,7 +1003,10 @@ def test_an_unreachable_github_is_one_error_line_and_exit_1(
         fetch_settings: wambatic.settings.FetchSettings,
     ) -> wambatic.fetch.base.Fetcher:
         client = wambatic.fetch.client.GitHubClient(
-            token, fetch_settings, api_url=url, sleep=no_sleep
+            token,
+            fetch_settings,
+            host=wambatic.fetch.hosts.GitHubHost('github.com', url, f'{url}/graphql'),
+            sleep=no_sleep,
         )
         return wambatic.fetch.base.Fetcher(token, cache, fetch_settings, client=client)
 

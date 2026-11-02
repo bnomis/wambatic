@@ -20,7 +20,7 @@ address, a check of what the server supports (GraphQL fields the listing
 selects, rate-limit reporting) that fails with a typed error, and the cache
 identity recording the host so two hosts never share a cache.
 
-Spec: agents/specs/fetch/spec.md (1.16, with the cache, system, CLI, reports, terminal-report and HTML-report amendments; review agents/specs/fetch/review-1.md); tasks: not yet written.
+Spec: agents/specs/fetch/spec.md (1.16, with the cache, system, CLI, reports, terminal-report and HTML-report amendments; review agents/specs/fetch/review-1.md); tasks: agents/tasks/fetch/tasks-1.md.
 
 ## The commit sync reads only default-branch totals
 

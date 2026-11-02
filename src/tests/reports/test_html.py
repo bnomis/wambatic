@@ -487,6 +487,39 @@ def test_the_footer_names_an_enterprise_host_and_github_com_is_unchanged(
     assert '<p>GitHub host: ghe.example.com (Enterprise Server 3.19.1)</p>' in document
 
 
+def test_the_footer_says_how_commits_were_read(
+    org_report: wambatic.reports.html.HtmlReport,
+) -> None:
+    document = wambatic.reports.html.html_document(org_report, 'auto')
+    assert '<p>Commits read by: local clone</p>' in document
+    assert '<p>Branches: default branch</p>' in document
+    assert '; linguist-generated and linguist-vendored files</p>' in document
+    set_up = dataclasses.replace(
+        org_report.total,
+        provenance={
+            **org_report.total.provenance,
+            'commit_methods': 'api-files',
+            'branches': '["release/*"]',
+            'exclude_paths': '[]',
+            'linguist': 'false',
+        },
+    )
+    document = wambatic.reports.html.html_document(
+        dataclasses.replace(org_report, total=set_up), 'auto'
+    )
+    assert '<p>Commits read by: API with files</p>' in document
+    assert '<p>Branches: default branch and release/*</p>' in document
+    assert '<p>Line counts leave out: nothing</p>' in document
+    unread = dataclasses.replace(
+        org_report.total,
+        provenance={k: v for k, v in org_report.total.provenance.items() if k != 'commit_methods'},
+    )
+    document = wambatic.reports.html.html_document(
+        dataclasses.replace(org_report, total=unread), 'auto'
+    )
+    assert 'Commits read by' not in document
+
+
 def test_render_html_writes_the_document_and_returns_the_path(
     org_report: wambatic.reports.html.HtmlReport, tmp_path: pathlib.Path
 ) -> None:

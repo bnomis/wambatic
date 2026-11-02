@@ -310,7 +310,7 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 ## Task 9: Say in the report footers how commits were read
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** small
 **Spec Reference:** terminal report 1.2, item 14; HTML report 1.2, provenance footer
@@ -319,19 +319,19 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 **Subtasks:**
 
-- [ ] In the terminal provenance footer (`src/wambatic/reports/terminal.py`), when `branches` is present, add `Commits read by: ...` (`local clone`, `API with files`, `API totals`), `Branches: ...` and `Line counts leave out: ...` as terminal report 1.2 says
-- [ ] Add the same lines to the HTML footer (`src/wambatic/reports/html.py`)
-- [ ] Tests in `src/tests/reports/test_terminal.py` and `src/tests/reports/test_html.py`: each line for default and set `fetch.branches`, with `stats.linguist` on and off, and no lines when `commits` was not read
+- [x] In the terminal provenance footer (`src/wambatic/reports/terminal.py`), when `branches` is present, add `Commits read by: ...` (`local clone`, `API with files`, `API totals`), `Branches: ...` and `Line counts leave out: ...` as terminal report 1.2 says
+- [x] Add the same lines to the HTML footer (`src/wambatic/reports/html.py`)
+- [x] Tests in `src/tests/reports/test_terminal.py` and `src/tests/reports/test_html.py`: each line for default and set `fetch.branches`, with `stats.linguist` on and off, and no lines when `commits` was not read
 
 **Acceptance Criteria:**
 
-- [ ] A report with default settings over a cloned repository ends with `Branches: default branch` and the default patterns with linguist files
+- [x] A report with default settings over a cloned repository ends with `Branches: default branch` and the default patterns with linguist files
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/reports/test_terminal.py src/tests/reports/test_html.py src/tests/reports/test_rows.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/reports/test_terminal.py src/tests/reports/test_html.py src/tests/reports/test_rows.py` passes
 
 **Notes:**
 

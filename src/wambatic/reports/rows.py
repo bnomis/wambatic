@@ -3,6 +3,7 @@ with no Rich objects and no formatting, so the two renderers cannot disagree."""
 
 import collections.abc
 import dataclasses
+import json
 
 import wambatic.stats.activity
 import wambatic.stats.base
@@ -464,11 +465,40 @@ def unavailable_rows(result: wambatic.stats.base.StatsResult) -> list[tuple[str,
     return [(row['metric'], row['reason']) for row in result.tables.get('unavailable', [])]
 
 
+COMMIT_METHOD_LABELS = {'api': 'API totals', 'api-files': 'API with files', 'clone': 'local clone'}
+
+
+def commit_lines(provenance: collections.abc.Mapping[str, str]) -> list[str]:
+    """The footer lines saying how commits were read; none when `commits` was not read."""
+    if 'commit_methods' not in provenance:
+        return []
+    methods = [m for m in provenance['commit_methods'].split(',') if m]
+    labels = ', '.join(COMMIT_METHOD_LABELS.get(m, m) for m in methods) or 'nothing read'
+    branches = json.loads(provenance.get('branches', '[]'))
+    branch_text = ', '.join(['default branch', *branches]).replace(
+        'default branch, ', 'default branch and ', 1
+    )
+    left_out = json.loads(provenance.get('exclude_paths', '[]'))
+    left_text = ', '.join(left_out) or 'nothing'
+    if provenance.get('linguist') == 'true':
+        left_text = (
+            'linguist-generated and linguist-vendored files'
+            if not left_out
+            else f'{left_text}; linguist-generated and linguist-vendored files'
+        )
+    return [
+        f'Commits read by: {labels}',
+        f'Branches: {branch_text}',
+        f'Line counts leave out: {left_text}',
+    ]
+
+
 def provenance_lines(result: wambatic.stats.base.StatsResult) -> list[str]:
     provenance = result.provenance
     keys = ['computed_at', *sorted(k for k in provenance if k.startswith('fetched_at:'))]
     keys += ['wambatic_version', 'schema_version']
-    lines = [f'{key}: {provenance[key]}' for key in keys if key in provenance]
+    lines = commit_lines(provenance)
+    lines += [f'{key}: {provenance[key]}' for key in keys if key in provenance]
     host = provenance.get('github_host', 'github.com')
     if host != 'github.com':
         version = provenance.get('server_version', 'unknown version')

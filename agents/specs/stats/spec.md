@@ -1,7 +1,7 @@
 # Stats
 
-**Version:** 1.10
-**Status:** implemented
+**Version:** 1.11
+**Status:** proposed
 **Date:** 2026-11-02
 
 Turns the raw records from [Fetch](../fetch/spec.md) and [Cache](../cache/spec.md) into statistics for a user, repository or organisation, optionally bucketed by year, month, week or day. It does no network or rendering of its own: `compute` reads the cache through the fetcher, and the aggregation functions it calls are pure. [Reports](../reports/spec.md) consumes its output.
@@ -17,6 +17,8 @@ Version 1.8 corrects the text to the code after [audit review 1](../../audit-rev
 Version 1.9 corrects the text to the code after [audit review 2](../../audit-reviews/review-2.md) (G15): `percentile.py` in the module table, the `@ref` strip in the workflow file name, and the tuple defaults.
 
 Version 1.10 moves the metric groups to a [Metric groups](../metric-groups/spec.md) spec of their own, with only their cross-references updated, as [audit review 2](../../audit-reviews/review-2.md) Decision 2 (answer A, 2026-10-31) asked, on 2026-11-02; the references to them here now link to it.
+
+Version 1.11 adds the settings that leave generated files out of line counts, `stats.exclude_paths` and `stats.linguist`, and their provenance keys, with the `branches` key the fetcher adds, for the clone-based commit sync ([Commit sync](../commit-sync/spec.md), [Fetch](../fetch/spec.md) 1.17); the choices are in the [commit sync review 1](../commit-sync/review-1.md), decided 2026-11-02.
 
 ## Module location
 
@@ -208,7 +210,8 @@ What each group counts, its series names, units and order, and its tables are in
 Every result records what produced it, so a saved report can be traced and a mismatch with a later run is detectable. `provenance` holds:
 
 - from `Fetcher.provenance(subject, resources)` (fetch spec): the cache identity (`schema_version`, `wambatic_version` as recorded, `query:<NAME>` hashes), `version_override_at` when the cache was opened with the version override, and `fetched_at:<resource>` for each resource read, the earliest `synced_at` over the subject's repos (the oldest data in the result), or `never` when a repo has no sync state for it;
-- from stats: `computed_at` (ISO UTC, from `clock`), `timezone` (`str(tz)`), and `partial_buckets`.
+- from `Fetcher.provenance`, when `commits` is read (1.11): `commit_methods`, the methods the subject's repositories were read by, comma-separated in the order `clone`, `api-files`, `api` (`read_records` also keeps each repository's `Fetcher.commit_method` for the `activity` group); `branches`, the JSON list of `fetch.branches` the commits were synced under (`[]`: the default branch only);
+- from stats: `computed_at` (ISO UTC, from `clock`), `timezone` (`str(tz)`), and `partial_buckets`; when `commits` is read, `exclude_paths` (the JSON list of `stats.exclude_paths`) and `linguist` (`'true'` or `'false'`) (1.11), so two results computed with different patterns say so.
 
 ## Settings
 
@@ -216,6 +219,8 @@ Every result records what produced it, so a saved report can be traced and a mis
 |---------|------|---------|-------------|
 | `stats.bot_logins` | `tuple[str, ...]` | `('dependabot[bot]', 'renovate[bot]')` | Authors excluded from contributor counts and the top-contributors table |
 | `stats.deploy_workflow` | `str \| None` | `None` | Workflow counted as a deployment, matched against a run's workflow file name (`deploy.yml`) or its name; unset, non-prerelease releases are the deployments |
+| `stats.exclude_paths` | `tuple[str, ...]` | `('**/*.lock', '**/package-lock.json', '**/pnpm-lock.yaml', '**/go.sum', '**/vendor/**', '**/node_modules/**', '**/dist/**', '**/*.min.js', '**/*.min.css', '**/*.map')` | Path patterns (`pathlib.PurePosixPath.full_match`, where `**` is any number of directories) whose files are left out of line counts (1.11) |
+| `stats.linguist` | `bool` | `True` | Also leave out files the repository marks `linguist-generated` or `linguist-vendored` in `.gitattributes` (1.11) |
 | `stats.exclude_merge_commits` | `bool` | `True` | Skip merge commits in line counts |
 | `stats.failure_window` | `timedelta` | `7 days` | How long after a deployment a hotfix pull request marks it as failed |
 | `stats.hotfix_labels` | `tuple[str, ...]` | `('hotfix',)` | Pull request labels marking a failure fix, compared case-insensitively |

@@ -25,6 +25,8 @@ per-file counts are fetched. Generated files are filtered before other
 branches are counted, so commits from other branches are filtered from the
 start.
 
+Spec: agents/specs/commit-sync/spec.md (1.0, with the fetch, cache, stats, metric-groups, system, CLI, terminal-report and HTML-report amendments; review agents/specs/commit-sync/review-1.md); tasks: none yet.
+
 ### Line counts include generated files
 
 Found on 2026-11-02 by `/todo-review`, from the limits the system spec

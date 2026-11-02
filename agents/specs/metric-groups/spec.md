@@ -1,12 +1,14 @@
 # Metric groups
 
-**Version:** 1.0
-**Status:** implemented
+**Version:** 1.1
+**Status:** proposed
 **Date:** 2026-11-02
 
 What each of the `activity`, `flow`, `delivery` and `popularity` groups counts: its series names, units and order, and its tables. Part of [Stats](../stats/spec.md), which holds the API, the range, the reading of the cache, aggregation and provenance.
 
 Version 1.0 is the stats spec 1.9 text moved here, with only its cross-references updated, when that spec was split on 2026-11-02, as [audit review 2](../../audit-reviews/review-2.md) Decision 2 (answer A, 2026-10-31) asked. `review-N.md` in the text below means the [stats reviews](../stats/review-1.md) in `agents/specs/stats/`.
+
+Version 1.1 leaves generated files out of the `activity` line counts, from each commit's per-file counts ([Commit sync](../commit-sync/spec.md), [Stats](../stats/spec.md) 1.11); the choices are in the [commit sync review 1](../commit-sync/review-1.md), decided 2026-11-02.
 
 ## Module location
 
@@ -19,15 +21,16 @@ Version 1.0 is the stats spec 1.9 text moved here, with only its cross-reference
 - `commits` (unit `count`): commits in the bucket, merge commits included.
 - `contributors` (unit `count`): distinct author logins with a commit in the bucket, compared case-insensitively, excluding `stats.bot_logins` and excluding unattributed commits (they cannot be told apart by person).
 - `active_days` (unit `days`): distinct local dates with at least one commit in the bucket.
-- **Code contributions:** `lines_added`, `lines_deleted`, `lines_net` (added minus deleted, unit `lines`) from per-commit `additions` and `deletions`, summed per bucket. Merge commits are excluded when `stats.exclude_merge_commits` is true (the default) so lines are not double counted; the setting does not affect `commits`. Bot commits are counted in `commits` and lines; `stats.bot_logins` only affects contributor counts. Generated and vendored files are not filtered because GitHub does not expose per-file stats cheaply (documented limitation).
+- **Code contributions:** `lines_added`, `lines_deleted`, `lines_net` (added minus deleted, unit `lines`), summed per bucket. Since 1.1 they depend on how the repository's commits were read (`Fetcher.commit_method`, [Commit sync](../commit-sync/spec.md)): for `clone` and `api-files`, from each commit's kept files, where a file of `Commit.files` is left out when its path matches a `stats.exclude_paths` pattern (`PurePosixPath(path).full_match(pattern)`) or, with `stats.linguist`, when it is `generated`, and a commit's lines are the sums of its other files' `additions` and `deletions`; for `api`, from the commit's own `additions` and `deletions`, generated files included. The choice follows the recorded method, never whether a commit happens to have files. A commit whose every file is left out still counts in `commits`, `contributors` and `active_days`, with no lines. Merge commits are excluded when `stats.exclude_merge_commits` is true (the default) so lines are not double counted; the setting does not affect `commits`. Bot commits are counted in `commits` and lines; `stats.bot_logins` only affects contributor counts. Until 1.1 generated and vendored files were not filtered, because the cache held only per-commit totals.
+- *Repositories that could not be filtered (1.1).* `tables['unavailable']` gets one row per repository of the subject, ordered by name: for an `api` repository `{'metric': 'lines_added, lines_deleted, lines_net: <owner/name>', 'reason': 'generated files are counted: the repository is not cloned (public repositories, and those fetch.clone_repos allows, are cloned; fetch.api_history files reads per-file counts by API)'}`, and when `fetch.branches` is not empty a second row `{'metric': 'commits: <owner/name>', 'reason': 'default branch only: the repository is not cloned and fetch.api_history is totals'}`; for an `api-files` repository with `stats.linguist` on, `{'metric': 'lines_added, lines_deleted, lines_net: <owner/name>', 'reason': 'linguist attributes not read: the repository is not cloned; stats.exclude_paths applies'}`. The series still count every repository; the rows say which part is unfiltered.
 - Stars, forks, watchers and languages were listed here until step 10, which moves them to `popularity` (review-4.md decision 1).
-- `tables['top_contributors']`: one row per author over the whole range, `{'login', 'commits', 'lines_added', 'lines_deleted', 'lines_net', 'active_days'}`, with the same merge rule as the series, ordered by `commits` descending then `login`. Bots are left out; unattributed commits are one row with `login` `'unattributed'`. Produced for every subject, with or without `by_author`.
+- `tables['top_contributors']`: one row per author over the whole range, `{'login', 'commits', 'lines_added', 'lines_deleted', 'lines_net', 'active_days'}`, with the same merge and file rules as the series, ordered by `commits` descending then `login`. Bots are left out; unattributed commits are one row with `login` `'unattributed'`. Produced for every subject, with or without `by_author`.
 
 **flow** (pull requests and issues; total series only, built in step 6)
 
 - Counts (unit `count`), each bucketed by the local date of its event: `prs_opened` (`created_at`), `prs_merged` (`merged_at`), `issues_opened` (`created_at`), `issues_closed` (`closed_at`, issues closed now; a reopened issue is open). A pull request closed without merging counts in `prs_opened` only.
 - Durations (unit `hours`), each bucketed by the local date of its end event, as `<name>_p50` (`statistics.median`) and `<name>_p90` (`statistics.quantiles(values, n=10, method='inclusive')[8]`, which stays inside the values, unlike the default `exclusive` method, and accepts one value on Python 3.13 and later): `time_to_first_review` (pull request `created_at` to `first_review_at`), `time_to_merge` (`created_at` to `merged_at`) and `time_to_close` (issue `created_at` to `closed_at`; pull requests have `time_to_merge`). Hours are `(end - start).total_seconds() / 3600`.
-- `pr_size_p50` (unit `lines`): `statistics.median_low` of `additions + deletions` over the pull requests merged in the bucket, so the value is one pull request's real size and an integer, as the JSON output requires of `lines`.
+- `pr_size_p50` (unit `lines`): `statistics.median_low` of `additions + deletions` over the pull requests merged in the bucket (GitHub's pull request totals, generated files included: an accepted limit, 1.1), so the value is one pull request's real size and an integer, as the JSON output requires of `lines`.
 - Bots are counted: `stats.bot_logins` affects contributor counts only, as in `activity`. Who reviewed is settled by the fetch layer (`first_review_at` leaves out the author and bots).
 - Series order: `prs_opened`, `prs_merged`, `issues_opened`, `issues_closed`, `time_to_first_review_p50`, `time_to_first_review_p90`, `time_to_merge_p50`, `time_to_merge_p90`, `time_to_close_p50`, `time_to_close_p90`, `pr_size_p50`.
 

@@ -1,7 +1,7 @@
 # HTML report
 
-**Version:** 1.1
-**Status:** implemented
+**Version:** 1.2
+**Status:** proposed
 **Date:** 2026-11-02
 
 The self-contained static HTML report of `--format html`, also served by the web app: its figures, page layout, granularity switch, palette and themes, and the headless-browser test. Part of [Reports](../reports/spec.md).
@@ -9,6 +9,8 @@ The self-contained static HTML report of `--format html`, also served by the web
 Version 1.0 is the reports spec 1.12 text moved here, with only its cross-references updated, when that spec was split on 2026-11-02, as [audit review 2](../../audit-reviews/review-2.md) Decision 2 (answer A, 2026-10-31) asked. `review-N.md` in the text below means the [reports reviews](../reports/review-1.md) in `agents/specs/reports/`.
 
 Version 1.1 shows the GitHub host in the provenance footer as the terminal does ([Fetch](../fetch/spec.md) 1.16, [fetch review 1](../fetch/review-1.md)).
+
+Version 1.2 shows the branch and excluded-files lines in the provenance footer as the terminal does ([Commit sync](../commit-sync/spec.md); [commit sync review 1](../commit-sync/review-1.md)).
 
 ## Module location
 
@@ -87,7 +89,7 @@ def html_report(results: list[StatsResult], initial: Granularity) -> HtmlReport:
   5. Delivery: the per-period charts of `build_figures` for `delivery`, then Delivery by period and, when a proxy is emitted, DORA proxies by period, one table per granularity as above, with a line under the section heading that the DORA figures are proxies and how each is measured is in the README.
   6. Popularity: the per-period charts of `build_figures` for `popularity`, the Languages chart of `build_range_figures`, then Popularity by period (one table per granularity, as above), Popularity now and Languages (every row; the chart shows at most `TOP_LANGUAGES_SHOWN` bars, the last an `Other` bar summing the rest when there are more), with a line under the section heading that the counts are as of the last sync and the totals count the stars and forks that exist now.
   7. Unavailable, when `tables['unavailable']` is not empty.
-  8. A provenance footer: the terminal's items (with its GitHub host line, 1.1), the plotly.js version (`plotly.offline.get_plotlyjs_version()`), and the `--ignore-cache-version` warning when `version_override_at` is present.
+  8. A provenance footer: the terminal's items (with its GitHub host line, 1.1, and its branch and excluded-files lines, 1.2), the plotly.js version (`plotly.offline.get_plotlyjs_version()`), and the `--ignore-cache-version` warning when `version_override_at` is present.
   Tables hold the same rows and columns as the terminal's, from `rows.py`, so the two never disagree; they are the page's data view and work without script.
 - *Built once.* `html_document` builds each period's `build_figures`, the `build_range_figures` of the `TOTAL` result and the `build_calendar` of the `DAY` result once, and every part of the page (the chart elements, the sections, the embedded data) reads those; it never calls a builder a second time for the same result. A section's presence test reuses the table it then renders rather than building it to test for `None`. In `rows.py`, `figures.py` and `terminal.py` a function that needs a result's total series and bucket list derives each once and passes them on. The output is unchanged byte for byte: the existing HTML, terminal and JSON tests are the check.
 - *Granularity switch.* All four period results are embedded as figures and pre-rendered tables. Choosing a granularity calls `Plotly.react` on each per-period chart with that granularity's figure and toggles the `hidden` attribute of the period tables; nothing is recomputed in the browser. Only total series are embedded per period (never the per-repo or per-author breakdowns, which would grow with repos times days); the breakdown charts and tables come from the `TOTAL` result.

@@ -1,12 +1,14 @@
 # System
 
-**Version:** 1.10
-**Status:** implemented
+**Version:** 1.11
+**Status:** proposed
 **Date:** 2026-11-02
 
 wambatic reports statistics from github.com, or from a GitHub Enterprise Server, for a user, a repository or an organisation, as a terminal report, a static HTML report or a local web app, with the numbers bucketed by year, month, week or day. This spec is the top of the set: it fixes the architecture, the boundaries between components, the data flow, the stack and the build order. The detail of each component is in its own spec; where this spec and a component spec differ, the component spec wins and this one is amended.
 
 Version 1.10 lifts the first release's GitHub Enterprise Server limit ([Fetch](../fetch/spec.md) 1.16): the token variables of an Enterprise host, and the limits that remain; the choices are in the [fetch review 1](../fetch/review-1.md), decided 2026-11-02.
+
+Version 1.11 lifts two more of the first release's limits, default-branch history only and line counts that include generated files, for public repositories and those the user allows to be cloned, and by an explicit slow API option for the others: a clone needs `git` ([Commit sync](../commit-sync/spec.md), [Fetch](../fetch/spec.md) 1.17); the choices are in the [commit sync review 1](../commit-sync/review-1.md), decided 2026-11-02.
 
 ## Module location
 
@@ -94,7 +96,7 @@ Errors are typed in the layer that detects them and presented only at the edge:
 
 **Testing.** Unit tests run on recorded fixture responses and never touch the network. The opt-in live tests, skipped without `GITHUB_TOKEN`, fetch a small public repository and check line totals against the REST `stats/code_frequency` endpoint, and read its star events and forks. Tests are scoped to changed modules, as the shared rules require.
 
-**Limits accepted for the first release.** Default-branch history only; line counts are not filtered for generated files; one timezone per report. Since 1.10 GitHub Enterprise Server is supported from the oldest release GitHub supported when the wambatic release was made (3.19 on 2026-11-02); GitHub Enterprise Cloud with data residency (`*.ghe.com`) is out of scope.
+**Limits accepted for the first release.** One timezone per report. Since 1.11 a public repository, or one the user allows in `fetch.clone_repos`, is read from a local clone, which follows the branches `fetch.branches` names and leaves generated files out of line counts (`stats.exclude_paths`, `stats.linguist`); any other repository keeps the default branch and unfiltered totals unless `fetch.api_history` is `'files'`, a slow per-commit REST read that follows the branches and applies `stats.exclude_paths`. A report names the repositories it could not filter. A repository's attributes are read at its default branch's head, and pull request sizes still include generated files. Since 1.10 GitHub Enterprise Server is supported from the oldest release GitHub supported when the wambatic release was made (3.19 on 2026-11-02); GitHub Enterprise Cloud with data residency (`*.ghe.com`) is out of scope.
 
 ## Settings
 
@@ -118,6 +120,7 @@ Layered, later wins: built-in defaults, `~/.config/wambatic/config.json`, comman
 
 ## External dependencies
 
-- The GitHub [GraphQL](https://docs.github.com/en/graphql) and [REST](https://docs.github.com/en/rest) APIs.
+- The GitHub [GraphQL](https://docs.github.com/en/graphql) and [REST](https://docs.github.com/en/rest) APIs, and since 1.11 its Git HTTPS endpoint.
+- `git` 2.40 or later on `PATH`, for the bare clones (1.11, [Commit sync](../commit-sync/spec.md)).
 - The libraries named under Implementation, each declared in `pyproject.toml`.
 - The shared rules and skills from the agents repository, linked as the `.agents/` submodule.

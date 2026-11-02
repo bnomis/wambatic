@@ -1,7 +1,7 @@
 # Implementation order
 
-**Version:** 1.11
-**Status:** implemented
+**Version:** 1.12
+**Status:** proposed
 **Date:** 2026-11-02
 
 The order in which wambatic is built, with what each step delivers, what it depends on and how to tell it is done. It sequences the components in the [system spec](system/spec.md) into steps that [taskdev](../../.agents/claude/skills/taskdev/SKILL.md) can break into tasks. Component detail stays in the component specs; this document only sequences them.
@@ -31,6 +31,7 @@ The order in which wambatic is built, with what each step delivers, what it depe
 | 11 | Audit work: errors, specs and code fixes from the two audit reviews | every spec | 10 | done: [tasks-1](../tasks/audit-reviews/tasks-1.md), [tasks-2](../tasks/audit-reviews/tasks-2.md) |
 | 12 | User guide: MkDocs site, reference pages, screenshots, drift test | [user guide](user-guide/spec.md) | 11 | done: [tasks-1](../tasks/user-guide/tasks-1.md) |
 | 13 | GitHub Enterprise Server: host setting, addresses, token, rate limits off, version check, cache per host | [fetch](fetch/spec.md), [cache](cache/spec.md), [system](system/spec.md), [CLI](cli/spec.md), [reports](reports/spec.md), [terminal report](terminal-report/spec.md), [HTML report](html-report/spec.md) | 12 | done: [tasks-1](../tasks/fetch/tasks-1.md) |
+| 14 | Commit sync: bare clones for public and allowed repositories, an opt-in per-file API read for the rest, generated files left out, followed branches | [commit sync](commit-sync/spec.md), [fetch](fetch/spec.md), [cache](cache/spec.md), [stats](stats/spec.md), [metric groups](metric-groups/spec.md), [system](system/spec.md), [CLI](cli/spec.md), [terminal report](terminal-report/spec.md), [HTML report](html-report/spec.md) | 13 | todo |
 
 Steps 6 and 7 are independent and may be built in either order or in parallel once 5 is done. Step 10 was split from step 8 on 2026-10-30 (stats review 3), because its fetch resources were not specified and the two together were more than one task list; it was specified on 2026-10-30 (stats review 4). Steps 9 and 10 are independent of each other. Step 11 is the audit work after step 10; it changes no feature. Step 12 is the user guide; it changes no source module.
 
@@ -101,6 +102,11 @@ Done when: `mkdocs build --strict` exits 0, `pytest src/tests/test_docs.py` pass
 Deliver: `fetch.github_host` and its checks in `wambatic.settings`, `cache_path_for`, `hosts.py` (`GitHubHost`, `parse_host`, `MIN_SERVER_VERSION`, `parse_server_version`), `GitHubClient` taking a `GitHubHost` in place of `api_url`, `fetch_token(host)`, `GitHubClient.server_version` and `ServerVersionError`, rate limits that may be switched off on an Enterprise host, the `github_host` identity row, `CacheHostError` and the `server_version` row, `--github-host` on `report`, `serve` and `cache`, the host line in the terminal and HTML provenance footers, and the user guide's Enterprise page and setting. Fetch spec 1.16, cache spec 1.1, system spec 1.10, CLI spec 1.1, reports spec 1.14, terminal report and HTML report specs 1.1; the choices are in the [fetch review 1](fetch/review-1.md).
 Done when: replayed Enterprise fixtures show every request going to `/api/v3` or `/api/graphql` on the host with the Enterprise token and never `GITHUB_TOKEN`; a server below `MIN_SERVER_VERSION` is refused before any other request; a response without rate-limit headers or `rateLimit` syncs on an Enterprise host and still fails on github.com; a cache made for one host is refused for another even with `--ignore-cache-version`; a github.com cache made before this step opens unchanged; and `mkdocs build --strict` and `pytest src/tests/test_docs.py` pass.
 
+### 14. Commit sync from bare clones
+
+Deliver: `git.py` (`Git`, `GitCommit`, `clone_url`), `GitError` and `BranchesMismatchError`, `CommitFile`, `Commit.files` and `Repo.visibility`, `commit_method` and the `clone`, `api` (the 1.16 sync, kept) and `api-files` methods in `Fetcher`, with `COMMIT_AUTHORS`, `BRANCHES` and `BRANCH_HISTORY`, `fetch.branches`, `fetch.clone_repos`, `fetch.api_history`, `fetch.clone_dir` and `clones_dir_for`, the `commit_files` and `branch_heads` tables and `SCHEMA_VERSION` 5, `clear_cache` and `inspect_cache` with the clones, `stats.exclude_paths` and `stats.linguist` applied to the `activity` line counts, the `unavailable` rows for repositories that could not be filtered, the `commit_methods`, `branches`, `exclude_paths` and `linguist` provenance keys and their footer lines, and the user guide's pages and settings. Commit sync spec 1.0, fetch spec 1.17, cache spec 1.2, stats spec 1.11, metric groups spec 1.1, system spec 1.11, CLI spec 1.2, terminal report and HTML report specs 1.2; the choices are in the [commit sync review 1](commit-sync/review-1.md).
+Done when: a private repository is cloned only when `fetch.clone_repos` matches it, and otherwise is read by the 1.16 sync or, with `fetch.api_history = 'files'`, by per-commit REST reads; a change of method re-reads the repository and removes a clone it no longer may keep; a sync of local test repositories stores every followed branch's commits once with their per-file counts, and a force-push or a deleted branch removes the commits no longer reachable; no git argument holds the token; a lock file and a `linguist-generated` path are left out of `lines_added` and counted in `commits`; a `--no-fetch` report after `fetch.branches` changed raises `BranchesMismatchError`; the live sync of `octocat/Hello-World` matches `stats/code_frequency`; and `mkdocs build --strict` and `pytest src/tests/test_docs.py` pass.
+
 ## Not in scope for this order
 
-Default-branch-only history, per-file line filtering and multi-timezone reports are listed as accepted limits in the system spec and have no step here; each is an item in `TODO.md`.
+Multi-timezone reports are listed as an accepted limit in the system spec and have no step here; it is an item in `TODO.md`.

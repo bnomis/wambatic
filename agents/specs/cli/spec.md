@@ -1,7 +1,7 @@
 # CLI
 
-**Version:** 1.1
-**Status:** implemented
+**Version:** 1.2
+**Status:** proposed
 **Date:** 2026-11-02
 
 The `wambatic` command line: its commands and flags, the order `report` runs in, the `cache` commands, and the one place every error becomes an exit status. Part of [Reports](../reports/spec.md), which holds what the front ends share.
@@ -9,6 +9,8 @@ The `wambatic` command line: its commands and flags, the order `report` runs in,
 Version 1.0 is the reports spec 1.12 text moved here, with only its cross-references updated, when that spec was split on 2026-11-02, as [audit review 2](../../audit-reviews/review-2.md) Decision 2 (answer A, 2026-10-31) asked. `review-N.md` in the text below means the [reports reviews](../reports/review-1.md) in `agents/specs/reports/`.
 
 Version 1.1 adds `--github-host` to `report`, `serve` and `cache`, for GitHub Enterprise Server ([Fetch](../fetch/spec.md) 1.16); the choices are in the [fetch review 1](../fetch/review-1.md), decided 2026-11-02.
+
+Version 1.2 has `cache clear` remove the bare clones with the file, and `cache info` report the commit file rows and the clones' size, for the clone-based commit sync ([Commit sync](../commit-sync/spec.md)); the choices are in the [commit sync review 1](../commit-sync/review-1.md), decided 2026-11-02.
 
 **Prerequisites:** [Reports](../reports/spec.md), [Terminal report](../terminal-report/spec.md), [HTML report](../html-report/spec.md) and [Web app](../web-app/spec.md), whose renderers it dispatches to.
 
@@ -70,7 +72,7 @@ The CLI is defined with [cappa](https://cappa.readthedocs.io/) dataclasses, as t
 
 **`cache info`** prints, for `fetch.cache_path`, what `inspect_cache` (fetch spec) returns: the path and size, the recorded identity and every key that differs from the running code (with both values), `version_override_at` when set, the number of repositories, commits, pull requests, issues, releases, workflow runs, star events and forks, and the latest sync time. It opens the file read-only and never creates, migrates or stamps it, so it works on a cache that `report` refuses. A missing file prints that there is no cache at the path and exits 0.
 
-**`cache clear`** deletes the cache file and its `-wal` and `-shm` files with `clear_cache` (fetch spec), logs each path removed at `info`, and exits 0 when there was nothing to remove. It does not prompt: the cache is derived data that the next `report` refetches.
+**`cache clear`** deletes the cache file and its `-wal` and `-shm` files, and since 1.2 the host's clones directory (`clones_dir_for`), with `clear_cache` ([Cache](../cache/spec.md)), logs each path removed at `info`, and exits 0 when there was nothing to remove. It does not prompt: the cache is derived data that the next `report` refetches.
 
 ## Error handling
 

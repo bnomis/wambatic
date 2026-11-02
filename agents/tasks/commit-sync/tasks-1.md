@@ -18,7 +18,7 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 ## Task 1: Add the commit sync and line-filter settings
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** small
 **Spec Reference:** commit sync 1.0, Settings and Where clones live; fetch 1.17, Settings; stats 1.11, Settings
@@ -27,22 +27,22 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 **Subtasks:**
 
-- [ ] Add to `FetchSettings` in `src/wambatic/settings.py`: `branches: tuple[str, ...] = ()`, `clone_repos: tuple[str, ...] = ()`, `api_history: Literal['totals', 'files'] = 'totals'` and `clone_dir: pathlib.Path | None = None`
-- [ ] Add to `StatsSettings`: `exclude_paths: tuple[str, ...]` with the default of stats spec 1.11 (`'**/*.lock'`, `'**/package-lock.json'`, `'**/pnpm-lock.yaml'`, `'**/go.sum'`, `'**/vendor/**'`, `'**/node_modules/**'`, `'**/dist/**'`, `'**/*.min.js'`, `'**/*.min.css'`, `'**/*.map'`) and `linguist: bool = True`
-- [ ] Add `clones_dir_for(settings: FetchSettings) -> pathlib.Path` beside `cache_path_for`: `fetch.clone_dir` when set, else `<cache file parent>/clones/<cache file stem>`
-- [ ] Add the six settings to `docs/reference/settings.md`, with their defaults and one line each
-- [ ] Tests in `src/tests/test_settings.py`: each default, a config file and a flag override of each, an `api_history` other than `totals` or `files` raising `SettingsError`, and `clones_dir_for` for github.com, an Enterprise host and a set `clone_dir`
+- [x] Add to `FetchSettings` in `src/wambatic/settings.py`: `branches: tuple[str, ...] = ()`, `clone_repos: tuple[str, ...] = ()`, `api_history: Literal['totals', 'files'] = 'totals'` and `clone_dir: pathlib.Path | None = None`
+- [x] Add to `StatsSettings`: `exclude_paths: tuple[str, ...]` with the default of stats spec 1.11 (`'**/*.lock'`, `'**/package-lock.json'`, `'**/pnpm-lock.yaml'`, `'**/go.sum'`, `'**/vendor/**'`, `'**/node_modules/**'`, `'**/dist/**'`, `'**/*.min.js'`, `'**/*.min.css'`, `'**/*.map'`) and `linguist: bool = True`
+- [x] Add `clones_dir_for(settings: FetchSettings) -> pathlib.Path` beside `cache_path_for`: `fetch.clone_dir` when set, else `<cache file parent>/clones/<cache file stem>`
+- [x] Add the six settings to `docs/reference/settings.md`, with their defaults and one line each
+- [x] Tests in `src/tests/test_settings.py`: each default, a config file and a flag override of each, an `api_history` other than `totals` or `files` raising `SettingsError`, and `clones_dir_for` for github.com, an Enterprise host and a set `clone_dir`
 
 **Acceptance Criteria:**
 
-- [ ] `load_settings(None, {})` gives the defaults of the spec tables
-- [ ] `clones_dir_for` gives `~/.cache/wambatic/clones/cache` for github.com and `~/.cache/wambatic/clones/cache-ghe.example.com` for `ghe.example.com`
+- [x] `load_settings(None, {})` gives the defaults of the spec tables
+- [x] `clones_dir_for` gives `~/.cache/wambatic/clones/cache` for github.com and `~/.cache/wambatic/clones/cache-ghe.example.com` for `ghe.example.com`
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/test_settings.py src/tests/test_docs.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/test_settings.py src/tests/test_docs.py` passes
 
 **Notes:**
 

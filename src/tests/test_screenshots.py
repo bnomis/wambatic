@@ -124,13 +124,15 @@ def test_the_docs_cache_is_never_the_users_own() -> None:
 
 def test_wanted_images_are_those_the_guide_references() -> None:
     docs = SCRIPT.parent.parent / 'docs'
+    images = (docs / 'images').resolve()
     link = re.compile(r'!\[[^\]]*\]\(([^)\s]+)')
     referenced = set()
     for page in docs.rglob('*.md'):
         for target in link.findall(page.read_text(encoding='utf-8')):
             if '://' not in target:
                 image = (page.parent / target).resolve()
-                referenced.add(image.relative_to((docs / 'images').resolve()).as_posix())
+                if image.is_relative_to(images):
+                    referenced.add(image.relative_to(images).as_posix())
     assert referenced == screenshots.WANTED
 
 

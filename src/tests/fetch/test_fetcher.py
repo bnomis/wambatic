@@ -2654,3 +2654,86 @@ def test_stars_and_forks_of_an_unchanged_repo_cost_only_the_listing(
     assert second.kinds == LISTING
     assert second.report.repos_skipped == 1
     assert second.report.rows_written == {'forks': 0, 'star_events': 0}
+
+
+# The Enterprise server version
+
+
+def enterprise_fetcher(
+    server: tests.fixtures.fetch.server.ReplayServer,
+    cache: wambatic.fetch.cache.Cache,
+    settings: wambatic.settings.FetchSettings,
+    sleeps: tests.conftest.Sleeps,
+) -> wambatic.fetch.base.Fetcher:
+    client = wambatic.fetch.client.GitHubClient(
+        'test-token',
+        settings,
+        host=server.enterprise_host,
+        sleep=sleeps,
+        clock=lambda: tests.fixtures.fetch.responses.NOW,
+    )
+    return wambatic.fetch.base.Fetcher('test-token', cache, settings, client=client)
+
+
+def test_a_sync_records_the_server_version_and_provenance_carries_it(
+    tmp_path: pathlib.Path,
+    fetch_settings: wambatic.settings.FetchSettings,
+    sleeps: tests.conftest.Sleeps,
+) -> None:
+    upstream = tests.fixtures.fetch.upstream.Upstream([hello()])
+
+    async def scenario() -> tuple[dict[str, str], list[str]]:
+        async with tests.fixtures.fetch.server.ReplayServer(
+            {}, default=upstream.respond_without_limits
+        ) as server:
+            cache = wambatic.fetch.cache.Cache.open(
+                tmp_path / 'cache.sqlite3', host='ghe.example.com'
+            )
+            try:
+                async with enterprise_fetcher(server, cache, fetch_settings, sleeps) as fetcher:
+                    resources = tests.fixtures.stats.RESOURCES_ACTIVITY
+                    await fetcher.sync(OWNER, resources, False)
+                    result = await fetcher.provenance(OWNER, resources)
+            finally:
+                cache.close()
+            return result, [f'{r.method} {r.path}' for r in server.received]
+
+    result, paths = asyncio.run(scenario())
+    assert result['server_version'] == '3.19.0'
+    assert result['github_host'] == 'ghe.example.com'
+    meta = tests.fixtures.fetch.constants.ENTERPRISE_META_REQUEST
+    assert paths.count(meta) == 1
+    assert paths[0] == meta
+
+
+@pytest.mark.parametrize('operation', ['sync', 'owner_kind'])
+def test_a_refused_server_gets_no_request_but_the_version_check(
+    operation: str,
+    tmp_path: pathlib.Path,
+    fetch_settings: wambatic.settings.FetchSettings,
+    sleeps: tests.conftest.Sleeps,
+) -> None:
+    async def scenario() -> list[str]:
+        routes = {
+            tests.fixtures.fetch.constants.ENTERPRISE_META_ROUTE: [
+                tests.fixtures.fetch.server.Canned(200, tests.fixtures.fetch.responses.META_TOO_OLD)
+            ]
+        }
+        async with tests.fixtures.fetch.server.ReplayServer(routes) as server:
+            cache = wambatic.fetch.cache.Cache.open(
+                tmp_path / 'cache.sqlite3', host='ghe.example.com'
+            )
+            try:
+                async with enterprise_fetcher(server, cache, fetch_settings, sleeps) as fetcher:
+                    with pytest.raises(wambatic.fetch.errors.ServerVersionError) as info:
+                        if operation == 'sync':
+                            await fetcher.sync(OWNER, tests.fixtures.stats.RESOURCES_ACTIVITY)
+                        else:
+                            await fetcher.owner_kind('octocat')
+                    assert info.value.found == '3.18.4'
+                    assert cache.server_version() is None
+            finally:
+                cache.close()
+            return [f'{r.method} {r.path}' for r in server.received]
+
+    assert asyncio.run(scenario()) == [tests.fixtures.fetch.constants.ENTERPRISE_META_REQUEST]

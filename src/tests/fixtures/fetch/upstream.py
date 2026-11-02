@@ -194,6 +194,10 @@ class Upstream:
         path = received.path.removeprefix('/api/v3')
         if path == '/api/graphql':
             path = '/graphql'
+        if path == '/meta':
+            return tests.fixtures.fetch.server.Canned(
+                200, tests.fixtures.fetch.responses.META_SUPPORTED
+            )
         canned = self.respond(dataclasses.replace(received, path=path))
         body = tests.fixtures.thaw.thaw(canned.body)
         if isinstance(body, dict) and isinstance(body.get('data'), dict):

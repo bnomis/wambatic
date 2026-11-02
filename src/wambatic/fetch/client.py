@@ -119,6 +119,9 @@ class GitHubClient:
         self.clock = clock or wambatic.fetch.ratelimit.utc_now
         self.rng = rng or random.Random()
         self.session: aiohttp.ClientSession | None = None
+        self.version_checked = False
+        self.version_text: str | None = None
+        self.version_error: wambatic.fetch.errors.ServerVersionError | None = None
         self.limits = {
             'graphql': wambatic.fetch.ratelimit.RateLimitState(),
             'rest': wambatic.fetch.ratelimit.RateLimitState(),
@@ -158,6 +161,56 @@ class GitHubClient:
     def rest_limit(self) -> wambatic.fetch.ratelimit.RateLimitState:
         return self.limits['rest']
 
+    async def server_version(self) -> str | None:
+        """The Enterprise server's `installed_version`, from one `GET /meta` kept for the
+        client's life; None on github.com, with no request.
+
+        Raises:
+            ServerVersionError: the server reports no usable version, or one below the minimum.
+            AuthError: GitHub rejects the token.
+            FetchError: another failure, or retries run out.
+        """
+        if self.host.is_dotcom:
+            return None
+        if self.version_error is not None:
+            raise self.version_error
+        if not self.version_checked:
+            try:
+                self.version_text = await self.fetch_server_version()
+            except wambatic.fetch.errors.ServerVersionError as error:
+                self.version_error = error
+                raise
+            self.version_checked = True
+        return self.version_text
+
+    async def fetch_server_version(self) -> str:
+        response = await self.rest_get('/meta')
+        data = response.data
+        text = data.get('installed_version') if isinstance(data, dict) else None
+        found = text if isinstance(text, str) and text else None
+        minimum = wambatic.fetch.hosts.MIN_SERVER_VERSION
+        if found is None:
+            raise wambatic.fetch.errors.ServerVersionError(self.host.name, None, minimum)
+        try:
+            parsed = wambatic.fetch.hosts.parse_server_version(found)
+        except wambatic.fetch.errors.ServerVersionError as error:
+            raise wambatic.fetch.errors.ServerVersionError(
+                self.host.name, found, minimum
+            ) from error
+        if parsed < minimum:
+            raise wambatic.fetch.errors.ServerVersionError(self.host.name, found, minimum)
+        return found
+
+    def graphql_error(self, pairs: list[tuple[str, str]]) -> wambatic.fetch.errors.GraphQLError:
+        """A `GraphQLError`; on an Enterprise host its message also names the host and the
+        server version."""
+        if self.host.is_dotcom:
+            return wambatic.fetch.errors.GraphQLError(pairs)
+        seen = self.version_text or 'unknown'
+        return wambatic.fetch.errors.GraphQLError(
+            pairs, f'host {self.host.name}, server version {seen}'
+        )
+
     async def graphql(
         self, query: str, variables: collections.abc.Mapping[str, object]
     ) -> dict[str, object]:
@@ -185,15 +238,13 @@ class GitHubClient:
         if any(kind == 'NOT_FOUND' for kind, _ in pairs):
             raise wambatic.fetch.errors.NotFoundError('; '.join(message for _, message in pairs))
         if pairs:
-            raise wambatic.fetch.errors.GraphQLError(pairs)
+            raise self.graphql_error(pairs)
         data = response.data.get('data') if isinstance(response.data, dict) else None
         if not isinstance(data, dict) or (
             self.host.is_dotcom and not isinstance(data.get('rateLimit'), dict)
         ):
             # An Enterprise server with rate limits switched off may omit rateLimit or send null.
-            raise wambatic.fetch.errors.GraphQLError(
-                [('MALFORMED', 'response has no data or lacks rateLimit')]
-            )
+            raise self.graphql_error([('MALFORMED', 'response has no data or lacks rateLimit')])
         return data, response_date(response)
 
     async def rest_get(

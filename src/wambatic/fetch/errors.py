@@ -18,9 +18,10 @@ class AuthError(FetchError):
 
 
 class GraphQLError(FetchError):
-    def __init__(self, errors: list[tuple[str, str]]) -> None:
+    def __init__(self, errors: list[tuple[str, str]], context: str | None = None) -> None:
         self.errors = tuple(errors)
-        super().__init__('; '.join(f'{kind}: {message}' for kind, message in errors))
+        message = '; '.join(f'{kind}: {message}' for kind, message in errors)
+        super().__init__(f'{message} ({context})' if context else message)
 
 
 class NotFoundError(FetchError):

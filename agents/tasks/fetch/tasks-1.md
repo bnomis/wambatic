@@ -228,7 +228,7 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 ## Task 7: Check the Enterprise server's version before syncing
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** medium
 **Spec Reference:** fetch spec 1.16, API (`GitHubClient.server_version`), Error handling (`ServerVersionError`, `GraphQLError`), GitHub hosts (Server version, Provenance, Testing)
@@ -237,23 +237,23 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 **Subtasks:**
 
-- [ ] `GitHubClient.server_version()`: `None` on github.com with no request; on an Enterprise host one REST `GET /meta`, its `installed_version` parsed with `parse_server_version` and refused below `MIN_SERVER_VERSION`, missing or unparseable with `ServerVersionError`; the result is kept for the client's life and the error is never retried
-- [ ] `Fetcher.sync` and `Fetcher.owner_kind` call it before any other request; `sync` writes the version with `Cache.write_server_version`
-- [ ] `Fetcher.provenance` adds `server_version` when the cache records one (`github_host` already comes with the identity from Task 6)
-- [ ] On an Enterprise host, `GraphQLError`'s message also names the host and the server version
-- [ ] Add `GET /meta` fixtures written from GitHub's Enterprise Server documentation (3.19.0 accepted, 3.18.4 refused, and none) and serve them in the replay server's Enterprise layout
-- [ ] Tests in `src/tests/fetch/test_client.py`, `src/tests/fetch/test_fetcher.py` and `src/tests/fetch/test_base.py`: `GET /meta` is requested once per client and never on github.com; a refused server makes no other request; provenance carries both keys
+- [x] `GitHubClient.server_version()`: `None` on github.com with no request; on an Enterprise host one REST `GET /meta`, its `installed_version` parsed with `parse_server_version` and refused below `MIN_SERVER_VERSION`, missing or unparseable with `ServerVersionError`; the result is kept for the client's life and the error is never retried
+- [x] `Fetcher.sync` and `Fetcher.owner_kind` call it before any other request; `sync` writes the version with `Cache.write_server_version`
+- [x] `Fetcher.provenance` adds `server_version` when the cache records one (`github_host` already comes with the identity from Task 6)
+- [x] On an Enterprise host, `GraphQLError`'s message also names the host and the server version
+- [x] Add `GET /meta` fixtures written from GitHub's Enterprise Server documentation (3.19.0 accepted, 3.18.4 refused, and none) and serve them in the replay server's Enterprise layout
+- [x] Tests in `src/tests/fetch/test_client.py`, `src/tests/fetch/test_fetcher.py` and `src/tests/fetch/test_base.py`: `GET /meta` is requested once per client and never on github.com; a refused server makes no other request; provenance carries both keys
 
 **Acceptance Criteria:**
 
-- [ ] Syncing against a server reporting 3.18.4 raises `ServerVersionError` naming 3.18.4 and 3.19, and the replay server saw only `GET /api/v3/meta`
-- [ ] A github.com sync makes exactly the requests it made before this task
+- [x] Syncing against a server reporting 3.18.4 raises `ServerVersionError` naming 3.18.4 and 3.19, and the replay server saw only `GET /api/v3/meta`
+- [x] A github.com sync makes exactly the requests it made before this task
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/fetch/test_client.py src/tests/fetch/test_fetcher.py src/tests/fetch/test_base.py src/tests/fetch/test_server.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/fetch/test_client.py src/tests/fetch/test_fetcher.py src/tests/fetch/test_base.py src/tests/fetch/test_server.py` passes
 
 **Notes:**
 

@@ -451,6 +451,15 @@ GRAPHQL_NULL_RATE_LIMIT = types.MappingProxyType(
         )
     }
 )
+# https://docs.github.com/en/enterprise-server@latest/rest/meta/meta#get-github-enterprise-server-meta-information
+# `installed_version` is documented on this endpoint for Enterprise Server only.
+META_SUPPORTED = types.MappingProxyType(
+    {'installed_version': '3.19.0', 'verifiable_password_authentication': True}
+)
+META_TOO_OLD = types.MappingProxyType(
+    {'installed_version': '3.18.4', 'verifiable_password_authentication': True}
+)
+META_NO_VERSION = types.MappingProxyType({'verifiable_password_authentication': True})
 GRAPHQL_RATE_LIMITED = types.MappingProxyType(
     {
         'errors': (

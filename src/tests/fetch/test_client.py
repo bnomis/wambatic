@@ -388,7 +388,7 @@ def test_dotcom_layout_sends_graphql_and_rest_to_their_own_paths() -> None:
 
 def test_enterprise_layout_sends_graphql_outside_api_v3() -> None:
     assert paths_requested('enterprise') == [
-        ('POST', '/api/graphql'),
+        tests.fixtures.fetch.constants.ENTERPRISE_GRAPHQL_ROUTE,
         ('GET', f'/api/v3{REPO[1]}'),
     ]
 
@@ -1047,3 +1047,101 @@ def test_limit_kind_signals_only_on_403_and_429(
         assert kind is None
     elif 'retry-after' in headers:
         assert kind == 'retry-after'
+
+
+# The Enterprise server version
+
+META = tests.fixtures.fetch.constants.ENTERPRISE_META_ROUTE
+
+
+def enterprise_client(
+    server: tests.fixtures.fetch.server.ReplayServer, sleeps: tests.conftest.Sleeps
+) -> wambatic.fetch.client.GitHubClient:
+    return wambatic.fetch.client.GitHubClient(
+        'test-token',
+        wambatic.settings.FetchSettings(),
+        host=server.enterprise_host,
+        sleep=sleeps,
+        clock=lambda: tests.fixtures.fetch.responses.NOW,
+    )
+
+
+def canned_meta(body: object) -> list[tests.fixtures.fetch.server.Canned]:
+    return [tests.fixtures.fetch.server.Canned(200, body)]
+
+
+def test_server_version_is_requested_once_and_kept(sleeps: tests.conftest.Sleeps) -> None:
+    async def scenario() -> tuple[list[str | None], list[str]]:
+        routes = {META: canned_meta(tests.fixtures.fetch.responses.META_SUPPORTED)}
+        async with tests.fixtures.fetch.server.ReplayServer(routes) as server:
+            async with enterprise_client(server, sleeps) as client:
+                found = [await client.server_version(), await client.server_version()]
+            return found, [f'{r.method} {r.path}' for r in server.received]
+
+    found, paths = asyncio.run(scenario())
+    assert found == ['3.19.0', '3.19.0']
+    assert paths == [tests.fixtures.fetch.constants.ENTERPRISE_META_REQUEST]
+
+
+def test_server_version_on_github_com_is_none_and_sends_nothing(
+    make_client: tests.conftest.MakeClient,
+) -> None:
+    async def scenario() -> tuple[str | None, int]:
+        async with tests.fixtures.fetch.server.ReplayServer({}) as server:
+            async with make_client(server) as client:
+                return await client.server_version(), len(server.received)
+
+    assert asyncio.run(scenario()) == (None, 0)
+
+
+@pytest.mark.parametrize(
+    ('body', 'found'),
+    [
+        (tests.fixtures.fetch.responses.META_TOO_OLD, '3.18.4'),
+        (tests.fixtures.fetch.responses.META_NO_VERSION, None),
+        ({'installed_version': 'x.y'}, 'x.y'),
+    ],
+)
+def test_an_unsupported_server_version_is_refused_once_and_never_retried(
+    body: object, found: str | None, sleeps: tests.conftest.Sleeps
+) -> None:
+    async def scenario() -> tuple[wambatic.fetch.errors.ServerVersionError, int]:
+        routes = {META: canned_meta(body)}
+        async with tests.fixtures.fetch.server.ReplayServer(routes) as server:
+            async with enterprise_client(server, sleeps) as client:
+                with pytest.raises(wambatic.fetch.errors.ServerVersionError):
+                    await client.server_version()
+                with pytest.raises(wambatic.fetch.errors.ServerVersionError) as info:
+                    await client.server_version()
+            return info.value, len(server.received)
+
+    error, requests = asyncio.run(scenario())
+    assert requests == 1
+    assert error.host == 'ghe.example.com'
+    assert error.found == found
+    assert error.minimum == (3, 19)
+
+
+def test_a_graphql_error_on_an_enterprise_host_names_the_host_and_version(
+    sleeps: tests.conftest.Sleeps,
+) -> None:
+    errors = {'errors': [{'type': 'FAILED', 'message': 'no such field'}]}
+
+    async def scenario() -> wambatic.fetch.errors.GraphQLError:
+        routes = {
+            META: canned_meta(tests.fixtures.fetch.responses.META_SUPPORTED),
+            tests.fixtures.fetch.constants.ENTERPRISE_GRAPHQL_ROUTE: [
+                tests.fixtures.fetch.server.Canned(200, errors)
+            ],
+        }
+        async with tests.fixtures.fetch.server.ReplayServer(routes) as server:
+            async with enterprise_client(server, sleeps) as client:
+                await client.server_version()
+                with pytest.raises(wambatic.fetch.errors.GraphQLError) as info:
+                    await client.graphql(wambatic.fetch.queries.OWNER_REPOSITORIES, VARIABLES)
+            return info.value
+
+    message = str(asyncio.run(scenario()))
+    assert 'FAILED: no such field' in message
+    assert 'ghe.example.com' in message
+    assert '3.19.0' in message

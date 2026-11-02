@@ -51,6 +51,7 @@ def alpha_upstream() -> tests.fixtures.fetch.upstream.Upstream:
             ],
             watchers=repo.watcher_count,
             languages=list(repo.languages) or None,
+            visibility=repo.visibility,
         )
         for repo in (alpha, gamma)
     ]

@@ -919,6 +919,8 @@ class Fetcher:
 
         Raises:
             InvalidRequestError: `resources` names an unknown resource.
+            BranchesMismatchError: `commits` is read and a `clone` or `api-files` repo was
+                synced under other `fetch.branches` patterns.
             CacheError: the cache cannot be read.
         """
         unknown = sorted(resources - RESOURCES)
@@ -947,7 +949,38 @@ class Fetcher:
                 result[f'fetched_at:{resource}'] = 'never'
             else:
                 result[f'fetched_at:{resource}'] = min(synced).astimezone(datetime.UTC).isoformat()
+        if 'commits' in resources:
+            result.update(self.commit_provenance(repos, states))
         return result
+
+    def commit_provenance(
+        self,
+        repos: collections.abc.Sequence[Repo],
+        states: collections.abc.Mapping[tuple[str, str], SyncState | None],
+    ) -> dict[str, str]:
+        """`commit_methods` (the methods the repos were read by, in the order `clone`,
+        `api-files`, `api`) and `branches` (the JSON list of `fetch.branches`).
+
+        Raises:
+            BranchesMismatchError: a `clone` or `api-files` repo was synced under other patterns.
+        """
+        current = tuple(self.settings.branches)
+        methods: set[str] = set()
+        stale: dict[str, tuple[str, ...]] = {}
+        for repo in repos:
+            state = states.get((repo.name_with_owner, 'commits'))
+            if state is None:
+                continue
+            probe = parse_commit_probe(state.probe)
+            methods.add(probe.method)
+            if probe.method != 'api' and probe.branches != current:
+                stale[repo.name_with_owner] = probe.branches or ()
+        if stale:
+            raise wambatic.fetch.errors.BranchesMismatchError(stale, current)
+        return {
+            'commit_methods': ','.join(m for m in COMMIT_METHODS if m in methods),
+            'branches': json.dumps(list(current)),
+        }
 
     async def commit_method(self, repo: Repo) -> CommitMethod | None:
         """The method of the repo's last commit sync, from its state's probe; None when never

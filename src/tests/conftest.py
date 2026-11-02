@@ -153,7 +153,13 @@ def make_fetcher(
 def store_commits(
     cache: wambatic.fetch.cache.Cache, repo: wambatic.fetch.base.Repo, synced_at: datetime.datetime
 ) -> None:
-    commits = [c for c in tests.fixtures.stats.COMMITS if c.repo == repo.name_with_owner]
+    commits = [
+        dataclasses.replace(
+            c, files=(wambatic.fetch.base.CommitFile('src/main.py', c.additions, c.deletions),)
+        )
+        for c in tests.fixtures.stats.COMMITS
+        if c.repo == repo.name_with_owner
+    ]
     state = wambatic.fetch.base.SyncState(
         repo=repo.name_with_owner,
         resource='commits',
@@ -163,6 +169,7 @@ def store_commits(
         updated_at=repo.updated_at,
         synced_at=synced_at,
         full_synced_at=synced_at,
+        probe=wambatic.fetch.base.commit_probe('clone', None, ()),
     )
     cache.write_commits(repo.name_with_owner, commits, state, replace=True)
 

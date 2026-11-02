@@ -507,6 +507,8 @@ def test_full_refresh_syncs_a_fresh_cache_and_reads_the_history_again(
 ) -> None:
     monkeypatch.setenv('GITHUB_TOKEN', 'test-token')
     upstream = tests.fixtures.reports.alpha_upstream()
+    for fake in upstream.repos.values():
+        fake.visibility = 'PRIVATE'  # read by the API history, not cloned
     ran = run_report(
         monkeypatch,
         make_client,

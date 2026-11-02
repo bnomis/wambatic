@@ -239,7 +239,7 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 ## Task 7: Leave generated files out of line counts and name unfiltered repositories
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** medium
 **Spec Reference:** metric groups 1.1, activity (Code contributions, Repositories that could not be filtered, top contributors); stats 1.11, Provenance; fetch 1.17, `provenance`; commit sync 1.0, Error handling (`BranchesMismatchError`), What a report is told
@@ -248,22 +248,22 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 **Subtasks:**
 
-- [ ] Add `BranchesMismatchError(FetchError)` to `src/wambatic/fetch/errors.py`; make `Fetcher.provenance` add `commit_methods` (comma-separated, in the order `clone`, `api-files`, `api`) and `branches` when `commits` is read, raising `BranchesMismatchError` for a `clone` or `api-files` repository whose recorded branches differ from `fetch.branches`
-- [ ] In `src/wambatic/stats/engine.py`, keep each repository's `Fetcher.commit_method` in what `read_records` returns, and add `exclude_paths` (JSON list) and `linguist` (`'true'` or `'false'`) to the provenance when `commits` is read
-- [ ] In `src/wambatic/stats/activity.py`, take a commit's lines from its kept files for `clone` and `api-files` (a file left out when `PurePosixPath(path).full_match(pattern)` for a `stats.exclude_paths` pattern, or when `generated` with `stats.linguist`) and from its totals for `api`, chosen by the recorded method; apply the same rule in `tables['top_contributors']`; a commit whose every file is left out still counts in `commits`, `contributors` and `active_days`
-- [ ] Add the `tables['unavailable']` rows of metric groups 1.1 for `api` and `api-files` repositories, ordered by name, beside any rows other groups add
-- [ ] Tests in `src/tests/stats/test_activity.py` and `src/tests/stats/test_engine.py`: a lock file and a `generated` file left out of lines and kept in `commits`; an `api` repository's totals used whatever its files; `stats.linguist` off; the unavailable rows for each method and with `fetch.branches` set; the provenance keys; in `src/tests/fetch/test_fetcher.py`, `BranchesMismatchError` after `fetch.branches` changed without a sync
+- [x] Add `BranchesMismatchError(FetchError)` to `src/wambatic/fetch/errors.py`; make `Fetcher.provenance` add `commit_methods` (comma-separated, in the order `clone`, `api-files`, `api`) and `branches` when `commits` is read, raising `BranchesMismatchError` for a `clone` or `api-files` repository whose recorded branches differ from `fetch.branches`
+- [x] In `src/wambatic/stats/engine.py`, keep each repository's `Fetcher.commit_method` in what `read_records` returns, and add `exclude_paths` (JSON list) and `linguist` (`'true'` or `'false'`) to the provenance when `commits` is read
+- [x] In `src/wambatic/stats/activity.py`, take a commit's lines from its kept files for `clone` and `api-files` (a file left out when `PurePosixPath(path).full_match(pattern)` for a `stats.exclude_paths` pattern, or when `generated` with `stats.linguist`) and from its totals for `api`, chosen by the recorded method; apply the same rule in `tables['top_contributors']`; a commit whose every file is left out still counts in `commits`, `contributors` and `active_days`
+- [x] Add the `tables['unavailable']` rows of metric groups 1.1 for `api` and `api-files` repositories, ordered by name, beside any rows other groups add
+- [x] Tests in `src/tests/stats/test_activity.py` and `src/tests/stats/test_engine.py`: a lock file and a `generated` file left out of lines and kept in `commits`; an `api` repository's totals used whatever its files; `stats.linguist` off; the unavailable rows for each method and with `fetch.branches` set; the provenance keys; in `src/tests/fetch/test_fetcher.py`, `BranchesMismatchError` after `fetch.branches` changed without a sync
 
 **Acceptance Criteria:**
 
-- [ ] A report over a cloned and an `api` repository counts both, and names the `api` one in `tables['unavailable']`
-- [ ] Two results computed with different `stats.exclude_paths` differ in their `exclude_paths` provenance
+- [x] A report over a cloned and an `api` repository counts both, and names the `api` one in `tables['unavailable']`
+- [x] Two results computed with different `stats.exclude_paths` differ in their `exclude_paths` provenance
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/stats/test_activity.py src/tests/stats/test_engine.py src/tests/stats/test_properties.py src/tests/fetch/test_fetcher.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/stats/test_activity.py src/tests/stats/test_engine.py src/tests/stats/test_properties.py src/tests/fetch/test_fetcher.py` passes
 
 **Notes:**
 

@@ -1,6 +1,7 @@
 import collections.abc
 import dataclasses
 import datetime
+import json
 import types
 import typing
 
@@ -169,6 +170,7 @@ class CachedRecords:
     forks: tuple[wambatic.fetch.base.Fork, ...]
     hidden: tuple[wambatic.fetch.base.Repo, ...]
     provenance: types.MappingProxyType[str, str]
+    commit_methods: types.MappingProxyType[str, str] = types.MappingProxyType({})
 
 
 async def read_records(
@@ -222,6 +224,14 @@ async def read_records(
     if 'popularity' in built:
         stars, forks, hidden = await read_popularity(fetcher, repos, states)
     provenance = await fetcher.provenance(subject, resources, repos, states)
+    commit_methods: dict[str, str] = {}
+    if 'activity' in built:
+        for repo in repos:
+            state = states[repo.name_with_owner, 'commits']
+            if state is not None:
+                commit_methods[repo.name_with_owner] = wambatic.fetch.base.parse_commit_probe(
+                    state.probe
+                ).method
     return CachedRecords(
         repos=tuple(repos),
         commits=tuple(commits),
@@ -234,6 +244,7 @@ async def read_records(
         forks=tuple(forks),
         hidden=tuple(hidden),
         provenance=types.MappingProxyType(dict(provenance)),
+        commit_methods=types.MappingProxyType(commit_methods),
     )
 
 
@@ -303,9 +314,17 @@ def aggregate(
             request.settings,
             by_author=request.by_author,
             by_repo=subject.kind != 'repo',
+            methods=records.commit_methods,
         )
     totals = len(wambatic.stats.activity.TOTAL_METRICS) if 'activity' in built else 0
     gaps: list[dict[str, typing.Any]] = []
+    if 'activity' in built:
+        gaps = wambatic.stats.activity.unfiltered_gaps(
+            repos,
+            records.commit_methods,
+            request.settings,
+            branches=json.loads(records.provenance.get('branches', '[]')) != [],
+        )
     if 'flow' in built:
         flow = wambatic.stats.flow.aggregate(pulls, issues, buckets, tz, since, until)
         series = [*series[:totals], *flow, *series[totals:]]
@@ -316,7 +335,7 @@ def aggregate(
         )
         series = [*series[:totals], *delivery, *series[totals:]]
         totals += len(delivery)
-        gaps = list(missing)
+        gaps.extend(missing)
     if popularity:
         liked, popular_tables = wambatic.stats.popularity.aggregate(
             stars, forks, repos, buckets, tz, since, until
@@ -328,6 +347,9 @@ def aggregate(
     provenance = dict(records.provenance)
     provenance['computed_at'] = now.astimezone(datetime.UTC).isoformat()
     provenance['timezone'] = str(tz)
+    if 'commit_methods' in provenance:
+        provenance['exclude_paths'] = json.dumps(list(request.settings.exclude_paths))
+        provenance['linguist'] = 'true' if request.settings.linguist else 'false'
     provenance['partial_buckets'] = ','.join(
         bucket.label for bucket in wambatic.stats.buckets.partial_buckets(since, until, buckets)
     )

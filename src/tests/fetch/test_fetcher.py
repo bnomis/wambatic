@@ -578,7 +578,11 @@ def test_the_stored_state_records_the_listed_head_and_times(
 
 
 def store_synced(
-    cache: wambatic.fetch.cache.Cache, name: str, hours: int | None, owner: str = 'octocat'
+    cache: wambatic.fetch.cache.Cache,
+    name: str,
+    hours: int | None,
+    owner: str = 'octocat',
+    probe: str | None = None,
 ) -> None:
     """List `name`; unless `hours` is None, store a commits state `hours` after T0."""
     repo = wambatic.fetch.base.parse_repo(
@@ -595,6 +599,7 @@ def store_synced(
             updated_at=repo.updated_at,
             synced_at=T0 + datetime.timedelta(hours=hours),
             full_synced_at=T0,
+            probe=probe,
         )
         cache.write_commits(name, [], state, replace=False)
 
@@ -675,6 +680,65 @@ def test_provenance_has_no_override_key_for_a_matching_cache(
     finally:
         cache.close()
     assert 'version_override_at' not in result
+
+
+def test_provenance_lists_the_commit_methods_and_branches(
+    make_fetcher: tests.conftest.MakeFetcher, tmp_path: pathlib.Path
+) -> None:
+    cache = wambatic.fetch.cache.Cache.open(tmp_path / 'prov.sqlite3')
+    try:
+        store_synced(cache, HELLO, 5, probe=wambatic.fetch.base.commit_probe('api-files', None, ()))
+        store_synced(cache, SPOON, 2, probe=wambatic.fetch.base.commit_probe('clone', 'x', ()))
+        result, _ = provenance_of(make_fetcher, cache)
+    finally:
+        cache.close()
+    assert result['commit_methods'] == 'clone,api-files'
+    assert result['branches'] == '[]'
+
+
+def test_provenance_has_no_commit_keys_when_commits_are_not_read(
+    make_fetcher: tests.conftest.MakeFetcher, tmp_path: pathlib.Path
+) -> None:
+    cache = wambatic.fetch.cache.Cache.open(tmp_path / 'prov.sqlite3')
+    try:
+        store_synced(cache, HELLO, 5)
+        result, _ = provenance_of(make_fetcher, cache, tests.fixtures.fetch.constants.RELEASES)
+    finally:
+        cache.close()
+    assert not {'commit_methods', 'branches'} & result.keys()
+
+
+@pytest.mark.parametrize('method', tests.fixtures.stats.FILE_METHODS)
+def test_provenance_refuses_a_repo_synced_under_other_branches(
+    make_fetcher: tests.conftest.MakeFetcher, tmp_path: pathlib.Path, method: str
+) -> None:
+    cache = wambatic.fetch.cache.Cache.open(tmp_path / 'prov.sqlite3')
+    try:
+        probe = wambatic.fetch.base.commit_probe(
+            typing.cast('wambatic.fetch.base.CommitMethod', method),
+            'x',
+            tests.fixtures.stats.RELEASE_BRANCHES,
+        )
+        store_synced(cache, HELLO, 5, probe=probe)
+        with pytest.raises(wambatic.fetch.errors.BranchesMismatchError) as raised:
+            provenance_of(make_fetcher, cache)
+    finally:
+        cache.close()
+    assert HELLO in str(raised.value)
+    assert 'release/*' in str(raised.value)
+    assert '--no-fetch' in str(raised.value)
+
+
+def test_provenance_ignores_the_branches_of_an_api_repo(
+    make_fetcher: tests.conftest.MakeFetcher, tmp_path: pathlib.Path
+) -> None:
+    cache = wambatic.fetch.cache.Cache.open(tmp_path / 'prov.sqlite3')
+    try:
+        store_synced(cache, HELLO, 5, probe=wambatic.fetch.base.commit_probe('api'))
+        result, _ = provenance_of(make_fetcher, cache)
+    finally:
+        cache.close()
+    assert result['commit_methods'] == 'api'
 
 
 def test_provenance_rejects_an_unknown_resource(

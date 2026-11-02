@@ -1,5 +1,6 @@
 import asyncio
 import collections.abc
+import dataclasses
 import datetime
 
 import tests.fixtures.stats
@@ -67,7 +68,7 @@ def test_the_fetcher_returns_every_fixture_commit(
                 found.extend([c async for c in stats_fetcher.commits(repo, None, None)])
         return found
 
-    found = asyncio.run(read())
+    found = [dataclasses.replace(c, files=()) for c in asyncio.run(read())]
     assert sorted(found, key=lambda c: (c.repo, c.oid)) == sorted(
         tests.fixtures.stats.COMMITS, key=lambda c: (c.repo, c.oid)
     )

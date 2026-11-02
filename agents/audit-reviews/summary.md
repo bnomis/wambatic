@@ -60,4 +60,5 @@ F2, F5, F6 and F8 are now resolved in full by tasks-2; F18 stays open by choice 
 
 ## Checker changes since the last review
 
+- The unused-dependency check (D2 in the auditme checklist) now skips a dependency a declared host tool loads as a plugin or theme, shown by its entry point (shipped in agents on 2026-11-02, Phase B text only). `mkdocs-material`, the theme `mkdocs.yml` names, falls under it; the command-line tools in G13 were already covered by the 2026-10-31 refinement.
 - `raises-section-drift` added and `mutable-module-level-exported` refined for builtin constructor calls (agents `c437b07`, digest `4d7de71f...` to `4e66ac0c...`): 16 new hits in this project, all `raises-section-drift`.

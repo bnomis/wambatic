@@ -168,6 +168,7 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 - [ ] `fetch_token(host: GitHubHost = GITHUB_COM)` in `src/wambatic/fetch/auth.py`: github.com unchanged; an Enterprise host reads `GH_ENTERPRISE_TOKEN`, else `GITHUB_ENTERPRISE_TOKEN`, else `gh auth token --hostname <host.name>`, and never `GITHUB_TOKEN`
 - [ ] The no-token `AuthError` message for an Enterprise host says to set `GH_ENTERPRISE_TOKEN` or run `gh auth login --hostname <host>`; the github.com message is unchanged
 - [ ] `src/wambatic/reports/service.py` and `src/wambatic/reports/web.py` pass `parse_host(settings.fetch.github_host)` to `fetch_token`
+- [ ] Remove the `# auditme: accept[spec-api-signature-drift]` line above `fetch_token` in the fetch spec's API block: with the host argument built, spec and code agree and `bin/audit-check.sh` must pass without it
 - [ ] Tests in `src/tests/fetch/test_auth.py` (the order of the variables, `gh` called with `--hostname`, `GITHUB_TOKEN` ignored for an Enterprise host, both messages) and `src/tests/reports/test_service.py`; the tests set variables with `monkeypatch` and never print a token
 
 **Acceptance Criteria:**
@@ -180,6 +181,7 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 - [ ] `source bin/activate.sh` succeeds
 - [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
 - [ ] `pytest src/tests/fetch/test_auth.py src/tests/reports/test_service.py src/tests/reports/test_web.py src/tests/test_cli.py` passes
+- [ ] `bin/audit-check.sh` exits 0 (the spec's accept line is gone)
 
 **Notes:**
 

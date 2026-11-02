@@ -234,6 +234,7 @@ class Fetcher:
     async def forks(self, repo: Repo) -> typing.AsyncIterator[Fork]:
         """From the cache: the repo's direct forks, oldest `created_at` first (then `id`), all of them."""
 
+# auditme: accept[spec-api-signature-drift] proposed in 1.16; agents/tasks/fetch/tasks-1.md Task 5 builds the host argument and removes this line
 def fetch_token(host: GitHubHost = GITHUB_COM) -> str:
     """For github.com: GITHUB_TOKEN from the environment, else `gh auth token`. For an
     Enterprise host (1.16): GH_ENTERPRISE_TOKEN, else GITHUB_ENTERPRISE_TOKEN, else

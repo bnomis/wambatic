@@ -827,6 +827,53 @@ def test_cache_info_lists_the_counts_and_no_differences(stats_cache_path: pathli
     assert 'differs' not in output
 
 
+def test_github_host_reaches_the_settings_of_each_command() -> None:
+    host = 'ghe.example.com'
+    via_report = settings_for(report(github_host=host))
+    via_serve = wambatic.settings.load_settings(
+        None, wambatic.cli.serve_overrides(wambatic.cli.Serve(github_host=host))
+    )
+    via_cache = wambatic.settings.load_settings(
+        None, wambatic.cli.cache_overrides(wambatic.cli.CacheCommand('info', github_host=host))
+    )
+    for settings in (via_report, via_serve, via_cache):
+        assert settings.fetch.github_host == host
+        assert wambatic.settings.cache_path_for(settings.fetch).name == f'cache-{host}.sqlite3'
+    assert wambatic.cli.cache_overrides(wambatic.cli.CacheCommand('info')) == {}
+
+
+def test_serve_host_is_still_the_bind_address_beside_github_host() -> None:
+    serve = cappa.parse(
+        wambatic.cli.Wambatic, argv=['serve', '--host', '::1', '--github-host', 'ghe.example.com']
+    ).command
+    assert isinstance(serve, wambatic.cli.Serve)
+    assert wambatic.cli.serve_overrides(serve) == {
+        'report': {'web_host': '::1'},
+        'fetch': {'github_host': 'ghe.example.com'},
+    }
+
+
+@pytest.mark.parametrize(
+    'argv',
+    [
+        ['report', 'a/b', '--github-host', 'api.github.com'],
+        ['serve', '--github-host', 'octo.ghe.com'],
+        ['cache', 'info', '--github-host', 'nodot'],
+    ],
+)
+def test_a_bad_github_host_exits_2(argv: list[str]) -> None:
+    assert wambatic.cli.main(argv) == 2
+
+
+def test_cache_info_with_github_host_names_that_hosts_file(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(wambatic.settings, 'DEFAULT_CACHE_DIR', tmp_path)
+    assert wambatic.cli.main(['cache', 'info', '--github-host', 'ghe.example.com']) == 0
+    out = capsys.readouterr().out.replace('\n', '')
+    assert f'no cache at {tmp_path / "cache-ghe.example.com.sqlite3"}' in out
+
+
 def test_cache_info_of_a_schema_2_file_counts_the_missing_tables_as_zero(
     tmp_path: pathlib.Path,
 ) -> None:

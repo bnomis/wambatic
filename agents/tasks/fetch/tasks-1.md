@@ -264,7 +264,7 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 ## Task 8: Add `--github-host` to `report`, `serve` and `cache`
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** small
 **Spec Reference:** CLI spec 1.1, Command line and Flags
@@ -273,21 +273,21 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 **Subtasks:**
 
-- [ ] Add `--github-host HOST` to the `report`, `serve` and `cache` commands in `src/wambatic/cli.py`, passed to settings as an override of `fetch.github_host`, so the settings' checks apply and a bad host exits 2 with `SettingsError`
-- [ ] `cache clear` and `cache info` act on that host's file (`cache_path_for`), and `cache info` shows `github_host` and `server_version`
-- [ ] Add the flag to `docs/reference/cli.md` for each command
-- [ ] Tests in `src/tests/test_cli.py`: each command with the flag reaches the right cache file and host; a bad host exits 2; `serve --host` still means the bind address
+- [x] Add `--github-host HOST` to the `report`, `serve` and `cache` commands in `src/wambatic/cli.py`, passed to settings as an override of `fetch.github_host`, so the settings' checks apply and a bad host exits 2 with `SettingsError`
+- [x] `cache clear` and `cache info` act on that host's file (`cache_path_for`), and `cache info` shows `github_host` and `server_version`
+- [x] Add the flag to `docs/reference/cli.md` for each command
+- [x] Tests in `src/tests/test_cli.py`: each command with the flag reaches the right cache file and host; a bad host exits 2; `serve --host` still means the bind address
 
 **Acceptance Criteria:**
 
-- [ ] `wambatic cache info --github-host ghe.example.com` reports `~/.cache/wambatic/cache-ghe.example.com.sqlite3` (or that there is no cache there)
-- [ ] `pytest src/tests/test_docs.py` passes with the new flag
+- [x] `wambatic cache info --github-host ghe.example.com` reports `~/.cache/wambatic/cache-ghe.example.com.sqlite3` (or that there is no cache there)
+- [x] `pytest src/tests/test_docs.py` passes with the new flag
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/test_cli.py src/tests/test_docs.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/test_cli.py src/tests/test_docs.py` passes
 
 **Notes:**
 

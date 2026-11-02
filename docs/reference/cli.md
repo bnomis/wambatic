@@ -30,6 +30,7 @@ Every command-line option. Global options come before the command: `wambatic -v 
 | `--no-fetch` | off | Use the cache only, with no network and no token |
 | `--max-age DURATION` | `fetch.max_age` | Skip the network when every resource was synced more recently, for example `30m` or `1d` |
 | `--ignore-cache-version` | off | Read a cache written by a different wambatic or schema version, and say so in the report |
+| `--github-host HOST` | `fetch.github_host` | The GitHub Enterprise Server host to read, such as `ghe.example.com`, or `github.com`; it also picks that host's cache file |
 
 Dates must be written `YYYY-MM-DD`; other ISO forms are rejected. Without `--no-fetch` and `--max-age`, every run syncs first, because `fetch.max_age` defaults to zero.
 
@@ -45,6 +46,7 @@ Dates must be written `YYYY-MM-DD`; other ISO forms are rejected. Without `--no-
 | `--allow-remote` | `report.allow_remote` | Listen on an address other than loopback, and turn off the `Host` check; logs a warning |
 | `--max-age DURATION` | `fetch.max_age` | As for `report` |
 | `--ignore-cache-version` | off | As for `report` |
+| `--github-host HOST` | `fetch.github_host` | As for `report`; unrelated to `--host`, the address to listen on |
 
 ## cache
 
@@ -52,4 +54,5 @@ Dates must be written `YYYY-MM-DD`; other ISO forms are rejected. Without `--no-
 
 | Option | Default | Meaning |
 |--------|---------|---------|
-| `ACTION` | required | `info` describes the cache; `clear` removes it and its `-wal` and `-shm` files without asking |
+| `ACTION` | required | `info` describes the cache, including its `github_host` and `server_version`; `clear` removes it and its `-wal` and `-shm` files without asking |
+| `--github-host HOST` | `fetch.github_host` | Act on that host's cache file |

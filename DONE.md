@@ -53,3 +53,23 @@ API and its metric groups, as `cdb829e` did for fetch and cache. Update
 cross-reference.
 
 Done: 2026-11-02 - split on branch `docs/split-reports-stats-specs`: reports spec 1.13 keeps what the front ends share, with the CLI, Terminal report, HTML report and Web app specs 1.0; stats spec 1.10 keeps the API, with the Metric groups spec 1.0. Source: agents/audit-reviews/review-2.md (Decision 2).
+
+## GitHub Enterprise Server is not supported
+
+Found on 2026-11-02 by `/todo-review`, from the limits the system spec
+(`agents/specs/system/spec.md`, "Limits accepted for the first release")
+accepted for the first release: "GitHub Enterprise Server is out of scope".
+The user chose on 2026-11-02 to lift it.
+
+Cause: `GitHubClient` in `src/wambatic/fetch/client.py` takes an `api_url`
+but defaults it to `https://api.github.com`, and no setting passes another;
+the fetch spec assumes GitHub.com's API features and rate limits.
+
+Fix direction: a spec change to `fetch` and `system` for a configurable API
+address, a check of what the server supports (GraphQL fields the listing
+selects, rate-limit reporting) that fails with a typed error, and the cache
+identity recording the host so two hosts never share a cache.
+
+Spec: agents/specs/fetch/spec.md (1.16, with the cache, system, CLI, reports, terminal-report and HTML-report amendments; review agents/specs/fetch/review-1.md); tasks: agents/tasks/fetch/tasks-1.md.
+
+Done: 2026-11-02 - built by agents/tasks/fetch/tasks-1.md against fetch spec 1.16.

@@ -14,7 +14,9 @@ What wambatic does not do, and why.
   would be a guess that differs between projects.
 - **A report uses one time zone.** Periods are cut by the zone in `--tz` or `stats.timezone`, so all
   numbers in a report agree on where a day, week or month begins. A different zone means a different report.
-- **GitHub Enterprise Server is not supported.** wambatic talks to github.com only.
+- **Only some GitHub Enterprise servers are supported.** Enterprise Server is supported from 3.19, as
+  [the guide](guide/enterprise.md) describes. Enterprise Cloud with data residency (`*.ghe.com`) is not,
+  because it uses different addresses.
 - **The DORA figures are proxies.** They are built on conventions GitHub does not enforce: what counts as a
   deployment, and which pull requests are fixes. See [Delivery and DORA](guide/delivery.md) for the
   conventions and the settings that adjust them.

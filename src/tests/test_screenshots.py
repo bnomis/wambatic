@@ -119,7 +119,9 @@ def test_the_config_names_the_docs_cache_and_utc(tmp_path: pathlib.Path) -> None
 
 
 def test_the_docs_cache_is_never_the_users_own() -> None:
-    assert screenshots.DOCS_CACHE != wambatic.settings.FetchSettings().cache_path
+    assert screenshots.DOCS_CACHE != wambatic.settings.cache_path_for(
+        wambatic.settings.FetchSettings()
+    )
 
 
 def test_wanted_images_are_those_the_guide_references() -> None:

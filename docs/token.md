@@ -29,6 +29,12 @@ flowchart TD
 A report that makes no request, with `--no-fetch` or a `--max-age` that the cache already satisfies, needs no
 token at all.
 
+## A GitHub Enterprise Server
+
+For a host set with `--github-host`, wambatic never uses `GITHUB_TOKEN`; it looks for `GH_ENTERPRISE_TOKEN`,
+then `GITHUB_ENTERPRISE_TOKEN`, then `gh auth token --hostname <host>`. Run `gh auth login --hostname <host>`
+once to use the GitHub CLI. See [GitHub Enterprise Server](guide/enterprise.md).
+
 ## What the token may do
 
 wambatic only reads. Create a classic token or a fine-grained one.

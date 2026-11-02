@@ -461,6 +461,32 @@ def test_the_report_names_the_range_the_timezone_and_the_provenance(
     )
 
 
+def test_the_footer_names_an_enterprise_host_and_github_com_is_unchanged(
+    org_report: wambatic.reports.html.HtmlReport,
+) -> None:
+    plain = wambatic.reports.html.html_document(org_report, 'auto')
+    assert 'GitHub host' not in plain
+    dotcom = dataclasses.replace(
+        org_report.total, provenance={**org_report.total.provenance, 'github_host': 'github.com'}
+    )
+    assert (
+        wambatic.reports.html.html_document(dataclasses.replace(org_report, total=dotcom), 'auto')
+        == plain
+    )
+    enterprise = dataclasses.replace(
+        org_report.total,
+        provenance={
+            **org_report.total.provenance,
+            'github_host': 'ghe.example.com',
+            'server_version': '3.19.1',
+        },
+    )
+    document = wambatic.reports.html.html_document(
+        dataclasses.replace(org_report, total=enterprise), 'auto'
+    )
+    assert '<p>GitHub host: ghe.example.com (Enterprise Server 3.19.1)</p>' in document
+
+
 def test_render_html_writes_the_document_and_returns_the_path(
     org_report: wambatic.reports.html.HtmlReport, tmp_path: pathlib.Path
 ) -> None:

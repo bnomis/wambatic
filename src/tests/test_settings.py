@@ -17,8 +17,9 @@ import wambatic.settings
 def test_fetch_defaults() -> None:
     fetch = wambatic.settings.Settings().fetch
     assert fetch == wambatic.settings.FetchSettings(
-        cache_path=pathlib.Path.home() / '.cache/wambatic/cache.sqlite3',
+        cache_path=None,
         full_refresh_after=datetime.timedelta(days=30),
+        github_host='github.com',
         include_archived=False,
         include_forks=False,
         max_age=datetime.timedelta(0),
@@ -373,3 +374,57 @@ def test_a_duration_too_long_for_a_timedelta_raises() -> None:
 def test_parse_duration_of_a_huge_count_raises_settings_error(n: int, unit: str) -> None:
     with pytest.raises(wambatic.settings.SettingsError, match='too long'):
         wambatic.settings.parse_duration(f'{n}{unit}')
+
+
+def host_layer(host: str) -> wambatic.settings.Settings:
+    return wambatic.settings.apply_layer(
+        wambatic.settings.Settings(), {'fetch': {'github_host': host}}, 'overrides'
+    )
+
+
+@pytest.mark.parametrize(
+    ('given', 'expected'),
+    [
+        ('github.com', 'github.com'),
+        ('GitHub.com', 'github.com'),
+        ('ghe.example.com', 'ghe.example.com'),
+        ('GHE.Example.com:8443', 'ghe.example.com:8443'),
+        ('ghe.example.com:65535', 'ghe.example.com:65535'),
+    ],
+)
+def test_github_host_is_accepted_and_lower_cased(given: str, expected: str) -> None:
+    assert host_layer(given).fetch.github_host == expected
+
+
+@pytest.mark.parametrize(
+    'given',
+    [
+        'api.github.com',
+        'acme.ghe.com',
+        'https://ghe.example.com',
+        'ghe.example.com/path',
+        'user@ghe.example.com',
+        'ghe.example.com?x=1',
+        'ghe.example.com:0',
+        'ghe.example.com:65536',
+        'ghe.example.com:http',
+        'ghe',
+    ],
+)
+def test_github_host_is_refused_without_echoing_it(given: str) -> None:
+    with pytest.raises(wambatic.settings.SettingsError, match=r'fetch\.github_host') as raised:
+        host_layer(given)
+    assert given not in str(raised.value)
+
+
+def test_cache_path_for_an_unset_path_is_per_host() -> None:
+    home = pathlib.Path.home() / '.cache/wambatic'
+    default = wambatic.settings.FetchSettings()
+    assert wambatic.settings.cache_path_for(default) == home / 'cache.sqlite3'
+    other = host_layer('GHE.Example.com:8443').fetch
+    assert wambatic.settings.cache_path_for(other) == home / 'cache-ghe.example.com-8443.sqlite3'
+
+
+def test_cache_path_for_a_set_path_is_that_path(tmp_path: pathlib.Path) -> None:
+    fetch = wambatic.settings.FetchSettings(cache_path=tmp_path / 'x.sqlite3', github_host='a.b')
+    assert wambatic.settings.cache_path_for(fetch) == tmp_path / 'x.sqlite3'

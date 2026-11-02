@@ -114,7 +114,7 @@ def make_client(sleeps: Sleeps, fetch_settings: wambatic.settings.FetchSettings)
         return wambatic.fetch.client.GitHubClient(
             'test-token',
             settings,
-            api_url=server.url,
+            host=server.host,
             sleep=sleeps,
             clock=lambda: tests.fixtures.fetch.responses.NOW,
             rng=random.Random(0),

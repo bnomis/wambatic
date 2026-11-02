@@ -89,6 +89,13 @@ class Report:
         str | None,
         cappa.Arg(long=True, help='Skip the network if synced more recently, e.g. 30m or 1d'),
     ] = None
+    github_host: typing.Annotated[
+        str | None,
+        cappa.Arg(
+            long=True,
+            help='GitHub Enterprise Server host, or github.com (default: fetch.github_host)',
+        ),
+    ] = None
     ignore_cache_version: typing.Annotated[
         bool, cappa.Arg(long=True, help='Read a cache written by a different version')
     ] = False
@@ -120,6 +127,13 @@ class Serve:
         str | None,
         cappa.Arg(long=True, help='Skip the network if synced more recently, e.g. 30m or 1d'),
     ] = None
+    github_host: typing.Annotated[
+        str | None,
+        cappa.Arg(
+            long=True,
+            help='GitHub Enterprise Server host, or github.com (default: fetch.github_host)',
+        ),
+    ] = None
     ignore_cache_version: typing.Annotated[
         bool, cappa.Arg(long=True, help='Read a cache written by a different version')
     ] = False
@@ -132,6 +146,13 @@ class CacheCommand:
         typing.Literal['clear', 'info'],
         cappa.Arg(help='info describes the cache, clear removes it'),
     ]
+    github_host: typing.Annotated[
+        str | None,
+        cappa.Arg(
+            long=True,
+            help='GitHub Enterprise Server host, or github.com (default: fetch.github_host)',
+        ),
+    ] = None
 
 
 @cappa.command(name='wambatic', help='Statistics from github.com for a user, an org or a repo.')
@@ -155,6 +176,8 @@ def overrides(report: Report) -> dict[str, object]:
         result.setdefault('fetch', {})['max_age'] = report.max_age
     if report.tz is not None:
         result.setdefault('stats', {})['timezone'] = report.tz
+    if report.github_host is not None:
+        result.setdefault('fetch', {})['github_host'] = report.github_host
     return typing.cast(dict[str, object], result)
 
 
@@ -169,7 +192,16 @@ def serve_overrides(serve: Serve) -> dict[str, object]:
         result.setdefault('report', {})['allow_remote'] = True
     if serve.max_age is not None:
         result.setdefault('fetch', {})['max_age'] = serve.max_age
+    if serve.github_host is not None:
+        result.setdefault('fetch', {})['github_host'] = serve.github_host
     return typing.cast(dict[str, object], result)
+
+
+def cache_overrides(command: CacheCommand) -> dict[str, object]:
+    """The `load_settings` overrides for the flags of `cache`, only where given."""
+    if command.github_host is None:
+        return {}
+    return {'fetch': {'github_host': command.github_host}}
 
 
 def check_verbosity(root: Wambatic) -> None:
@@ -252,7 +284,9 @@ async def run_report(
     request = build_request(report, settings, clock())
     wambatic.stats.engine.resources_for(request.groups)
     cache = wambatic.fetch.cache.Cache.open(
-        settings.fetch.cache_path, ignore_version=report.ignore_cache_version
+        wambatic.settings.cache_path_for(settings.fetch),
+        host=settings.fetch.github_host,
+        ignore_version=report.ignore_cache_version,
     )
     as_html = settings.report.format == 'html'
     requests = wambatic.reports.html.period_requests(request) if as_html else [request]
@@ -285,12 +319,14 @@ def cache_info_table(info: wambatic.fetch.cache.CacheInfo) -> rich.table.Table:
     rows: list[tuple[str, str]] = [
         ('path', str(info.path)),
         ('size', f'{wambatic.reports.terminal.format_number(info.size_bytes)} bytes'),
-        *sorted(info.identity.items()),
+        *sorted({'github_host': info.github_host, **info.identity}.items()),
     ]
     for key, (recorded, running) in info.differences.items():
         rows.append((f'differs: {key}', f'{recorded or "nothing"} -> {running or "nothing"}'))
     if not info.differences:
         rows.append(('differences', 'none'))
+    if info.server_version is not None:
+        rows.append(('server_version', info.server_version))
     if info.version_override_at is not None:
         rows.append(('version_override_at', info.version_override_at))
     rows += [
@@ -318,7 +354,7 @@ def run_cache(
     command: CacheCommand, settings: wambatic.settings.Settings, console: rich.console.Console
 ) -> None:
     """`cache info` describes the cache, `cache clear` removes it; neither uses the network."""
-    path = settings.fetch.cache_path
+    path = wambatic.settings.cache_path_for(settings.fetch)
     if command.action == 'info':
         info = wambatic.fetch.cache.inspect_cache(path)
         if info is None:
@@ -361,7 +397,7 @@ def execute(root: Wambatic) -> None:
             ignore_cache_version=command.ignore_cache_version,
         )
     else:
-        run_cache(command, wambatic.settings.load_settings(None, {}), console)
+        run_cache(command, wambatic.settings.load_settings(None, cache_overrides(command)), console)
 
 
 def exit_status(code: str | int | None) -> int:

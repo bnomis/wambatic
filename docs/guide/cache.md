@@ -18,6 +18,11 @@ from GitHub again, so deleting it costs time and requests but loses nothing.
 By default `~/.cache/wambatic/cache.sqlite3`. Set `fetch.cache_path` in the
 [configuration](config.md) to move it. A leading `~` is expanded.
 
+A host other than github.com has its own file, `cache-<host>.sqlite3` beside it; see
+[GitHub Enterprise Server](enterprise.md). The cache records its host, and a cache made for another host
+stops the report with a `CacheHostError`. `--ignore-cache-version` does not override it: set
+`fetch.cache_path` to another file, or clear that host's cache.
+
 ## `cache info`
 
 `wambatic cache info` prints the path, the size, the identity the cache recorded (the schema version, the

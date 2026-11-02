@@ -11,6 +11,7 @@ import loguru
 
 import wambatic.fetch.client
 import wambatic.fetch.errors
+import wambatic.fetch.hosts
 import wambatic.fetch.queries
 import wambatic.settings
 
@@ -577,7 +578,9 @@ class Fetcher:
             )
         self.cache = cache
         self.settings = settings
-        self.client = client or wambatic.fetch.client.GitHubClient(token, settings)
+        self.client = client or wambatic.fetch.client.GitHubClient(
+            token, settings, host=wambatic.fetch.hosts.parse_host(settings.github_host)
+        )
         self.semaphore = asyncio.Semaphore(settings.workers)
 
     async def __aenter__(self) -> Fetcher:
@@ -611,15 +614,17 @@ class Fetcher:
 
     async def owner_kind(self, login: str) -> typing.Literal['user', 'org']:
         """Whether `login` is a user or an organisation, from GitHub's own `type` field; one
-        request, nothing cached.
+        request (after the Enterprise version check), nothing cached.
 
         Raises:
+            ServerVersionError: an Enterprise server is older than the minimum or reports none.
             NotFoundError: the login is neither a user nor an organisation, or GitHub answers 404.
             StatsPendingError: GitHub is still computing the statistics.
             AuthError: GitHub rejects the token.
             RateLimitError: the rate limit is exhausted.
             FetchError: another failure, or retries run out.
         """
+        await self.client.server_version()
         response = await self.client.rest_get(f'/users/{login}')
         body = response.data
         kind = body.get('type') if isinstance(body, dict) else None
@@ -770,7 +775,8 @@ class Fetcher:
         repos: collections.abc.Sequence[Repo] | None = None,
         states: collections.abc.Mapping[tuple[str, str], SyncState | None] | None = None,
     ) -> dict[str, str]:
-        """From the cache: the cache identity, `version_override_at` when recorded, and for each
+        """From the cache: the cache identity, `version_override_at` and `server_version` when
+        recorded, and for each
         resource `fetched_at:<resource>`, the earliest `synced_at` over the subject's repos, or
         `never` when one of them has no sync state for it.
 
@@ -790,6 +796,9 @@ class Fetcher:
         override = await self.db(self.cache.version_override_at)
         if override is not None:
             result['version_override_at'] = override
+        server_version = await self.db(self.cache.server_version)
+        if server_version is not None:
+            result['server_version'] = server_version
         if repos is None:
             repos = await self.repos(subject)
         if states is None:
@@ -1370,6 +1379,7 @@ class Fetcher:
 
         Raises:
             InvalidRequestError: `resources` names an unknown resource.
+            ServerVersionError: an Enterprise server is older than the minimum or reports none.
             FetchError: a repo fails to sync; the first failure is re-raised.
         """
         unknown = sorted(resources - RESOURCES)
@@ -1377,6 +1387,9 @@ class Fetcher:
             raise wambatic.fetch.errors.InvalidRequestError(
                 f'unknown resources: {", ".join(unknown)}'
             )
+        version = await self.client.server_version()
+        if version is not None:
+            await self.db(self.cache.write_server_version, version)
         listed = await self.list_repos(subject)
         await self.db(
             self.cache.upsert_repos, subject.login, listed, complete=subject.kind != 'repo'

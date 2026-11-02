@@ -8,8 +8,9 @@ A duration is a whole number and one unit, `s`, `m`, `h`, `d` or `w`, such as `3
 
 | Setting | Type | Default | Meaning and trade-off |
 |---------|------|---------|-----------------------|
-| `fetch.cache_path` | path | `~/.cache/wambatic/cache.sqlite3` | Where the cache lives |
+| `fetch.cache_path` | path or none | `none` | Where the cache lives; unset uses `~/.cache/wambatic/cache.sqlite3` for `github.com` and `~/.cache/wambatic/cache-<host>.sqlite3` for another host, so each host has its own cache |
 | `fetch.full_refresh_after` | duration | `30d` | Age of the last full read after which a resource is read in full again to catch deletions; shorter is more accurate and costs more requests |
+| `fetch.github_host` | host name | `github.com` | The GitHub host to read: `github.com`, or the host name of a GitHub Enterprise Server with an optional `:port`; lower-cased on load. `api.github.com` and `*.ghe.com` (data residency) are refused |
 | `fetch.include_archived` | boolean | `false` | Include archived repositories of a user or organisation |
 | `fetch.include_forks` | boolean | `false` | Include forks of a user or organisation |
 | `fetch.max_age` | duration | `0s` | Skip the network when the subject was synced more recently than this; zero always syncs |

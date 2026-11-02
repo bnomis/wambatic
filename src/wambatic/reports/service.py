@@ -13,6 +13,7 @@ import loguru
 import wambatic.fetch.auth
 import wambatic.fetch.base
 import wambatic.fetch.cache
+import wambatic.fetch.hosts
 import wambatic.fetch.ratelimit
 import wambatic.reports.errors
 import wambatic.settings
@@ -205,7 +206,10 @@ async def sync_target(
     async with contextlib.AsyncExitStack() as stack:
         online: wambatic.fetch.base.Fetcher | None = None
         if isinstance(target, str):
-            token = await asyncio.to_thread(wambatic.fetch.auth.fetch_token)
+            token = await asyncio.to_thread(
+                wambatic.fetch.auth.fetch_token,
+                wambatic.fetch.hosts.parse_host(settings.fetch.github_host),
+            )
             online = await stack.enter_async_context(make_fetcher(token, cache, settings.fetch))
             subject = wambatic.fetch.base.Subject(await online.owner_kind(target), target)
             if request.by_author:
@@ -223,7 +227,10 @@ async def sync_target(
             )
         if sync:
             if online is None:
-                token = await asyncio.to_thread(wambatic.fetch.auth.fetch_token)
+                token = await asyncio.to_thread(
+                    wambatic.fetch.auth.fetch_token,
+                    wambatic.fetch.hosts.parse_host(settings.fetch.github_host),
+                )
                 online = await stack.enter_async_context(make_fetcher(token, cache, settings.fetch))
             if progress is None:
                 report = await online.sync(subject, resources, full_refresh=full_refresh)
@@ -287,7 +294,9 @@ async def sync_and_compute(
 
 
 def redact_environment_token(text: str) -> str:
-    return wambatic.fetch.auth.redact(text, os.environ.get('GITHUB_TOKEN', '').strip())
+    for variable in ('GITHUB_TOKEN', *wambatic.fetch.auth.ENTERPRISE_VARIABLES):
+        text = wambatic.fetch.auth.redact(text, os.environ.get(variable, '').strip())
+    return text
 
 
 def redact_error(error: BaseException) -> str:

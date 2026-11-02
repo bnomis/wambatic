@@ -1,7 +1,7 @@
 # Fetch
 
 **Version:** 1.16
-**Status:** proposed
+**Status:** implemented
 **Date:** 2026-11-02
 
 Fetches raw data about a GitHub user, repository or organisation and hands it to the [Cache](../cache/spec.md), the local SQLite store that keeps repeated and incremental runs inside the API rate limits. It uses the [GraphQL API](https://docs.github.com/en/graphql) for almost everything and the [REST API](https://docs.github.com/en/rest) only where GraphQL has no equivalent (workflow runs, the `stats/*` endpoints, comparing two commits, and the list of a repository's forks). It knows nothing about metrics; [Stats](../stats/spec.md) consumes its output.
@@ -234,7 +234,6 @@ class Fetcher:
     async def forks(self, repo: Repo) -> typing.AsyncIterator[Fork]:
         """From the cache: the repo's direct forks, oldest `created_at` first (then `id`), all of them."""
 
-# auditme: accept[spec-api-signature-drift] proposed in 1.16; agents/tasks/fetch/tasks-1.md Task 5 builds the host argument and removes this line
 def fetch_token(host: GitHubHost = GITHUB_COM) -> str:
     """For github.com: GITHUB_TOKEN from the environment, else `gh auth token`. For an
     Enterprise host (1.16): GH_ENTERPRISE_TOKEN, else GITHUB_ENTERPRISE_TOKEN, else

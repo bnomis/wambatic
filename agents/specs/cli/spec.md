@@ -1,7 +1,7 @@
 # CLI
 
 **Version:** 1.1
-**Status:** proposed
+**Status:** implemented
 **Date:** 2026-11-02
 
 The `wambatic` command line: its commands and flags, the order `report` runs in, the `cache` commands, and the one place every error becomes an exit status. Part of [Reports](../reports/spec.md), which holds what the front ends share.

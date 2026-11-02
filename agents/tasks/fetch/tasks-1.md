@@ -16,7 +16,7 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 ## Task 1: Add the `fetch.github_host` setting and a cache file per host
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** medium
 **Spec Reference:** fetch spec 1.16, GitHub hosts (Host names) and Settings; cache spec 1.1, One file per host and Settings
@@ -25,24 +25,24 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 **Subtasks:**
 
-- [ ] Add `github_host: str = 'github.com'` to `FetchSettings` in `src/wambatic/settings.py`, checked when settings load: lower-cased; `github.com`, or a name of letters, digits, `-` and `.` with at least one `.`, optionally `:` and a port from 1 to 65535; no scheme, path, user or query. `api.github.com` raises `SettingsError` saying to use `github.com`; a name ending in `.ghe.com` raises `SettingsError` saying GitHub Enterprise Cloud with data residency is not supported. Every message names `fetch.github_host` and never echoes the value, as the other settings errors do
-- [ ] Make `fetch.cache_path` `pathlib.Path | None`, default `None`, and add `cache_path_for(settings: FetchSettings) -> pathlib.Path`: the setting when set, else `~/.cache/wambatic/cache.sqlite3` for `github.com` and `~/.cache/wambatic/cache-<host>.sqlite3` for another host, `:` replaced by `-`
-- [ ] Replace every read of `settings.fetch.cache_path` with `cache_path_for(settings.fetch)`: `src/wambatic/cli.py` (the `report` and `cache` commands) and `src/wambatic/reports/web.py` (`serve`)
-- [ ] Update the fixture settings in `src/tests/fixtures/settings.py` and the tests that set `cache_path`, keeping their temporary paths
-- [ ] Tests in `src/tests/test_settings.py`: accepted names (with and without a port, upper case lower-cased), each refusal (`api.github.com`, `*.ghe.com`, a scheme, a path, a port of 0 and of 65536, no dot), and `cache_path_for` for an unset path on both kinds of host and for a set path
-- [ ] Add `fetch.github_host` to `docs/reference/settings.md`, and the new `fetch.cache_path` type and default
+- [x] Add `github_host: str = 'github.com'` to `FetchSettings` in `src/wambatic/settings.py`, checked when settings load: lower-cased; `github.com`, or a name of letters, digits, `-` and `.` with at least one `.`, optionally `:` and a port from 1 to 65535; no scheme, path, user or query. `api.github.com` raises `SettingsError` saying to use `github.com`; a name ending in `.ghe.com` raises `SettingsError` saying GitHub Enterprise Cloud with data residency is not supported. Every message names `fetch.github_host` and never echoes the value, as the other settings errors do
+- [x] Make `fetch.cache_path` `pathlib.Path | None`, default `None`, and add `cache_path_for(settings: FetchSettings) -> pathlib.Path`: the setting when set, else `~/.cache/wambatic/cache.sqlite3` for `github.com` and `~/.cache/wambatic/cache-<host>.sqlite3` for another host, `:` replaced by `-`
+- [x] Replace every read of `settings.fetch.cache_path` with `cache_path_for(settings.fetch)`: `src/wambatic/cli.py` (the `report` and `cache` commands) and `src/wambatic/reports/web.py` (`serve`)
+- [x] Update the fixture settings in `src/tests/fixtures/settings.py` and the tests that set `cache_path`, keeping their temporary paths
+- [x] Tests in `src/tests/test_settings.py`: accepted names (with and without a port, upper case lower-cased), each refusal (`api.github.com`, `*.ghe.com`, a scheme, a path, a port of 0 and of 65536, no dot), and `cache_path_for` for an unset path on both kinds of host and for a set path
+- [x] Add `fetch.github_host` to `docs/reference/settings.md`, and the new `fetch.cache_path` type and default
 
 **Acceptance Criteria:**
 
-- [ ] `load_settings` with `{"fetch": {"github_host": "GHE.Example.com:8443"}}` gives `ghe.example.com:8443`, and `cache_path_for` gives `~/.cache/wambatic/cache-ghe.example.com-8443.sqlite3`
-- [ ] A default github.com run opens `~/.cache/wambatic/cache.sqlite3`, as before
-- [ ] `pytest src/tests/test_docs.py` passes with the new setting
+- [x] `load_settings` with `{"fetch": {"github_host": "GHE.Example.com:8443"}}` gives `ghe.example.com:8443`, and `cache_path_for` gives `~/.cache/wambatic/cache-ghe.example.com-8443.sqlite3`
+- [x] A default github.com run opens `~/.cache/wambatic/cache.sqlite3`, as before
+- [x] `pytest src/tests/test_docs.py` passes with the new setting
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/test_settings.py src/tests/test_cli.py src/tests/reports/test_web.py src/tests/test_docs.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/test_settings.py src/tests/test_cli.py src/tests/reports/test_web.py src/tests/test_docs.py` passes
 
 **Notes:**
 
@@ -53,7 +53,7 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 ## Task 2: Add `hosts.py` and `ServerVersionError`
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** small
 **Spec Reference:** fetch spec 1.16, Module location (`hosts.py`), API (hosts.py), Error handling (`ServerVersionError`), GitHub hosts (Addresses, Server version)
@@ -62,21 +62,21 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 **Subtasks:**
 
-- [ ] Create `src/wambatic/fetch/hosts.py` with `GitHubHost` (frozen, slots: `name`, `rest_url`, `graphql_url`, and the `is_dotcom` property), `GITHUB_COM`, `MIN_SERVER_VERSION = (3, 19)` with a comment naming 2026-11-02 and the oldest supported release, `parse_host` and `parse_server_version`, as the spec's API gives them
-- [ ] `parse_host('github.com')` gives `https://api.github.com` and `https://api.github.com/graphql`; any other checked name gives `https://<name>/api/v3` and `https://<name>/api/graphql`; text that fails the settings' rules raises `InvalidRequestError`
-- [ ] Add `ServerVersionError(FetchError)` to `src/wambatic/fetch/errors.py`, carrying the host, the version found (or none) and `MIN_SERVER_VERSION`, with a message naming all three
-- [ ] Tests in a new `src/tests/fetch/test_hosts.py` (both kinds of host, a port, a refused name, `'3.19.2'`, `'3.19'`, `'3'`, `'x.y'`, `''`), and the new error in `src/tests/fetch/test_errors.py`
+- [x] Create `src/wambatic/fetch/hosts.py` with `GitHubHost` (frozen, slots: `name`, `rest_url`, `graphql_url`, and the `is_dotcom` property), `GITHUB_COM`, `MIN_SERVER_VERSION = (3, 19)` with a comment naming 2026-11-02 and the oldest supported release, `parse_host` and `parse_server_version`, as the spec's API gives them
+- [x] `parse_host('github.com')` gives `https://api.github.com` and `https://api.github.com/graphql`; any other checked name gives `https://<name>/api/v3` and `https://<name>/api/graphql`; text that fails the settings' rules raises `InvalidRequestError`
+- [x] Add `ServerVersionError(FetchError)` to `src/wambatic/fetch/errors.py`, carrying the host, the version found (or none) and `MIN_SERVER_VERSION`, with a message naming all three
+- [x] Tests in a new `src/tests/fetch/test_hosts.py` (both kinds of host, a port, a refused name, `'3.19.2'`, `'3.19'`, `'3'`, `'x.y'`, `''`), and the new error in `src/tests/fetch/test_errors.py`
 
 **Acceptance Criteria:**
 
-- [ ] `parse_host('ghe.example.com').graphql_url == 'https://ghe.example.com/api/graphql'`
-- [ ] `parse_server_version('3.19.2') == (3, 19)`; `parse_server_version('3')` raises `ServerVersionError`
+- [x] `parse_host('ghe.example.com').graphql_url == 'https://ghe.example.com/api/graphql'`
+- [x] `parse_server_version('3.19.2') == (3, 19)`; `parse_server_version('3')` raises `ServerVersionError`
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/fetch/test_hosts.py src/tests/fetch/test_errors.py src/tests/test_package.py src/tests/test_layering.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/fetch/test_hosts.py src/tests/fetch/test_errors.py src/tests/test_package.py src/tests/test_layering.py` passes
 
 **Notes:**
 
@@ -87,7 +87,7 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 ## Task 3: Point `GitHubClient` at a `GitHubHost`
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** medium
 **Spec Reference:** fetch spec 1.16, API (`GitHubClient`), GitHub hosts (Addresses)
@@ -96,22 +96,22 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 **Subtasks:**
 
-- [ ] Replace `GitHubClient`'s `api_url` with `host: GitHubHost = GITHUB_COM`; `graphql` posts to `host.graphql_url` and `rest_get` gets `{host.rest_url}{path}`
-- [ ] `Fetcher` builds its client with `parse_host(settings.github_host)` when it is given none
-- [ ] Change every test and fixture that passed `api_url` (`src/tests/conftest.py`, `src/tests/test_cli.py`, the fetch tests) to build a `GitHubHost` directly with the replay server's URLs
-- [ ] Teach the replay server (`src/tests/fixtures/fetch/server.py`) an Enterprise layout that serves REST under `/api/v3` and GraphQL at `/api/graphql`, and records each request's path
-- [ ] Tests in `src/tests/fetch/test_client.py`: a github.com host and an Enterprise host each send GraphQL and REST to their own paths
+- [x] Replace `GitHubClient`'s `api_url` with `host: GitHubHost = GITHUB_COM`; `graphql` posts to `host.graphql_url` and `rest_get` gets `{host.rest_url}{path}`
+- [x] `Fetcher` builds its client with `parse_host(settings.github_host)` when it is given none
+- [x] Change every test and fixture that passed `api_url` (`src/tests/conftest.py`, `src/tests/test_cli.py`, the fetch tests) to build a `GitHubHost` directly with the replay server's URLs
+- [x] Teach the replay server (`src/tests/fixtures/fetch/server.py`) an Enterprise layout that serves REST under `/api/v3` and GraphQL at `/api/graphql`, and records each request's path
+- [x] Tests in `src/tests/fetch/test_client.py`: a github.com host and an Enterprise host each send GraphQL and REST to their own paths
 
 **Acceptance Criteria:**
 
-- [ ] Against the Enterprise layout, a GraphQL query reaches `/api/graphql` and a REST request `/api/v3/...`; no request reaches `/api/v3/graphql`
-- [ ] No source or test file mentions `api_url` (`grep -rn api_url src` prints nothing)
+- [x] Against the Enterprise layout, a GraphQL query reaches `/api/graphql` and a REST request `/api/v3/...`; no request reaches `/api/v3/graphql`
+- [x] No source or test file mentions `api_url` (`grep -rn api_url src` prints nothing)
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/fetch/test_client.py src/tests/fetch/test_server.py src/tests/fetch/test_base.py src/tests/fetch/test_fetcher.py src/tests/test_cli.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/fetch/test_client.py src/tests/fetch/test_server.py src/tests/fetch/test_base.py src/tests/fetch/test_fetcher.py src/tests/test_cli.py` passes
 
 **Notes:**
 
@@ -122,7 +122,7 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 ## Task 4: Accept rate limits that are switched off
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** small
 **Spec Reference:** fetch spec 1.16, Implementation (Requests, retries and rate limits, step 6, and the `rateLimit` paragraph), GitHub hosts (Rate limits)
@@ -131,21 +131,21 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 **Subtasks:**
 
-- [ ] A response with no `x-ratelimit-*` headers leaves its `RateLimitState` unchanged, on any host (check the current behaviour first and change it only if it does not)
-- [ ] In `graphql_dated`, a `rateLimit` that is absent or `null` is accepted when `host.is_dotcom` is false and leaves the GraphQL state unchanged; on github.com it still raises `GraphQLError` (`MALFORMED`)
-- [ ] Add Enterprise fixtures to `src/tests/fixtures/fetch/responses.py`, written from GitHub's Enterprise Server documentation and naming the page each comes from: a GraphQL response with `rateLimit: null`, one without `rateLimit`, and REST responses without `x-ratelimit-*` headers
-- [ ] Tests in `src/tests/fetch/test_client.py` and `src/tests/fetch/test_ratelimit.py`: both Enterprise shapes are accepted and never wait; the same responses from a github.com host raise; a header-less run of many requests never becomes exhausted
+- [x] A response with no `x-ratelimit-*` headers leaves its `RateLimitState` unchanged, on any host (check the current behaviour first and change it only if it does not)
+- [x] In `graphql_dated`, a `rateLimit` that is absent or `null` is accepted when `host.is_dotcom` is false and leaves the GraphQL state unchanged; on github.com it still raises `GraphQLError` (`MALFORMED`)
+- [x] Add Enterprise fixtures to `src/tests/fixtures/fetch/responses.py`, written from GitHub's Enterprise Server documentation and naming the page each comes from: a GraphQL response with `rateLimit: null`, one without `rateLimit`, and REST responses without `x-ratelimit-*` headers
+- [x] Tests in `src/tests/fetch/test_client.py` and `src/tests/fetch/test_ratelimit.py`: both Enterprise shapes are accepted and never wait; the same responses from a github.com host raise; a header-less run of many requests never becomes exhausted
 
 **Acceptance Criteria:**
 
-- [ ] A sync of a fixture repository against the Enterprise layout with no rate-limit data completes and never sleeps
-- [ ] The github.com test that a query lacking `rateLimit` fails still passes
+- [x] A sync of a fixture repository against the Enterprise layout with no rate-limit data completes and never sleeps
+- [x] The github.com test that a query lacking `rateLimit` fails still passes
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/fetch/test_client.py src/tests/fetch/test_ratelimit.py src/tests/fetch/test_fetcher.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/fetch/test_client.py src/tests/fetch/test_ratelimit.py src/tests/fetch/test_fetcher.py` passes
 
 **Notes:**
 
@@ -156,7 +156,7 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 ## Task 5: Read an Enterprise host's token as `gh` does
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** small
 **Spec Reference:** fetch spec 1.16, API (`fetch_token`), Error handling (`AuthError`), GitHub hosts (Token); system spec 1.10, Settings (variables); reports spec 1.14, Error handling
@@ -165,23 +165,23 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 **Subtasks:**
 
-- [ ] `fetch_token(host: GitHubHost = GITHUB_COM)` in `src/wambatic/fetch/auth.py`: github.com unchanged; an Enterprise host reads `GH_ENTERPRISE_TOKEN`, else `GITHUB_ENTERPRISE_TOKEN`, else `gh auth token --hostname <host.name>`, and never `GITHUB_TOKEN`
-- [ ] The no-token `AuthError` message for an Enterprise host says to set `GH_ENTERPRISE_TOKEN` or run `gh auth login --hostname <host>`; the github.com message is unchanged
-- [ ] `src/wambatic/reports/service.py` and `src/wambatic/reports/web.py` pass `parse_host(settings.fetch.github_host)` to `fetch_token`
-- [ ] Remove the `# auditme: accept[spec-api-signature-drift]` line above `fetch_token` in the fetch spec's API block: with the host argument built, spec and code agree and `bin/audit-check.sh` must pass without it
-- [ ] Tests in `src/tests/fetch/test_auth.py` (the order of the variables, `gh` called with `--hostname`, `GITHUB_TOKEN` ignored for an Enterprise host, both messages) and `src/tests/reports/test_service.py`; the tests set variables with `monkeypatch` and never print a token
+- [x] `fetch_token(host: GitHubHost = GITHUB_COM)` in `src/wambatic/fetch/auth.py`: github.com unchanged; an Enterprise host reads `GH_ENTERPRISE_TOKEN`, else `GITHUB_ENTERPRISE_TOKEN`, else `gh auth token --hostname <host.name>`, and never `GITHUB_TOKEN`
+- [x] The no-token `AuthError` message for an Enterprise host says to set `GH_ENTERPRISE_TOKEN` or run `gh auth login --hostname <host>`; the github.com message is unchanged
+- [x] `src/wambatic/reports/service.py` and `src/wambatic/reports/web.py` pass `parse_host(settings.fetch.github_host)` to `fetch_token`
+- [x] Remove the `# auditme: accept[spec-api-signature-drift]` line above `fetch_token` in the fetch spec's API block: with the host argument built, spec and code agree and `bin/audit-check.sh` must pass without it
+- [x] Tests in `src/tests/fetch/test_auth.py` (the order of the variables, `gh` called with `--hostname`, `GITHUB_TOKEN` ignored for an Enterprise host, both messages) and `src/tests/reports/test_service.py`; the tests set variables with `monkeypatch` and never print a token
 
 **Acceptance Criteria:**
 
-- [ ] With `GITHUB_TOKEN` set and no Enterprise variable, an Enterprise host's `fetch_token` runs `gh auth token --hostname <host>` and, when that fails, raises `AuthError`
-- [ ] A replayed Enterprise sync sends the Enterprise token in `Authorization`
+- [x] With `GITHUB_TOKEN` set and no Enterprise variable, an Enterprise host's `fetch_token` runs `gh auth token --hostname <host>` and, when that fails, raises `AuthError`
+- [x] A replayed Enterprise sync sends the Enterprise token in `Authorization`
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/fetch/test_auth.py src/tests/reports/test_service.py src/tests/reports/test_web.py src/tests/test_cli.py` passes
-- [ ] `bin/audit-check.sh` exits 0 (the spec's accept line is gone)
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/fetch/test_auth.py src/tests/reports/test_service.py src/tests/reports/test_web.py src/tests/test_cli.py` passes
+- [x] `bin/audit-check.sh` exits 0 (the spec's accept line is gone)
 
 **Notes:**
 
@@ -192,7 +192,7 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 ## Task 6: Record the host and the server version in the cache
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** medium
 **Spec Reference:** cache spec 1.1, API (`Cache.open`, `server_version`, `write_server_version`), Error handling (`CacheHostError`), Implementation (The host); fetch spec 1.16, GitHub hosts (Provenance)
@@ -201,23 +201,23 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 **Subtasks:**
 
-- [ ] `Cache.open(path, *, host='github.com', ignore_version=False)`: a file without a `github_host` row gets `github.com` written; a recorded host other than `host` raises `CacheHostError` before the other identity keys are compared, whatever `ignore_version` says; a new file records `host`
-- [ ] Add `CacheHostError(CacheError)` naming the cache path and both hosts and saying to set `fetch.cache_path` or run `wambatic cache clear` with that host
-- [ ] `github_host` is part of `Cache.identity()`; `server_version` is a `meta` row outside it, with `Cache.server_version()` and `Cache.write_server_version(version)`
-- [ ] `inspect_cache` and `CacheInfo` report both rows
-- [ ] Every `Cache.open` caller passes `settings.fetch.github_host` (`src/wambatic/cli.py`, `src/wambatic/reports/web.py`)
-- [ ] Tests in `src/tests/fetch/test_cache.py`: a cache without the row (made by the current code before the change, built in the test) opens as github.com and gains the row; a github.com cache opened for an Enterprise host raises `CacheHostError` with and without `ignore_version`; `server_version` survives a reopen and does not change the identity
+- [x] `Cache.open(path, *, host='github.com', ignore_version=False)`: a file without a `github_host` row gets `github.com` written; a recorded host other than `host` raises `CacheHostError` before the other identity keys are compared, whatever `ignore_version` says; a new file records `host`
+- [x] Add `CacheHostError(CacheError)` naming the cache path and both hosts and saying to set `fetch.cache_path` or run `wambatic cache clear` with that host
+- [x] `github_host` is part of `Cache.identity()`; `server_version` is a `meta` row outside it, with `Cache.server_version()` and `Cache.write_server_version(version)`
+- [x] `inspect_cache` and `CacheInfo` report both rows
+- [x] Every `Cache.open` caller passes `settings.fetch.github_host` (`src/wambatic/cli.py`, `src/wambatic/reports/web.py`)
+- [x] Tests in `src/tests/fetch/test_cache.py`: a cache without the row (made by the current code before the change, built in the test) opens as github.com and gains the row; a github.com cache opened for an Enterprise host raises `CacheHostError` with and without `ignore_version`; `server_version` survives a reopen and does not change the identity
 
 **Acceptance Criteria:**
 
-- [ ] A github.com cache written before this task opens unchanged, with no `CacheVersionError`
-- [ ] `--ignore-cache-version` never lets a cache made for one host be read for another
+- [x] A github.com cache written before this task opens unchanged, with no `CacheVersionError`
+- [x] `--ignore-cache-version` never lets a cache made for one host be read for another
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/fetch/test_cache.py src/tests/fetch/test_errors.py src/tests/test_cli.py src/tests/reports/test_web.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/fetch/test_cache.py src/tests/fetch/test_errors.py src/tests/test_cli.py src/tests/reports/test_web.py` passes
 
 **Notes:**
 
@@ -228,7 +228,7 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 ## Task 7: Check the Enterprise server's version before syncing
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** medium
 **Spec Reference:** fetch spec 1.16, API (`GitHubClient.server_version`), Error handling (`ServerVersionError`, `GraphQLError`), GitHub hosts (Server version, Provenance, Testing)
@@ -237,23 +237,23 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 **Subtasks:**
 
-- [ ] `GitHubClient.server_version()`: `None` on github.com with no request; on an Enterprise host one REST `GET /meta`, its `installed_version` parsed with `parse_server_version` and refused below `MIN_SERVER_VERSION`, missing or unparseable with `ServerVersionError`; the result is kept for the client's life and the error is never retried
-- [ ] `Fetcher.sync` and `Fetcher.owner_kind` call it before any other request; `sync` writes the version with `Cache.write_server_version`
-- [ ] `Fetcher.provenance` adds `server_version` when the cache records one (`github_host` already comes with the identity from Task 6)
-- [ ] On an Enterprise host, `GraphQLError`'s message also names the host and the server version
-- [ ] Add `GET /meta` fixtures written from GitHub's Enterprise Server documentation (3.19.0 accepted, 3.18.4 refused, and none) and serve them in the replay server's Enterprise layout
-- [ ] Tests in `src/tests/fetch/test_client.py`, `src/tests/fetch/test_fetcher.py` and `src/tests/fetch/test_base.py`: `GET /meta` is requested once per client and never on github.com; a refused server makes no other request; provenance carries both keys
+- [x] `GitHubClient.server_version()`: `None` on github.com with no request; on an Enterprise host one REST `GET /meta`, its `installed_version` parsed with `parse_server_version` and refused below `MIN_SERVER_VERSION`, missing or unparseable with `ServerVersionError`; the result is kept for the client's life and the error is never retried
+- [x] `Fetcher.sync` and `Fetcher.owner_kind` call it before any other request; `sync` writes the version with `Cache.write_server_version`
+- [x] `Fetcher.provenance` adds `server_version` when the cache records one (`github_host` already comes with the identity from Task 6)
+- [x] On an Enterprise host, `GraphQLError`'s message also names the host and the server version
+- [x] Add `GET /meta` fixtures written from GitHub's Enterprise Server documentation (3.19.0 accepted, 3.18.4 refused, and none) and serve them in the replay server's Enterprise layout
+- [x] Tests in `src/tests/fetch/test_client.py`, `src/tests/fetch/test_fetcher.py` and `src/tests/fetch/test_base.py`: `GET /meta` is requested once per client and never on github.com; a refused server makes no other request; provenance carries both keys
 
 **Acceptance Criteria:**
 
-- [ ] Syncing against a server reporting 3.18.4 raises `ServerVersionError` naming 3.18.4 and 3.19, and the replay server saw only `GET /api/v3/meta`
-- [ ] A github.com sync makes exactly the requests it made before this task
+- [x] Syncing against a server reporting 3.18.4 raises `ServerVersionError` naming 3.18.4 and 3.19, and the replay server saw only `GET /api/v3/meta`
+- [x] A github.com sync makes exactly the requests it made before this task
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/fetch/test_client.py src/tests/fetch/test_fetcher.py src/tests/fetch/test_base.py src/tests/fetch/test_server.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/fetch/test_client.py src/tests/fetch/test_fetcher.py src/tests/fetch/test_base.py src/tests/fetch/test_server.py` passes
 
 **Notes:**
 
@@ -264,7 +264,7 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 ## Task 8: Add `--github-host` to `report`, `serve` and `cache`
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** small
 **Spec Reference:** CLI spec 1.1, Command line and Flags
@@ -273,21 +273,21 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 **Subtasks:**
 
-- [ ] Add `--github-host HOST` to the `report`, `serve` and `cache` commands in `src/wambatic/cli.py`, passed to settings as an override of `fetch.github_host`, so the settings' checks apply and a bad host exits 2 with `SettingsError`
-- [ ] `cache clear` and `cache info` act on that host's file (`cache_path_for`), and `cache info` shows `github_host` and `server_version`
-- [ ] Add the flag to `docs/reference/cli.md` for each command
-- [ ] Tests in `src/tests/test_cli.py`: each command with the flag reaches the right cache file and host; a bad host exits 2; `serve --host` still means the bind address
+- [x] Add `--github-host HOST` to the `report`, `serve` and `cache` commands in `src/wambatic/cli.py`, passed to settings as an override of `fetch.github_host`, so the settings' checks apply and a bad host exits 2 with `SettingsError`
+- [x] `cache clear` and `cache info` act on that host's file (`cache_path_for`), and `cache info` shows `github_host` and `server_version`
+- [x] Add the flag to `docs/reference/cli.md` for each command
+- [x] Tests in `src/tests/test_cli.py`: each command with the flag reaches the right cache file and host; a bad host exits 2; `serve --host` still means the bind address
 
 **Acceptance Criteria:**
 
-- [ ] `wambatic cache info --github-host ghe.example.com` reports `~/.cache/wambatic/cache-ghe.example.com.sqlite3` (or that there is no cache there)
-- [ ] `pytest src/tests/test_docs.py` passes with the new flag
+- [x] `wambatic cache info --github-host ghe.example.com` reports `~/.cache/wambatic/cache-ghe.example.com.sqlite3` (or that there is no cache there)
+- [x] `pytest src/tests/test_docs.py` passes with the new flag
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/test_cli.py src/tests/test_docs.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/test_cli.py src/tests/test_docs.py` passes
 
 **Notes:**
 
@@ -297,7 +297,7 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 ## Task 9: Name an Enterprise host in the reports
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** small
 **Spec Reference:** terminal-report spec 1.1, Implementation (item 14); HTML-report spec 1.1, Implementation (Layout, item 8)
@@ -306,19 +306,19 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 **Subtasks:**
 
-- [ ] The terminal provenance footer starts with `GitHub host: <host> (Enterprise Server <server_version>)` when `provenance['github_host']` is not `github.com`, in `src/wambatic/reports/terminal.py`
-- [ ] The HTML footer shows the same line, in `src/wambatic/reports/html.py` and its template
-- [ ] Tests in `src/tests/reports/test_terminal.py` and `src/tests/reports/test_html.py`: the line appears for an Enterprise host and is absent for github.com, whose output is unchanged byte for byte
+- [x] The terminal provenance footer starts with `GitHub host: <host> (Enterprise Server <server_version>)` when `provenance['github_host']` is not `github.com`, in `src/wambatic/reports/terminal.py`
+- [x] The HTML footer shows the same line, in `src/wambatic/reports/html.py` and its template
+- [x] Tests in `src/tests/reports/test_terminal.py` and `src/tests/reports/test_html.py`: the line appears for an Enterprise host and is absent for github.com, whose output is unchanged byte for byte
 
 **Acceptance Criteria:**
 
-- [ ] The existing terminal, HTML and JSON tests pass unchanged for github.com results
+- [x] The existing terminal, HTML and JSON tests pass unchanged for github.com results
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/reports/test_terminal.py src/tests/reports/test_html.py src/tests/reports/test_base.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/reports/test_terminal.py src/tests/reports/test_html.py src/tests/reports/test_base.py` passes
 
 **Notes:**
 
@@ -329,7 +329,7 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 ## Task 10: Document Enterprise Server and close the list
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** medium
 **Spec Reference:** system spec 1.10 (Limits accepted, Settings); implementation order 1.11, step 13; every spec section above (closing)
@@ -338,27 +338,27 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 **Subtasks:**
 
-- [ ] Add a guide page on GitHub Enterprise Server under `docs/guide/` (the host setting and flag, the token variables, the minimum server version, the cache file per host, rate limits switched off, what is not supported: `*.ghe.com`), and add it to the `nav` in `mkdocs.yml`
-- [ ] Update `docs/token.md` with the Enterprise variables and `gh auth login --hostname`, `docs/limits.md` (Enterprise Server is supported from 3.19; Enterprise Cloud with data residency is not), `docs/guide/cache.md` (one file per host, `CacheHostError`) and `docs/reference/exit-statuses.md` (`ServerVersionError` and `CacheHostError`, both exit 1)
-- [ ] Mark step 13 `done` in `agents/specs/implementation-order.md`, linking this list, and set its `**Status:**` to `implemented`
-- [ ] Set the `**Status:**` of each amended spec to `implemented`: fetch, cache, system, CLI, reports, terminal report and HTML report
-- [ ] Move the `TODO.md` item "GitHub Enterprise Server is not supported" to the end of `DONE.md`: append its heading and body unchanged, then `Done: <date> - built by agents/tasks/fetch/tasks-1.md against fetch spec 1.16.`, and remove it from `TODO.md`
-- [ ] Add the list to `agents/tasks/index.md` if it is not there
+- [x] Add a guide page on GitHub Enterprise Server under `docs/guide/` (the host setting and flag, the token variables, the minimum server version, the cache file per host, rate limits switched off, what is not supported: `*.ghe.com`), and add it to the `nav` in `mkdocs.yml`
+- [x] Update `docs/token.md` with the Enterprise variables and `gh auth login --hostname`, `docs/limits.md` (Enterprise Server is supported from 3.19; Enterprise Cloud with data residency is not), `docs/guide/cache.md` (one file per host, `CacheHostError`) and `docs/reference/exit-statuses.md` (`ServerVersionError` and `CacheHostError`, both exit 1)
+- [x] Mark step 13 `done` in `agents/specs/implementation-order.md`, linking this list, and set its `**Status:**` to `implemented`
+- [x] Set the `**Status:**` of each amended spec to `implemented`: fetch, cache, system, CLI, reports, terminal report and HTML report
+- [x] Move the `TODO.md` item "GitHub Enterprise Server is not supported" to the end of `DONE.md`: append its heading and body unchanged, then `Done: <date> - built by agents/tasks/fetch/tasks-1.md against fetch spec 1.16.`, and remove it from `TODO.md`
+- [x] Add the list to `agents/tasks/index.md` if it is not there
 
 **Acceptance Criteria:**
 
-- [ ] The guide explains how to use an Enterprise server, from setting the host to the first report
-- [ ] `TODO.md` no longer holds the Enterprise item, and `DONE.md` ends with it and its `Done:` line
+- [x] The guide explains how to use an Enterprise server, from setting the host to the first report
+- [x] `TODO.md` no longer holds the Enterprise item, and `DONE.md` ends with it and its `Done:` line
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] `uv sync --group docs` succeeds
-- [ ] `mkdocs build --strict` exits 0
-- [ ] `pre-commit run --all-files` exits 0
-- [ ] `bin/audit-check.sh` exits 0
-- [ ] `python3 ~/.claude/skills/todo-review/verify_bodies.py <before> TODO.md DONE.md` exits 0, where `<before>` is `TODO.md` as of the commit that added this list (`git show "$(git log --diff-filter=A --format=%H -- agents/tasks/fetch/tasks-1.md)":TODO.md`)
-- [ ] `pytest src/tests/fetch src/tests/reports src/tests/stats src/tests/test_cli.py src/tests/test_settings.py src/tests/test_docs.py src/tests/test_layering.py src/tests/test_package.py src/tests/test_screenshots.py` passes: every test that reaches `settings`, `fetch` or `reports`, the modules this list changes
+- [x] `source bin/activate.sh` succeeds
+- [x] `uv sync --group docs` succeeds
+- [x] `mkdocs build --strict` exits 0
+- [x] `pre-commit run --all-files` exits 0
+- [x] `bin/audit-check.sh` exits 0
+- [x] `python3 ~/.claude/skills/todo-review/verify_bodies.py <before> TODO.md DONE.md` exits 0, where `<before>` is `TODO.md` as of the commit that added this list (`git show "$(git log --diff-filter=A --format=%H -- agents/tasks/fetch/tasks-1.md)":TODO.md`)
+- [x] `pytest src/tests/fetch src/tests/reports src/tests/stats src/tests/test_cli.py src/tests/test_settings.py src/tests/test_docs.py src/tests/test_layering.py src/tests/test_package.py src/tests/test_screenshots.py` passes: every test that reaches `settings`, `fetch` or `reports`, the modules this list changes
 
 **Notes:**
 

@@ -67,6 +67,7 @@ nav:
       - Delivery and DORA: guide/delivery.md
       - Popularity: guide/popularity.md
       - The cache: guide/cache.md
+      - GitHub Enterprise Server: guide/enterprise.md
       - Configuration: guide/config.md
       - Recipes: guide/recipes.md
       - Troubleshooting: guide/troubleshooting.md

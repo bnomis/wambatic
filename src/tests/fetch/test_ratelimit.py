@@ -25,6 +25,15 @@ def test_missing_headers_give_empty_state() -> None:
     ) == wambatic.fetch.ratelimit.RateLimitState(None, None)
 
 
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(requests=hypothesis.strategies.integers(min_value=1, max_value=200))
+def test_a_run_of_headerless_responses_never_becomes_exhausted(requests: int) -> None:
+    state = wambatic.fetch.ratelimit.RateLimitState()
+    for _ in range(requests):
+        state = wambatic.fetch.ratelimit.RateLimitState.from_headers({})
+    assert not state.exhausted(NOW)
+
+
 def test_from_graphql() -> None:
     state = wambatic.fetch.ratelimit.RateLimitState.from_graphql(
         {'cost': 1, 'remaining': 4998, 'resetAt': '2026-10-29T13:00:00Z'}

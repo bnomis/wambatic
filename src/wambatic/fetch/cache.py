@@ -136,11 +136,15 @@ REPO_ID = ('repo', 'id')
 # auditme: accept[non-alphabetical-literal] repo first, as the key columns are declared
 REPO_NUMBER = ('repo', 'number')
 OVERRIDE_KEY = 'version_override_at'
+SERVER_VERSION_KEY = 'server_version'
+HOST_KEY = 'github_host'
+OUTSIDE_IDENTITY = (OVERRIDE_KEY, SERVER_VERSION_KEY)
 
 
-def expected_identity() -> dict[str, str]:
-    """What a cache written by the running code records in `meta`."""
+def expected_identity(host: str = 'github.com') -> dict[str, str]:
+    """What a cache written by the running code for `host` records in `meta`."""
     identity = {
+        HOST_KEY: host,
         'schema_version': str(SCHEMA_VERSION),
         'wambatic_version': wambatic.version.VERSION,
     }
@@ -401,11 +405,15 @@ class Cache:
         self.lock = threading.Lock()
 
     @classmethod
-    def open(cls, path: pathlib.Path, *, ignore_version: bool = False) -> Cache:
+    def open(
+        cls, path: pathlib.Path, *, host: str = 'github.com', ignore_version: bool = False
+    ) -> Cache:
         """Create the parent directory and file if absent, set WAL mode, create the schema,
         then check or write the identity; raises CacheVersionError on a mismatch unless
         `ignore_version`, which is recorded in `meta` as `version_override_at`. Raises
-        CacheError when the file cannot be created, opened or written."""
+        CacheHostError when the recorded `github_host` is not `host`, whatever `ignore_version`
+        says; a file without the row was made for github.com. Raises CacheError when the file
+        cannot be created, opened or written."""
         with translate_errors(path):
             # auditme: accept[filesystem-op-without-envelope] translate_errors is its envelope
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -415,7 +423,7 @@ class Cache:
                 connection.execute('PRAGMA foreign_keys=ON')
                 connection.executescript(SCHEMA)
                 cache = cls(connection, path)
-                cache.record_identity(ignore_version)
+                cache.record_identity(host, ignore_version)
             except BaseException:
                 # Cleans up the half-opened connection, then re-raises the original error.
                 connection.close()
@@ -436,8 +444,8 @@ class Cache:
         with self.locked():
             self.connection.close()
 
-    def record_identity(self, ignore_version: bool) -> None:
-        expected = expected_identity()
+    def record_identity(self, host: str, ignore_version: bool) -> None:
+        expected = expected_identity(host)
         with self.locked(), self.connection:
             recorded = self.recorded_identity()
             if not recorded:
@@ -445,6 +453,13 @@ class Cache:
                     'INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)', expected.items()
                 )
                 return
+            if HOST_KEY not in recorded:
+                self.connection.execute(
+                    'INSERT INTO meta (key, value) VALUES (?, ?)', (HOST_KEY, 'github.com')
+                )
+                recorded[HOST_KEY] = 'github.com'
+            if recorded[HOST_KEY] != host:
+                raise wambatic.fetch.errors.CacheHostError(self.path, recorded[HOST_KEY], host)
             differences = identity_differences(recorded, expected)
             if not differences:
                 return
@@ -457,7 +472,7 @@ class Cache:
 
     def recorded_identity(self) -> dict[str, str]:
         rows = self.connection.execute('SELECT key, value FROM meta').fetchall()
-        return {key: value for key, value in rows if key != OVERRIDE_KEY}
+        return {key: value for key, value in rows if key not in OUTSIDE_IDENTITY}
 
     def identity(self) -> dict[str, str]:
         with self.locked():
@@ -470,6 +485,21 @@ class Cache:
                 'SELECT value FROM meta WHERE key = ?', (OVERRIDE_KEY,)
             ).fetchone()
         return None if row is None else str(row[0])
+
+    def server_version(self) -> str | None:
+        """The Enterprise server's `installed_version` at the last sync, if one was recorded."""
+        with self.locked():
+            row = self.connection.execute(
+                'SELECT value FROM meta WHERE key = ?', (SERVER_VERSION_KEY,)
+            ).fetchone()
+        return None if row is None else str(row[0])
+
+    def write_server_version(self, version: str) -> None:
+        with self.locked(), self.connection:
+            self.connection.execute(
+                'INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)',
+                (SERVER_VERSION_KEY, version),
+            )
 
     def upsert_repos(
         self, owner: str, repos: list[wambatic.fetch.base.Repo], *, complete: bool
@@ -768,6 +798,8 @@ class CacheInfo:
     identity: dict[str, str]
     differences: dict[str, tuple[str | None, str | None]]
     version_override_at: str | None
+    github_host: str
+    server_version: str | None
     repos: int
     commits: int
     pull_requests: int
@@ -816,14 +848,19 @@ def read_cache_info(path: pathlib.Path) -> CacheInfo | None:
         forks = scalar('forks', 'SELECT COUNT(*) FROM forks')
     finally:
         connection.close()
-    identity = {key: value for key, value in meta.items() if key != OVERRIDE_KEY}
+    host = meta.get(HOST_KEY, 'github.com')
+    identity = {key: value for key, value in meta.items() if key not in OUTSIDE_IDENTITY}
+    if identity:
+        identity[HOST_KEY] = host
     wal = path.with_name(path.name + '-wal')
     return CacheInfo(
         path=path,
         size_bytes=path.stat().st_size + (wal.stat().st_size if wal.exists() else 0),
         identity=identity,
-        differences=identity_differences(identity, expected_identity()),
+        differences=identity_differences(identity, expected_identity(host)),
         version_override_at=meta.get(OVERRIDE_KEY),
+        github_host=host,
+        server_version=meta.get(SERVER_VERSION_KEY),
         repos=int(str(repos or 0)),
         commits=int(str(commits or 0)),
         pull_requests=int(str(pull_requests or 0)),

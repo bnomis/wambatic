@@ -4,24 +4,6 @@ Open work only, in implementation order, nearest first. Finished items move to
 `DONE.md` unchanged. See the shared `todo-add` and `todo-review` skills for
 the shape of an item.
 
-## GitHub Enterprise Server is not supported
-
-Found on 2026-11-02 by `/todo-review`, from the limits the system spec
-(`agents/specs/system/spec.md`, "Limits accepted for the first release")
-accepted for the first release: "GitHub Enterprise Server is out of scope".
-The user chose on 2026-11-02 to lift it.
-
-Cause: `GitHubClient` in `src/wambatic/fetch/client.py` takes an `api_url`
-but defaults it to `https://api.github.com`, and no setting passes another;
-the fetch spec assumes GitHub.com's API features and rate limits.
-
-Fix direction: a spec change to `fetch` and `system` for a configurable API
-address, a check of what the server supports (GraphQL fields the listing
-selects, rate-limit reporting) that fails with a typed error, and the cache
-identity recording the host so two hosts never share a cache.
-
-Spec: agents/specs/fetch/spec.md (1.16, with the cache, system, CLI, reports, terminal-report and HTML-report amendments; review agents/specs/fetch/review-1.md); tasks: agents/tasks/fetch/tasks-1.md.
-
 ## The commit sync reads only default-branch totals
 
 Consolidated on 2026-11-02 by `/todo-review` from the two findings below.

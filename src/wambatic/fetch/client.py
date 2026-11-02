@@ -187,7 +187,10 @@ class GitHubClient:
         if pairs:
             raise wambatic.fetch.errors.GraphQLError(pairs)
         data = response.data.get('data') if isinstance(response.data, dict) else None
-        if not isinstance(data, dict) or not isinstance(data.get('rateLimit'), dict):
+        if not isinstance(data, dict) or (
+            self.host.is_dotcom and not isinstance(data.get('rateLimit'), dict)
+        ):
+            # An Enterprise server with rate limits switched off may omit rateLimit or send null.
             raise wambatic.fetch.errors.GraphQLError(
                 [('MALFORMED', 'response has no data or lacks rateLimit')]
             )

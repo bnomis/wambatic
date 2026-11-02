@@ -112,6 +112,44 @@ def sync_once(
     return asyncio.run(scenario())
 
 
+def test_a_sync_against_an_enterprise_server_without_rate_limits_never_sleeps(
+    tmp_path: pathlib.Path,
+    fetch_settings: wambatic.settings.FetchSettings,
+    sleeps: tests.conftest.Sleeps,
+) -> None:
+    upstream = tests.fixtures.fetch.upstream.Upstream([hello()])
+
+    async def scenario() -> tuple[wambatic.fetch.base.SyncReport, list[str]]:
+        async with tests.fixtures.fetch.server.ReplayServer(
+            {}, default=upstream.respond_without_limits
+        ) as server:
+            client = wambatic.fetch.client.GitHubClient(
+                'test-token',
+                fetch_settings,
+                host=server.enterprise_host,
+                sleep=sleeps,
+                clock=lambda: tests.fixtures.fetch.responses.NOW,
+            )
+            cache = wambatic.fetch.cache.Cache.open(tmp_path / 'cache.sqlite3')
+            try:
+                async with wambatic.fetch.base.Fetcher(
+                    'test-token', cache, fetch_settings, client=client
+                ) as fetcher:
+                    report = await fetcher.sync(
+                        OWNER, tests.fixtures.stats.RESOURCES_ACTIVITY, False
+                    )
+            finally:
+                cache.close()
+            return report, [received.path for received in server.received]
+
+    report, paths = asyncio.run(scenario())
+    assert report.repos_listed == 1
+    assert report.rows_written['commits'] == 3
+    assert paths
+    assert not [path for path in paths if path.startswith('/graphql')]
+    assert list(sleeps) == []
+
+
 def stored(cache: wambatic.fetch.cache.Cache, name: str = HELLO) -> tuple[str, ...]:
     return tuple(commit.oid for commit in cache.read_commits(name, None, None))
 

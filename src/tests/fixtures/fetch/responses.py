@@ -440,6 +440,17 @@ GRAPHQL_NO_RATE_LIMIT = types.MappingProxyType(
         )
     }
 )
+# An Enterprise Server with rate limits switched off, the default. GitHub's Enterprise Server
+# documentation ("Rate limits for the GraphQL API" and "Rate limits for the REST API", under
+# docs.github.com/en/enterprise-server@latest) does not say what `rateLimit` returns then, so
+# both a null value and a missing field are written.
+GRAPHQL_NULL_RATE_LIMIT = types.MappingProxyType(
+    {
+        'data': types.MappingProxyType(
+            {'rateLimit': None, 'repositoryOwner': types.MappingProxyType({'login': 'octocat'})}
+        )
+    }
+)
 GRAPHQL_RATE_LIMITED = types.MappingProxyType(
     {
         'errors': (

@@ -122,7 +122,7 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 ## Task 4: Accept rate limits that are switched off
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** small
 **Spec Reference:** fetch spec 1.16, Implementation (Requests, retries and rate limits, step 6, and the `rateLimit` paragraph), GitHub hosts (Rate limits)
@@ -131,21 +131,21 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 **Subtasks:**
 
-- [ ] A response with no `x-ratelimit-*` headers leaves its `RateLimitState` unchanged, on any host (check the current behaviour first and change it only if it does not)
-- [ ] In `graphql_dated`, a `rateLimit` that is absent or `null` is accepted when `host.is_dotcom` is false and leaves the GraphQL state unchanged; on github.com it still raises `GraphQLError` (`MALFORMED`)
-- [ ] Add Enterprise fixtures to `src/tests/fixtures/fetch/responses.py`, written from GitHub's Enterprise Server documentation and naming the page each comes from: a GraphQL response with `rateLimit: null`, one without `rateLimit`, and REST responses without `x-ratelimit-*` headers
-- [ ] Tests in `src/tests/fetch/test_client.py` and `src/tests/fetch/test_ratelimit.py`: both Enterprise shapes are accepted and never wait; the same responses from a github.com host raise; a header-less run of many requests never becomes exhausted
+- [x] A response with no `x-ratelimit-*` headers leaves its `RateLimitState` unchanged, on any host (check the current behaviour first and change it only if it does not)
+- [x] In `graphql_dated`, a `rateLimit` that is absent or `null` is accepted when `host.is_dotcom` is false and leaves the GraphQL state unchanged; on github.com it still raises `GraphQLError` (`MALFORMED`)
+- [x] Add Enterprise fixtures to `src/tests/fixtures/fetch/responses.py`, written from GitHub's Enterprise Server documentation and naming the page each comes from: a GraphQL response with `rateLimit: null`, one without `rateLimit`, and REST responses without `x-ratelimit-*` headers
+- [x] Tests in `src/tests/fetch/test_client.py` and `src/tests/fetch/test_ratelimit.py`: both Enterprise shapes are accepted and never wait; the same responses from a github.com host raise; a header-less run of many requests never becomes exhausted
 
 **Acceptance Criteria:**
 
-- [ ] A sync of a fixture repository against the Enterprise layout with no rate-limit data completes and never sleeps
-- [ ] The github.com test that a query lacking `rateLimit` fails still passes
+- [x] A sync of a fixture repository against the Enterprise layout with no rate-limit data completes and never sleeps
+- [x] The github.com test that a query lacking `rateLimit` fails still passes
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/fetch/test_client.py src/tests/fetch/test_ratelimit.py src/tests/fetch/test_fetcher.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/fetch/test_client.py src/tests/fetch/test_ratelimit.py src/tests/fetch/test_fetcher.py` passes
 
 **Notes:**
 

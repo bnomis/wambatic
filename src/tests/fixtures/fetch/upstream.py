@@ -16,6 +16,7 @@ import typing
 
 import tests.fixtures.fetch.responses
 import tests.fixtures.fetch.server
+import tests.fixtures.thaw
 
 COMPARE_PATH = re.compile(r'/repos/(?P<name>[^/]+/[^/]+)/compare/(?P<base>\w+)\.\.\.(?P<head>\w+)')
 RUNS_PATH = re.compile(r'/repos/(?P<name>[^/]+/[^/]+)/actions/runs(?:/(?P<id>\d+))?')
@@ -184,6 +185,21 @@ class Upstream:
         if match:
             return self.fork_list(match, received)
         return tests.fixtures.fetch.server.Canned(404, tests.fixtures.fetch.responses.NOT_FOUND)
+
+    def respond_without_limits(
+        self, received: tests.fixtures.fetch.server.Received
+    ) -> tests.fixtures.fetch.server.Canned:
+        """`respond` as an Enterprise server with rate limits switched off answers: its paths,
+        no `x-ratelimit-*` headers and a null `rateLimit`."""
+        path = received.path.removeprefix('/api/v3')
+        if path == '/api/graphql':
+            path = '/graphql'
+        canned = self.respond(dataclasses.replace(received, path=path))
+        body = tests.fixtures.thaw.thaw(canned.body)
+        if isinstance(body, dict) and isinstance(body.get('data'), dict):
+            body['data']['rateLimit'] = None
+        headers = {k: v for k, v in canned.headers.items() if not k.startswith('x-ratelimit-')}
+        return dataclasses.replace(canned, body=body, headers=headers)
 
     def graphql(
         self, received: tests.fixtures.fetch.server.Received

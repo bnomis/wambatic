@@ -436,6 +436,93 @@ def test_graphql_requires_rate_limit(make_client: tests.conftest.MakeClient) -> 
         )
 
 
+NO_LIMIT_BODIES = (
+    tests.fixtures.fetch.responses.GRAPHQL_NULL_RATE_LIMIT,
+    tests.fixtures.fetch.responses.GRAPHQL_NO_RATE_LIMIT,
+)
+
+
+def run_unlimited(
+    body: object, *, enterprise: bool, sleeps: tests.conftest.Sleeps
+) -> tuple[
+    dict[str, object], wambatic.fetch.client.RestResponse, wambatic.fetch.client.GitHubClient
+]:
+    """A GraphQL query and a REST request, each answered without rate-limit data."""
+
+    def answer(
+        received: tests.fixtures.fetch.server.Received,
+    ) -> tests.fixtures.fetch.server.Canned:
+        if received.path.endswith('graphql'):
+            return tests.fixtures.fetch.server.Canned(200, body)
+        return tests.fixtures.fetch.server.Canned(200, {})
+
+    async def scenario() -> tuple[
+        dict[str, object], wambatic.fetch.client.RestResponse, wambatic.fetch.client.GitHubClient
+    ]:
+        async with tests.fixtures.fetch.server.ReplayServer({}, default=answer) as server:
+            client = wambatic.fetch.client.GitHubClient(
+                'test-token',
+                wambatic.settings.FetchSettings(),
+                host=server.enterprise_host if enterprise else server.host,
+                sleep=sleeps,
+                clock=lambda: tests.fixtures.fetch.responses.NOW,
+            )
+            async with client:
+                data = await client.graphql(wambatic.fetch.queries.OWNER_REPOSITORIES, VARIABLES)
+                rest = await client.rest_get(REPO[1])
+            return data, rest, client
+
+    return asyncio.run(scenario())
+
+
+@pytest.mark.parametrize('body', NO_LIMIT_BODIES)
+def test_an_enterprise_host_accepts_a_missing_or_null_rate_limit(
+    body: object, sleeps: tests.conftest.Sleeps
+) -> None:
+    data, rest, client = run_unlimited(body, enterprise=True, sleeps=sleeps)
+    assert data['repositoryOwner'] == {'login': 'octocat'}
+    assert rest.status == 200
+    empty = wambatic.fetch.ratelimit.RateLimitState()
+    assert client.graphql_limit == empty
+    assert client.rest_limit == empty
+    assert list(sleeps) == []
+
+
+@pytest.mark.parametrize('body', NO_LIMIT_BODIES)
+def test_github_com_still_requires_a_rate_limit(
+    body: object, sleeps: tests.conftest.Sleeps
+) -> None:
+    with pytest.raises(wambatic.fetch.errors.GraphQLError) as info:
+        run_unlimited(body, enterprise=False, sleeps=sleeps)
+    assert info.value.errors[0][0] == 'MALFORMED'
+
+
+def test_a_headerless_response_leaves_the_stored_limit_unchanged(
+    make_client: tests.conftest.MakeClient,
+) -> None:
+    async def scenario() -> tuple[
+        wambatic.fetch.ratelimit.RateLimitState, wambatic.fetch.ratelimit.RateLimitState
+    ]:
+        routes = {
+            REPO: [
+                tests.fixtures.fetch.server.Canned(
+                    200, {}, tests.fixtures.fetch.responses.RATE_HEADERS
+                ),
+                tests.fixtures.fetch.server.Canned(200, {}),
+            ]
+        }
+        async with tests.fixtures.fetch.server.ReplayServer(routes) as server:
+            async with make_client(server) as client:
+                await client.rest_get(REPO[1])
+                before = client.rest_limit
+                await client.rest_get(REPO[1])
+                return before, client.rest_limit
+
+    before, after = asyncio.run(scenario())
+    assert before.remaining == 4990
+    assert after == before
+
+
 def test_graphql_dated_returns_the_data_and_the_servers_date_in_utc(
     make_client: tests.conftest.MakeClient,
 ) -> None:

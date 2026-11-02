@@ -128,7 +128,7 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 ## Task 4: Look up commit authors by oid
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** small
 **Spec Reference:** commit sync 1.0, The `clone` method step 4, Error handling; fetch 1.17, GraphQL cost control
@@ -137,20 +137,20 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 **Subtasks:**
 
-- [ ] Add `commit_authors(n)` and `COMMIT_AUTHORS = commit_authors(100)` to `src/wambatic/fetch/queries.py`: aliased `object(oid: $oN) { ... on Commit { author { user { login } } } }` fields, variables `$o0` to `$o99` of type `GitObjectID!`, with `rateLimit`, modelled on `commit_counts`
-- [ ] Add a `Fetcher` helper that maps oids to logins (`None` for a commit with no user), 100 per query, raising `GraphQLError` naming the oid when an object or its author field is missing
-- [ ] Re-run `bin/record-fixtures.sh` so `recorded.py` holds a `COMMIT_AUTHORS` response for `octocat/Hello-World` commits, and serve it from the replay server
-- [ ] Tests in `src/tests/fetch/test_queries.py` (variables typed by oid, no node id) and `src/tests/fetch/test_fetcher.py` (logins mapped, a missing object raising, 101 oids making two queries)
+- [x] Add `commit_authors(n)` and `COMMIT_AUTHORS = commit_authors(100)` to `src/wambatic/fetch/queries.py`: aliased `object(oid: $oN) { ... on Commit { author { user { login } } } }` fields, variables `$o0` to `$o99` of type `GitObjectID!`, with `rateLimit`, modelled on `commit_counts`
+- [x] Add a `Fetcher` helper that maps oids to logins (`None` for a commit with no user), 100 per query, raising `GraphQLError` naming the oid when an object or its author field is missing
+- [x] Re-run `bin/record-fixtures.sh` so `recorded.py` holds a `COMMIT_AUTHORS` response for `octocat/Hello-World` commits, and serve it from the replay server
+- [x] Tests in `src/tests/fetch/test_queries.py` (variables typed by oid, no node id) and `src/tests/fetch/test_fetcher.py` (logins mapped, a missing object raising, 101 oids making two queries)
 
 **Acceptance Criteria:**
 
-- [ ] 250 oids cost three queries and give a login or `None` for each
+- [x] 250 oids cost three queries and give a login or `None` for each
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/fetch/test_queries.py src/tests/fetch/test_fetcher.py src/tests/test_record_fixtures.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/fetch/test_queries.py src/tests/fetch/test_fetcher.py src/tests/test_record_fixtures.py` passes
 
 **Notes:**
 

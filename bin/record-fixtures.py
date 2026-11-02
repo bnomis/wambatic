@@ -69,6 +69,7 @@ query PullRequestReviews($owner: String!, $name: String!, $number: Int!) {
 """
 
 RECORDED_QUERIES = (
+    'COMMIT_AUTHORS',
     'COMMIT_COUNTS',
     'COMMIT_HISTORY',
     'ISSUES',
@@ -211,6 +212,9 @@ def record(recorder: Recorder) -> dict[str, object]:
         'REPOSITORY_OK': recorder.graphql(queries.REPOSITORY, **hello),
         'COMMIT_HISTORY_OK': history,
         'COMPARE_AHEAD': compared,
+        'COMMIT_AUTHORS_OK': recorder.graphql(
+            queries.commit_authors(len(oids)), **counts_variables
+        ),
         'COMMIT_COUNTS_OK': recorder.graphql(queries.commit_counts(len(oids)), **counts_variables),
         'REPO': pick(repo, ('id', 'full_name', 'default_branch')),
         'REPO_ETAG': repo_headers['ETag'],

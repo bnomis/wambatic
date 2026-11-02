@@ -13,11 +13,12 @@ are trimmed to the fields the fetcher reads.
 
 import types
 
-RECORDED_AT = '2026-11-02T20:42:13Z'
+RECORDED_AT = '2026-11-02T20:51:38Z'
 WAMBATIC_VERSION = '0.1.0'
 # sha256 of each wambatic.fetch.queries text the recording was made with
 QUERY_SHA256 = types.MappingProxyType(
     {
+        'COMMIT_AUTHORS': 'ebb5226965d85789f6d617ccc557b7965212c66ea4c2440e57b40384b57f699b',
         'COMMIT_COUNTS': 'f0ff534684ce491b40712fe59760a95418a97b5713042ce9cb86317c717c80e2',
         'COMMIT_HISTORY': 'e390724dbc61a80de490efc8274d16854c3abef5819a7986b68d56ab1f120343',
         'ISSUES': '87fb57221f946898f3c0af75d81b9f185cf21bed79b29bb7de6aae89030e3ac6',
@@ -34,7 +35,7 @@ OWNER_REPOSITORIES_OK = types.MappingProxyType(
         'data': types.MappingProxyType(
             {
                 'rateLimit': types.MappingProxyType(
-                    {'cost': 4, 'remaining': 4929, 'resetAt': '2026-11-02T21:03:57Z'}
+                    {'cost': 4, 'remaining': 4911, 'resetAt': '2026-11-02T21:03:57Z'}
                 ),
                 'repositoryOwner': types.MappingProxyType(
                     {
@@ -491,7 +492,7 @@ REPOSITORY_OK = types.MappingProxyType(
         'data': types.MappingProxyType(
             {
                 'rateLimit': types.MappingProxyType(
-                    {'cost': 1, 'remaining': 4928, 'resetAt': '2026-11-02T21:03:57Z'}
+                    {'cost': 1, 'remaining': 4908, 'resetAt': '2026-11-02T21:03:57Z'}
                 ),
                 'repository': types.MappingProxyType(
                     {
@@ -540,7 +541,7 @@ COMMIT_HISTORY_OK = types.MappingProxyType(
         'data': types.MappingProxyType(
             {
                 'rateLimit': types.MappingProxyType(
-                    {'cost': 1, 'remaining': 4933, 'resetAt': '2026-11-02T21:03:57Z'}
+                    {'cost': 1, 'remaining': 4915, 'resetAt': '2026-11-02T21:03:57Z'}
                 ),
                 'repository': types.MappingProxyType(
                     {
@@ -661,12 +662,44 @@ COMPARE_AHEAD = types.MappingProxyType(
     }
 )
 
+COMMIT_AUTHORS_OK = types.MappingProxyType(
+    {
+        'data': types.MappingProxyType(
+            {
+                'rateLimit': types.MappingProxyType(
+                    {'cost': 1, 'remaining': 4907, 'resetAt': '2026-11-02T21:03:57Z'}
+                ),
+                'repository': types.MappingProxyType(
+                    {
+                        'c0': types.MappingProxyType(
+                            {
+                                'author': types.MappingProxyType(
+                                    {'user': types.MappingProxyType({'login': 'Spaceghost'})}
+                                ),
+                                'oid': '762941318ee16e59dabbacb1b4049eec22f0d303',
+                            }
+                        ),
+                        'c1': types.MappingProxyType(
+                            {
+                                'author': types.MappingProxyType(
+                                    {'user': types.MappingProxyType({'login': 'octocat'})}
+                                ),
+                                'oid': '7fd1a60b01f91b314f59955a4e4d4e80d8edf11d',
+                            }
+                        ),
+                    }
+                ),
+            }
+        )
+    }
+)
+
 COMMIT_COUNTS_OK = types.MappingProxyType(
     {
         'data': types.MappingProxyType(
             {
                 'rateLimit': types.MappingProxyType(
-                    {'cost': 1, 'remaining': 4927, 'resetAt': '2026-11-02T21:03:57Z'}
+                    {'cost': 1, 'remaining': 4906, 'resetAt': '2026-11-02T21:03:57Z'}
                 ),
                 'repository': types.MappingProxyType(
                     {
@@ -706,7 +739,7 @@ PULL_REQUESTS_OK = types.MappingProxyType(
         'data': types.MappingProxyType(
             {
                 'rateLimit': types.MappingProxyType(
-                    {'cost': 3, 'remaining': 4924, 'resetAt': '2026-11-02T21:03:57Z'}
+                    {'cost': 3, 'remaining': 4903, 'resetAt': '2026-11-02T21:03:57Z'}
                 ),
                 'repository': types.MappingProxyType(
                     {
@@ -1552,7 +1585,7 @@ ISSUES_OK = types.MappingProxyType(
         'data': types.MappingProxyType(
             {
                 'rateLimit': types.MappingProxyType(
-                    {'cost': 1, 'remaining': 4974, 'resetAt': '2026-11-02T21:11:05Z'}
+                    {'cost': 1, 'remaining': 4902, 'resetAt': '2026-11-02T21:03:57Z'}
                 ),
                 'repository': types.MappingProxyType(
                     {
@@ -2000,7 +2033,7 @@ RELEASES_OK = types.MappingProxyType(
         'data': types.MappingProxyType(
             {
                 'rateLimit': types.MappingProxyType(
-                    {'cost': 1, 'remaining': 4923, 'resetAt': '2026-11-02T21:03:57Z'}
+                    {'cost': 1, 'remaining': 4901, 'resetAt': '2026-11-02T21:03:57Z'}
                 ),
                 'repository': types.MappingProxyType(
                     {
@@ -2226,7 +2259,7 @@ STARGAZERS_OK = types.MappingProxyType(
         'data': types.MappingProxyType(
             {
                 'rateLimit': types.MappingProxyType(
-                    {'cost': 1, 'remaining': 4922, 'resetAt': '2026-11-02T21:03:57Z'}
+                    {'cost': 1, 'remaining': 4900, 'resetAt': '2026-11-02T21:03:57Z'}
                 ),
                 'repository': types.MappingProxyType(
                     {
@@ -2660,7 +2693,7 @@ BOT_REVIEWS_OK = types.MappingProxyType(
         'data': types.MappingProxyType(
             {
                 'rateLimit': types.MappingProxyType(
-                    {'cost': 1, 'remaining': 4921, 'resetAt': '2026-11-02T21:03:57Z'}
+                    {'cost': 1, 'remaining': 4969, 'resetAt': '2026-11-02T21:11:05Z'}
                 ),
                 'repository': types.MappingProxyType(
                     {

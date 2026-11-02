@@ -98,6 +98,24 @@ def commit_counts(count: int) -> str:
 # The full-page form; its hash stands for the builder in the cache identity.
 COMMIT_COUNTS = commit_counts(COMMIT_COUNT_PAGE)
 
+
+def commit_authors(count: int) -> str:
+    """The query for the GitHub logins of the authors of `count` commits, looked up by object id."""
+    variables = ', '.join(f'$o{i}: GitObjectID!' for i in range(count))
+    fields = '\n'.join(
+        f'    c{i}: object(oid: $o{i}) {{ ... on Commit {{ oid author {{ user {{ login }} }} }} }}'
+        for i in range(count)
+    )
+    return (
+        f'\nquery CommitAuthors($owner: String!, $name: String!, {variables}) {{\n'
+        f'  repository(owner: $owner, name: $name) {{\n{fields}\n  }}\n'
+        '  rateLimit { cost remaining resetAt }\n}\n'
+    )
+
+
+# The full-page form; its hash stands for the builder in the cache identity.
+COMMIT_AUTHORS = commit_authors(COMMIT_COUNT_PAGE)
+
 PULL_REQUESTS = """
 query PullRequests($owner: String!, $name: String!, $cursor: String) {
   repository(owner: $owner, name: $name) {

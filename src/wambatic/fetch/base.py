@@ -952,6 +952,44 @@ class Fetcher:
             commits.append(commit_of(repo.name_with_owner, commit, additions, deletions))
         return commits
 
+    async def commit_authors(self, repo: Repo, oids: list[str]) -> dict[str, str | None]:
+        """The GitHub login of each commit's author (None for a commit with no user).
+
+        Commits are looked up by object id, 100 per GraphQL query.
+
+        Raises:
+            GraphQLError: an object or its author field is missing, or a response is malformed.
+            NotFoundError: the repository does not exist.
+            AuthError: GitHub rejects the token.
+            RateLimitError: the rate limit is exhausted.
+            FetchError: another failure, or retries run out.
+        """
+        logins: dict[str, str | None] = {}
+        owner, name = split_name(repo.name_with_owner)
+        for start in range(0, len(oids), PAGE_SIZE):
+            page = oids[start : start + PAGE_SIZE]
+            variables: dict[str, object] = {
+                'owner': owner,
+                'name': name,
+                **{f'o{i}': oid for i, oid in enumerate(page)},
+            }
+            query = wambatic.fetch.queries.commit_authors(len(page))
+            data = await self.client.graphql(query, variables)
+            found = mapping(data.get('repository'), 'repository')
+            for i, oid in enumerate(page):
+                node = found.get(f'c{i}')
+                fields = {} if node is None else mapping(node, 'commit object')
+                if 'author' not in fields:  # no such object, or not a commit
+                    raise wambatic.fetch.errors.GraphQLError(
+                        [('MISSING', f'no author returned for commit {oid}')]
+                    )
+                author = fields['author']
+                user = None if author is None else mapping(author, 'author').get('user')
+                logins[oid] = (
+                    None if user is None else text(mapping(user, 'user').get('login'), 'login')
+                )
+        return logins
+
     async def update_commits(self, repo: Repo, state: SyncState) -> int | None:
         """Add the commits that reached the head since the stored one.
 

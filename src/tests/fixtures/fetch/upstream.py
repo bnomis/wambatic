@@ -244,6 +244,8 @@ class Upstream:
             return self.star_page(variables, headers)
         if 'query CommitCounts' in query:
             return tests.fixtures.fetch.server.Canned(200, self.commit_counts(variables), headers)
+        if 'query CommitAuthors' in query:
+            return tests.fixtures.fetch.server.Canned(200, self.commit_authors(variables), headers)
         raise AssertionError(f'unexpected query: {query}')
 
     def flow_page(
@@ -453,6 +455,28 @@ class Upstream:
             str(end),
         )
 
+    def commit_authors(self, variables: dict[str, object]) -> dict[str, object]:
+        by_oid = {
+            c.oid: c
+            for name, repo in self.repos.items()
+            if name == f'{variables["owner"]}/{variables["name"]}'
+            for c in repo.history
+        }
+        oids = [str(variables[f'o{i}']) for i in range(len(variables) - 2)]
+        return tests.fixtures.fetch.responses.commit_counts_response(
+            [
+                {
+                    'oid': oid,
+                    'author': {
+                        'user': None if by_oid[oid].login is None else {'login': by_oid[oid].login}
+                    },
+                }
+                if oid in by_oid
+                else None
+                for oid in oids
+            ]
+        )
+
     def commit_counts(self, variables: dict[str, object]) -> dict[str, object]:
         by_oid = {
             c.oid: c
@@ -460,7 +484,7 @@ class Upstream:
             if name == f'{variables["owner"]}/{variables["name"]}'
             for c in repo.history
         }
-        oids = [variables[f'o{i}'] for i in range(len(variables) - 2)]
+        oids = [str(variables[f'o{i}']) for i in range(len(variables) - 2)]
         return tests.fixtures.fetch.responses.commit_counts_response(
             [
                 {

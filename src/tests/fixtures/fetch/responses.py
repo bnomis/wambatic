@@ -344,7 +344,8 @@ def history_page(
 
 
 # https://docs.github.com/en/graphql/reference/objects#repository (`object`): one aliased
-# field per commit; null when the object does not exist.
+# field per commit (the CommitCounts and CommitAuthors queries alike); null when the object
+# does not exist.
 def commit_counts_response(commits: list[dict[str, object] | None]) -> dict[str, object]:
     return {
         'data': {

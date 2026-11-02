@@ -20,6 +20,7 @@ import wambatic.fetch.queries
 TOKEN = 'test-token-value'
 QUERY_NAME = re.compile(r'query (\w+)')
 RECORDED_BY_QUERY = {
+    'CommitAuthors': tests.fixtures.fetch.recorded.COMMIT_AUTHORS_OK,
     'CommitCounts': tests.fixtures.fetch.recorded.COMMIT_COUNTS_OK,
     'CommitHistory': tests.fixtures.fetch.recorded.COMMIT_HISTORY_OK,
     'Issues': tests.fixtures.fetch.recorded.ISSUES_OK,
@@ -276,6 +277,7 @@ def test_main_records_to_the_named_file(
     written = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(written)
     for name in (
+        'COMMIT_AUTHORS_OK',
         'COMMIT_COUNTS_OK',
         'COMMIT_HISTORY_OK',
         'COMPARE_AHEAD',

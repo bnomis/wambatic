@@ -988,6 +988,65 @@ def test_a_commit_with_no_line_counts_stores_nothing_and_names_its_oid(
     assert first.cache.sync_state(HELLO, 'commits') == before
 
 
+def authors_of(
+    make_fetcher: tests.conftest.MakeFetcher,
+    upstream: tests.fixtures.fetch.upstream.Upstream,
+    oids: list[str],
+) -> tuple[dict[str, str | None], int]:
+    """The logins for `oids`, and how many CommitAuthors queries were sent."""
+
+    async def scenario() -> tuple[dict[str, str | None], int]:
+        async with tests.fixtures.fetch.server.ReplayServer({}, default=upstream.respond) as server:
+            async with make_fetcher(server) as fetcher:
+                repo = next(
+                    r for r in await fetcher.list_repos(OWNER) if r.name_with_owner == HELLO
+                )
+                logins = await fetcher.commit_authors(repo, oids)
+            sent = [
+                r
+                for r in server.received
+                if r.path == '/graphql' and 'CommitAuthors' in str(r.json)
+            ]
+            return logins, len(sent)
+
+    return asyncio.run(scenario())
+
+
+def test_commit_authors_maps_each_oid_to_a_login_or_none(
+    make_fetcher: tests.conftest.MakeFetcher,
+) -> None:
+    upstream = tests.fixtures.fetch.upstream.Upstream([hello(0)])
+    upstream.repos[HELLO].history = [
+        tests.fixtures.fetch.upstream.FakeCommit('h1', at(1), 'mona'),
+        tests.fixtures.fetch.upstream.FakeCommit('h2', at(2), None),
+    ]
+    logins, queries = authors_of(make_fetcher, upstream, list(OIDS_H1_H2))
+    assert logins == {'h1': 'mona', 'h2': None}
+    assert queries == 1
+
+
+def test_commit_authors_names_the_oid_of_a_missing_object(
+    make_fetcher: tests.conftest.MakeFetcher,
+) -> None:
+    upstream = tests.fixtures.fetch.upstream.Upstream([hello(1)])
+    with pytest.raises(wambatic.fetch.errors.GraphQLError, match='nosuch'):
+        authors_of(make_fetcher, upstream, ['nosuch'])
+
+
+def test_commit_authors_sends_the_oids_in_pages_of_one_hundred(
+    make_fetcher: tests.conftest.MakeFetcher,
+) -> None:
+    upstream = tests.fixtures.fetch.upstream.Upstream([hello(0)])
+    upstream.repos[HELLO].history = history('c', 250, 1)
+    oids = [c.oid for c in upstream.repos[HELLO].history]
+    logins, queries = authors_of(make_fetcher, upstream, oids[:101])
+    assert len(logins) == 101
+    assert queries == 2
+    logins, queries = authors_of(make_fetcher, upstream, oids)
+    assert (len(logins), queries) == (250, 3)
+    assert set(logins.values()) == {'octocat'}
+
+
 # Rewritten history and full refresh
 
 

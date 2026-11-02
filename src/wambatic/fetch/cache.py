@@ -16,7 +16,7 @@ import wambatic.fetch.errors
 import wambatic.fetch.queries
 import wambatic.version
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS repos (
     watcher_count INTEGER NOT NULL DEFAULT 0,
     languages TEXT NOT NULL DEFAULT '[]',
     languages_size INTEGER NOT NULL DEFAULT 0,
-    missing INTEGER NOT NULL DEFAULT 0
+    missing INTEGER NOT NULL DEFAULT 0,
+    visibility TEXT NOT NULL DEFAULT 'PRIVATE'
 );
 CREATE INDEX IF NOT EXISTS repos_owner ON repos (owner);
 CREATE TABLE IF NOT EXISTS commits (
@@ -52,6 +53,23 @@ CREATE TABLE IF NOT EXISTS commits (
     PRIMARY KEY (repo, oid)
 );
 CREATE INDEX IF NOT EXISTS commits_repo_authored_at ON commits (repo, authored_at);
+CREATE TABLE IF NOT EXISTS commit_files (
+    repo TEXT NOT NULL,
+    oid TEXT NOT NULL,
+    path TEXT NOT NULL,
+    additions INTEGER NOT NULL,
+    deletions INTEGER NOT NULL,
+    binary INTEGER NOT NULL,
+    generated INTEGER NOT NULL,
+    PRIMARY KEY (repo, oid, path),
+    FOREIGN KEY (repo, oid) REFERENCES commits (repo, oid) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS branch_heads (
+    repo TEXT NOT NULL,
+    branch TEXT NOT NULL,
+    head_oid TEXT NOT NULL,
+    PRIMARY KEY (repo, branch)
+);
 CREATE TABLE IF NOT EXISTS pull_requests (
     repo TEXT NOT NULL,
     number INTEGER NOT NULL,
@@ -246,9 +264,16 @@ class Table[T: Record]:
 
     @classmethod
     def of(
-        cls, name: str, record_type: type[T], converters: Converters, key: tuple[str, ...]
+        cls,
+        name: str,
+        record_type: type[T],
+        converters: Converters,
+        key: tuple[str, ...],
+        *,
+        skip: tuple[str, ...] = (),
     ) -> Table[T]:
-        return cls(name, record_type, column_names(record_type), converters, key)
+        columns = tuple(column for column in column_names(record_type) if column not in skip)
+        return cls(name, record_type, columns, converters, key)
 
     def values(self, record: T) -> tuple[object, ...]:
         return tuple(to_column(getattr(record, name)) for name in self.columns)
@@ -305,6 +330,7 @@ def tables() -> Tables:
         wambatic.fetch.base.Commit,
         {'authored_at': from_text, 'is_merge': bool},
         ('repo', 'oid'),
+        skip=('files',),
     )
     pull_requests = Table.of(
         'pull_requests',
@@ -572,11 +598,12 @@ class Cache:
         state: wambatic.fetch.base.SyncState,
         *,
         replace: bool,
-        gone: collections.abc.Collection[int] = (),
+        gone: collections.abc.Collection[int | str] = (),
+        inside: collections.abc.Callable[[], None] | None = None,
     ) -> int:
         """In one transaction: with `replace`, delete the repo's rows from `table` first; upsert
-        each record by its key; delete the rows whose second key column is in `gone`; write
-        `state`. Returns the number of rows written.
+        each record by its key; delete the rows whose second key column is in `gone`; run
+        `inside`; write `state`. Returns the number of rows written.
 
         Raises:
             InvalidRequestError: a record or the state belongs to another repo.
@@ -601,8 +628,10 @@ class Cache:
             self.connection.executemany(sql, [table.values(record) for record in records])
             self.connection.executemany(
                 f'DELETE FROM {table.name} WHERE repo = ? AND {table.key[1]} = ?',
-                [(repo, identifier) for identifier in sorted(gone)],
+                [(repo, identifier) for identifier in sorted(gone, key=str)],
             )
+            if inside is not None:
+                inside()
             self.put_state(state)
         return len(records)
 
@@ -636,10 +665,58 @@ class Cache:
         state: wambatic.fetch.base.SyncState,
         *,
         replace: bool,
+        gone: collections.abc.Collection[str] = (),
+        branch_heads: collections.abc.Mapping[str, str] | None = None,
+        generated: collections.abc.Collection[str] | None = None,
     ) -> int:
-        """In one transaction: with `replace`, delete the repo's commits first; upsert by oid;
-        write `state`. Returns the number of rows written."""
-        return self.write_rows(tables().commits, repo, commits, state, replace=replace)
+        """In one transaction: with `replace`, delete the repo's commits first; delete the commits
+        whose oids are in `gone`; upsert by oid, each commit's `files` replacing its file rows;
+        when `generated` is given, flag every file row of the repo whose path is in it as generated
+        and every other as not; when `branch_heads` is given, replace the repo's branch heads with
+        it; write `state`. A commit's file rows go with the commit. Returns the number of commits
+        written."""
+
+        def write_files() -> None:
+            self.connection.executemany(
+                'DELETE FROM commit_files WHERE repo = ? AND oid = ?',
+                [(repo, commit.oid) for commit in commits],
+            )
+            self.connection.executemany(
+                'INSERT INTO commit_files '
+                '(repo, oid, path, additions, deletions, binary, generated) '
+                'VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [
+                    (
+                        repo,
+                        commit.oid,
+                        file.path,
+                        file.additions,
+                        file.deletions,
+                        file.binary,
+                        file.generated,
+                    )
+                    for commit in commits
+                    for file in commit.files
+                ],
+            )
+            if generated is not None:
+                self.connection.execute(
+                    'UPDATE commit_files SET generated = 0 WHERE repo = ?', (repo,)
+                )
+                self.connection.executemany(
+                    'UPDATE commit_files SET generated = 1 WHERE repo = ? AND path = ?',
+                    [(repo, path) for path in sorted(generated)],
+                )
+            if branch_heads is not None:
+                self.connection.execute('DELETE FROM branch_heads WHERE repo = ?', (repo,))
+                self.connection.executemany(
+                    'INSERT INTO branch_heads (repo, branch, head_oid) VALUES (?, ?, ?)',
+                    [(repo, branch, head) for branch, head in sorted(branch_heads.items())],
+                )
+
+        return self.write_rows(
+            tables().commits, repo, commits, state, replace=replace, gone=gone, inside=write_files
+        )
 
     def write_pull_requests(
         self,
@@ -711,7 +788,8 @@ class Cache:
     def read_commits(
         self, repo: str, since: datetime.datetime | None, until: datetime.datetime | None
     ) -> list[wambatic.fetch.base.Commit]:
-        return self.read_table(
+        """The repo's commits with `since <= authored_at < until`, each with its `files` by path."""
+        commits = self.read_table(
             tables().commits,
             repo,
             since,
@@ -719,6 +797,61 @@ class Cache:
             time_column='authored_at',
             order='authored_at, oid',
         )
+        query = (
+            'SELECT f.oid, f.path, f.additions, f.deletions, f.binary, f.generated '
+            'FROM commit_files f JOIN commits c ON c.repo = f.repo AND c.oid = f.oid '
+            'WHERE f.repo = ?'
+        )
+        params: list[str] = [repo]
+        if since is not None:
+            query += ' AND c.authored_at >= ?'
+            params.append(to_text(since))
+        if until is not None:
+            query += ' AND c.authored_at < ?'
+            params.append(to_text(until))
+        with self.locked():
+            rows = self.connection.execute(f'{query} ORDER BY f.path', params).fetchall()
+        files: dict[str, list[wambatic.fetch.base.CommitFile]] = {}
+        for oid, path, additions, deletions, binary, generated in rows:
+            files.setdefault(oid, []).append(
+                wambatic.fetch.base.CommitFile(
+                    path=path,
+                    additions=additions,
+                    deletions=deletions,
+                    binary=bool(binary),
+                    generated=bool(generated),
+                )
+            )
+        return [
+            dataclasses.replace(commit, files=tuple(files[commit.oid]))
+            if commit.oid in files
+            else commit
+            for commit in commits
+        ]
+
+    def commit_oids(self, repo: str) -> frozenset[str]:
+        """Every cached commit oid of the repo."""
+        with self.locked():
+            rows = self.connection.execute(
+                'SELECT oid FROM commits WHERE repo = ?', (repo,)
+            ).fetchall()
+        return frozenset(oid for (oid,) in rows)
+
+    def commit_paths(self, repo: str) -> frozenset[str]:
+        """Every path in the repo's file rows."""
+        with self.locked():
+            rows = self.connection.execute(
+                'SELECT DISTINCT path FROM commit_files WHERE repo = ?', (repo,)
+            ).fetchall()
+        return frozenset(path for (path,) in rows)
+
+    def branch_heads(self, repo: str) -> dict[str, str]:
+        """The followed branch heads written by the last commit sync."""
+        with self.locked():
+            rows = self.connection.execute(
+                'SELECT branch, head_oid FROM branch_heads WHERE repo = ?', (repo,)
+            ).fetchall()
+        return dict(rows)
 
     def read_pull_requests(
         self, repo: str, since: datetime.datetime | None
@@ -802,6 +935,7 @@ class CacheInfo:
     server_version: str | None
     repos: int
     commits: int
+    commit_files: int
     pull_requests: int
     issues: int
     releases: int
@@ -840,6 +974,7 @@ def read_cache_info(path: pathlib.Path) -> CacheInfo | None:
         last_synced = scalar('sync_state', 'SELECT MAX(synced_at) FROM sync_state')
         repos = scalar('repos', 'SELECT COUNT(*) FROM repos WHERE missing = 0')
         commits = scalar('commits', 'SELECT COUNT(*) FROM commits')
+        commit_files = scalar('commit_files', 'SELECT COUNT(*) FROM commit_files')
         pull_requests = scalar('pull_requests', 'SELECT COUNT(*) FROM pull_requests')
         issues = scalar('issues', 'SELECT COUNT(*) FROM issues')
         releases = scalar('releases', 'SELECT COUNT(*) FROM releases')
@@ -863,6 +998,7 @@ def read_cache_info(path: pathlib.Path) -> CacheInfo | None:
         server_version=meta.get(SERVER_VERSION_KEY),
         repos=int(str(repos or 0)),
         commits=int(str(commits or 0)),
+        commit_files=int(str(commit_files or 0)),
         pull_requests=int(str(pull_requests or 0)),
         issues=int(str(issues or 0)),
         releases=int(str(releases or 0)),

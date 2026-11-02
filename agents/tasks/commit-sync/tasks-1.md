@@ -53,7 +53,7 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 ## Task 2: Add per-file commit records, visibility and cache schema 5
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** medium
 **Spec Reference:** commit sync 1.0, API (`CommitFile`, `Commit.files`, `Repo.visibility`); fetch 1.17, API and Incremental sync step 1; cache 1.2, API and Implementation
@@ -62,24 +62,24 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 **Subtasks:**
 
-- [ ] Add `CommitFile` (`path`, `additions`, `deletions`, `binary`, `generated`) to `src/wambatic/fetch/base.py`, `files: tuple[CommitFile, ...] = ()` to `Commit`, and `visibility: Literal['PUBLIC', 'PRIVATE', 'INTERNAL'] = 'PRIVATE'` to `Repo`
-- [ ] Select `visibility` in `OWNER_REPOSITORIES` and `REPOSITORY` in `src/wambatic/fetch/queries.py`, and parse it in the listing parser; a value outside the three is a `GraphQLError` (`MALFORMED`)
-- [ ] In `src/wambatic/fetch/cache.py`: set `SCHEMA_VERSION` to 5; add the `commit_files` table (primary key `(repo, oid, path)`) and the `branch_heads` table (primary key `(repo, branch)`), and the `repos` column `visibility`
-- [ ] Extend `Cache.write_commits` with `gone`, `branch_heads` and `generated` as cache spec 1.2 says, in its one transaction; make `read_commits` return each commit's `files` by path; add `commit_oids`, `commit_paths` and `branch_heads`
-- [ ] Add `commit_files` to `CacheInfo` and count it in `inspect_cache` (a table absent from the file counts 0)
-- [ ] Re-run `bin/record-fixtures.sh` for the changed listing queries, and add `visibility` to the listing fixtures in `src/tests/fixtures/fetch/responses.py`
-- [ ] Tests in `src/tests/fetch/test_cache.py`: files written and read back by path, `gone` deleting commits with their files, `generated` rewriting every flag, `branch_heads` replaced, a cache of schema 4 refused with `CacheVersionError`; in `src/tests/fetch/test_base.py`: visibility parsed, and a `Repo` built without it is `PRIVATE`
+- [x] Add `CommitFile` (`path`, `additions`, `deletions`, `binary`, `generated`) to `src/wambatic/fetch/base.py`, `files: tuple[CommitFile, ...] = ()` to `Commit`, and `visibility: Literal['PUBLIC', 'PRIVATE', 'INTERNAL'] = 'PRIVATE'` to `Repo`
+- [x] Select `visibility` in `OWNER_REPOSITORIES` and `REPOSITORY` in `src/wambatic/fetch/queries.py`, and parse it in the listing parser; a value outside the three is a `GraphQLError` (`MALFORMED`)
+- [x] In `src/wambatic/fetch/cache.py`: set `SCHEMA_VERSION` to 5; add the `commit_files` table (primary key `(repo, oid, path)`) and the `branch_heads` table (primary key `(repo, branch)`), and the `repos` column `visibility`
+- [x] Extend `Cache.write_commits` with `gone`, `branch_heads` and `generated` as cache spec 1.2 says, in its one transaction; make `read_commits` return each commit's `files` by path; add `commit_oids`, `commit_paths` and `branch_heads`
+- [x] Add `commit_files` to `CacheInfo` and count it in `inspect_cache` (a table absent from the file counts 0)
+- [x] Re-run `bin/record-fixtures.sh` for the changed listing queries, and add `visibility` to the listing fixtures in `src/tests/fixtures/fetch/responses.py`
+- [x] Tests in `src/tests/fetch/test_cache.py`: files written and read back by path, `gone` deleting commits with their files, `generated` rewriting every flag, `branch_heads` replaced, a cache of schema 4 refused with `CacheVersionError`; in `src/tests/fetch/test_base.py`: visibility parsed, and a `Repo` built without it is `PRIVATE`
 
 **Acceptance Criteria:**
 
-- [ ] A commit written with files reads back with the same files, and `gone` leaves no file rows behind
-- [ ] Every existing fetch test still passes with `Commit.files` empty
+- [x] A commit written with files reads back with the same files, and `gone` leaves no file rows behind
+- [x] Every existing fetch test still passes with `Commit.files` empty
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/fetch/test_cache.py src/tests/fetch/test_base.py src/tests/fetch/test_fetcher.py src/tests/fetch/test_queries.py src/tests/fetch/test_parse_properties.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/fetch/test_cache.py src/tests/fetch/test_base.py src/tests/fetch/test_fetcher.py src/tests/fetch/test_queries.py src/tests/fetch/test_parse_properties.py` passes
 
 **Notes:**
 

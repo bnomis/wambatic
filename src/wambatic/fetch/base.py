@@ -30,6 +30,7 @@ BOT_SUFFIX = '[bot]'
 
 
 SubjectKind = typing.Literal['org', 'repo', 'user']
+Visibility = typing.Literal['PUBLIC', 'PRIVATE', 'INTERNAL']
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -72,6 +73,16 @@ class Repo:
     languages: tuple[tuple[str, int], ...] = ()
     languages_size: int = 0
     missing: bool = False
+    visibility: Visibility = 'PRIVATE'
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class CommitFile:
+    path: str
+    additions: int
+    deletions: int
+    binary: bool = False
+    generated: bool = False
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -83,6 +94,7 @@ class Commit:
     additions: int
     deletions: int
     is_merge: bool
+    files: tuple[CommitFile, ...] = ()
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -294,6 +306,16 @@ def parse_languages(languages: object) -> tuple[tuple[tuple[str, int], ...], int
     return tuple(found), integer(fields.get('totalSize'), 'languages.totalSize')
 
 
+def parse_visibility(value: object) -> Visibility:
+    if value == 'PUBLIC':
+        return 'PUBLIC'
+    if value == 'PRIVATE':
+        return 'PRIVATE'
+    if value == 'INTERNAL':
+        return 'INTERNAL'
+    raise malformed(f'visibility is {value!r}')
+
+
 def parse_repo(node: object) -> Repo:
     fields = mapping(node, 'repository')
     branch = fields.get('defaultBranchRef')
@@ -331,6 +353,7 @@ def parse_repo(node: object) -> Repo:
         ),
         languages=languages,
         languages_size=languages_size,
+        visibility=parse_visibility(fields.get('visibility')),
     )
 
 

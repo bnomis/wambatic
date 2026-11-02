@@ -49,6 +49,7 @@ def repo_node(
     watcher_count: int = 0,
     languages: list[tuple[str, int]] | None = None,
     languages_size: int | None = None,
+    visibility: str = 'PUBLIC',
 ) -> dict[str, object]:
     """A repository node as `OWNER_REPOSITORIES` and `REPOSITORY` select it. `languages` None is
     a `null` connection; `languages_size` None is the sum of the listed languages."""
@@ -56,6 +57,7 @@ def repo_node(
         'nameWithOwner': name_with_owner,
         'isArchived': is_archived,
         'isFork': is_fork,
+        'visibility': visibility,
         'pushedAt': None if pushed_at is None else iso(pushed_at),
         'updatedAt': iso(updated_at),
         'defaultBranchRef': None if head is None else {'name': branch, 'target': {'oid': head}},

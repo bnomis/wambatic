@@ -7,7 +7,7 @@ query OwnerRepositories($login: String!, $cursor: String) {
     ) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        nameWithOwner isArchived isFork pushedAt updatedAt
+        nameWithOwner isArchived isFork pushedAt updatedAt visibility
         defaultBranchRef { name target { oid } }
         pullRequests(first: 1, orderBy: {field: UPDATED_AT, direction: DESC}) {
           nodes { updatedAt }
@@ -32,7 +32,7 @@ query OwnerRepositories($login: String!, $cursor: String) {
 REPOSITORY = """
 query Repository($owner: String!, $name: String!) {
   repository(owner: $owner, name: $name) {
-    nameWithOwner isArchived isFork pushedAt updatedAt
+    nameWithOwner isArchived isFork pushedAt updatedAt visibility
     defaultBranchRef { name target { oid } }
     pullRequests(first: 1, orderBy: {field: UPDATED_AT, direction: DESC}) {
       nodes { updatedAt }

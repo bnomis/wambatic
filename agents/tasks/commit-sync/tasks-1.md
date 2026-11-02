@@ -275,7 +275,7 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 ## Task 8: Clear and inspect the clones with the cache
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** small
 **Spec Reference:** cache 1.2, API (`inspect_cache`, `clear_cache`, `CacheInfo`); CLI 1.2, `cache clear` and `cache info`; commit sync 1.0, Where clones live
@@ -284,22 +284,22 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 **Subtasks:**
 
-- [ ] Give `inspect_cache` and `clear_cache` in `src/wambatic/fetch/cache.py` their `clones_dir` argument; `clear_cache` deletes the tree and returns it among the paths removed; `inspect_cache` fills `CacheInfo.clones_bytes` (0 when absent)
-- [ ] Pass `clones_dir_for(settings)` from the `cache` command in `src/wambatic/cli.py`, and show the clones' size and the commit file rows in `cache info`
-- [ ] Remove the two `auditme: accept[spec-api-signature-drift]` lines above `inspect_cache` and `clear_cache` in `agents/specs/cache/spec.md`; keep the one above `Cache.read_commits`
-- [ ] Tests in `src/tests/fetch/test_cache.py` and `src/tests/test_cli.py`: clear removes the file and the clones, info reports their size, a missing clones directory is fine
+- [x] Give `inspect_cache` and `clear_cache` in `src/wambatic/fetch/cache.py` their `clones_dir` argument; `clear_cache` deletes the tree and returns it among the paths removed; `inspect_cache` fills `CacheInfo.clones_bytes` (0 when absent)
+- [x] Pass `clones_dir_for(settings)` from the `cache` command in `src/wambatic/cli.py`, and show the clones' size and the commit file rows in `cache info`
+- [x] Remove the two `auditme: accept[spec-api-signature-drift]` lines above `inspect_cache` and `clear_cache` in `agents/specs/cache/spec.md`; keep the one above `Cache.read_commits`
+- [x] Tests in `src/tests/fetch/test_cache.py` and `src/tests/test_cli.py`: clear removes the file and the clones, info reports their size, a missing clones directory is fine
 
 **Acceptance Criteria:**
 
-- [ ] After `wambatic cache clear`, neither the cache file nor its clones directory exists
-- [ ] `bin/audit-check.sh` passes without the two removed markers
+- [x] After `wambatic cache clear`, neither the cache file nor its clones directory exists
+- [x] `bin/audit-check.sh` passes without the two removed markers
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/fetch/test_cache.py src/tests/test_cli.py src/tests/test_docs.py` passes
-- [ ] `bin/audit-check.sh` exits 0
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/fetch/test_cache.py src/tests/test_cli.py src/tests/test_docs.py` passes
+- [x] `bin/audit-check.sh` exits 0
 
 **Notes:**
 

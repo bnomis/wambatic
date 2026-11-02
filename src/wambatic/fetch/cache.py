@@ -6,6 +6,7 @@ import functools
 import hashlib
 import json
 import pathlib
+import shutil
 import sqlite3
 import threading
 import types
@@ -943,17 +944,24 @@ class CacheInfo:
     star_events: int
     forks: int
     last_synced_at: datetime.datetime | None
+    clones_bytes: int
 
 
-def inspect_cache(path: pathlib.Path) -> CacheInfo | None:
+def tree_bytes(directory: pathlib.Path) -> int:
+    """Total size of the files under `directory`; 0 when it does not exist."""
+    return sum(entry.stat().st_size for entry in directory.rglob('*') if entry.is_file())
+
+
+def inspect_cache(path: pathlib.Path, clones_dir: pathlib.Path) -> CacheInfo | None:
     """What `path` holds, read with plain SELECTs on its own connection, or None when it does
     not exist. It creates, migrates and stamps nothing, so a cache `Cache.open` refuses can still
-    be inspected; a table absent from the file counts as 0 rows."""
+    be inspected; a table absent from the file counts as 0 rows. `clones_bytes` is the size of the
+    `clones_dir` tree, 0 when it is absent."""
     with translate_errors(path):
-        return read_cache_info(path)
+        return read_cache_info(path, clones_dir)
 
 
-def read_cache_info(path: pathlib.Path) -> CacheInfo | None:
+def read_cache_info(path: pathlib.Path, clones_dir: pathlib.Path) -> CacheInfo | None:
     if not path.exists():
         return None
     connection = sqlite3.connect(f'{path.resolve().as_uri()}?mode=ro', uri=True)
@@ -1006,14 +1014,16 @@ def read_cache_info(path: pathlib.Path) -> CacheInfo | None:
         star_events=int(str(star_events or 0)),
         forks=int(str(forks or 0)),
         last_synced_at=None if last_synced is None else from_text(str(last_synced)),
+        clones_bytes=tree_bytes(clones_dir),
     )
 
 
-def clear_cache(path: pathlib.Path) -> list[pathlib.Path]:
-    """Delete `path` and its `-wal` and `-shm` files where present; return those deleted.
+def clear_cache(path: pathlib.Path, clones_dir: pathlib.Path) -> list[pathlib.Path]:
+    """Delete `path` and its `-wal` and `-shm` files where present, and the `clones_dir` tree;
+    return those deleted.
 
     Raises:
-        CacheError: when a file that exists cannot be deleted.
+        CacheError: when a file or the clones tree that exists cannot be deleted.
     """
     deleted: list[pathlib.Path] = []
     for candidate in (path, path.with_name(path.name + '-wal'), path.with_name(path.name + '-shm')):
@@ -1025,4 +1035,12 @@ def clear_cache(path: pathlib.Path) -> list[pathlib.Path]:
             # auditme: accept[except-interpolation] the SQLite or OS reason is the payload
             raise wambatic.fetch.errors.CacheError(f'cannot delete {candidate}: {error}') from error
         deleted.append(candidate)
+    if clones_dir.exists():
+        try:
+            shutil.rmtree(clones_dir)
+        except OSError as error:
+            # auditme: accept[except-interpolation] the OS reason is the payload
+            reason = f'cannot delete {clones_dir}: {error}'
+            raise wambatic.fetch.errors.CacheError(reason) from error
+        deleted.append(clones_dir)
     return deleted

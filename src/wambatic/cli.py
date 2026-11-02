@@ -332,12 +332,14 @@ def cache_info_table(info: wambatic.fetch.cache.CacheInfo) -> rich.table.Table:
     rows += [
         ('repositories', wambatic.reports.terminal.format_number(info.repos)),
         ('commits', wambatic.reports.terminal.format_number(info.commits)),
+        ('commit files', wambatic.reports.terminal.format_number(info.commit_files)),
         ('pull requests', wambatic.reports.terminal.format_number(info.pull_requests)),
         ('issues', wambatic.reports.terminal.format_number(info.issues)),
         ('releases', wambatic.reports.terminal.format_number(info.releases)),
         ('workflow runs', wambatic.reports.terminal.format_number(info.workflow_runs)),
         ('star events', wambatic.reports.terminal.format_number(info.star_events)),
         ('forks', wambatic.reports.terminal.format_number(info.forks)),
+        ('clones', f'{wambatic.reports.terminal.format_number(info.clones_bytes)} bytes'),
         (
             'last synced',
             'never' if info.last_synced_at is None else info.last_synced_at.isoformat(),
@@ -355,8 +357,9 @@ def run_cache(
 ) -> None:
     """`cache info` describes the cache, `cache clear` removes it; neither uses the network."""
     path = wambatic.settings.cache_path_for(settings.fetch)
+    clones_dir = wambatic.settings.clones_dir_for(settings.fetch)
     if command.action == 'info':
-        info = wambatic.fetch.cache.inspect_cache(path)
+        info = wambatic.fetch.cache.inspect_cache(path, clones_dir)
         if info is None:
             console.print(wambatic.reports.terminal.text_cell(f'no cache at {path}'))
         else:
@@ -364,7 +367,7 @@ def run_cache(
         return
     if command.action != 'clear':
         typing.assert_never(command.action)
-    removed = wambatic.fetch.cache.clear_cache(path)
+    removed = wambatic.fetch.cache.clear_cache(path, clones_dir)
     for deleted in removed:
         loguru.logger.info(f'Removed {deleted}')
     if not removed:

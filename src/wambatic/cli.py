@@ -252,7 +252,7 @@ async def run_report(
     request = build_request(report, settings, clock())
     wambatic.stats.engine.resources_for(request.groups)
     cache = wambatic.fetch.cache.Cache.open(
-        settings.fetch.cache_path, ignore_version=report.ignore_cache_version
+        wambatic.settings.cache_path_for(settings.fetch), ignore_version=report.ignore_cache_version
     )
     as_html = settings.report.format == 'html'
     requests = wambatic.reports.html.period_requests(request) if as_html else [request]
@@ -318,7 +318,7 @@ def run_cache(
     command: CacheCommand, settings: wambatic.settings.Settings, console: rich.console.Console
 ) -> None:
     """`cache info` describes the cache, `cache clear` removes it; neither uses the network."""
-    path = settings.fetch.cache_path
+    path = wambatic.settings.cache_path_for(settings.fetch)
     if command.action == 'info':
         info = wambatic.fetch.cache.inspect_cache(path)
         if info is None:

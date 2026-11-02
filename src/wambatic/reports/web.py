@@ -595,7 +595,7 @@ def serve(
     if default_target is not None:
         wambatic.reports.service.parse_target(default_target)
     cache = wambatic.fetch.cache.Cache.open(
-        settings.fetch.cache_path, ignore_version=ignore_cache_version
+        wambatic.settings.cache_path_for(settings.fetch), ignore_version=ignore_cache_version
     )
     sock: socket.socket | None = None
     try:

@@ -218,7 +218,7 @@ def compute(
     request = wambatic.reports.service.make_request(
         BY, SINCE, UNTIL, GROUPS, by_author, settings, now
     )
-    cache = wambatic.fetch.cache.Cache.open(settings.fetch.cache_path)
+    cache = wambatic.fetch.cache.Cache.open(wambatic.settings.cache_path_for(settings.fetch))
     try:
         _, results = asyncio.run(
             wambatic.reports.service.sync_and_compute(

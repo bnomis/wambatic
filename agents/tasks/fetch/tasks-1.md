@@ -16,7 +16,7 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 ## Task 1: Add the `fetch.github_host` setting and a cache file per host
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** medium
 **Spec Reference:** fetch spec 1.16, GitHub hosts (Host names) and Settings; cache spec 1.1, One file per host and Settings
@@ -25,24 +25,24 @@ No GitHub Enterprise server is available, so no task makes a live request to one
 
 **Subtasks:**
 
-- [ ] Add `github_host: str = 'github.com'` to `FetchSettings` in `src/wambatic/settings.py`, checked when settings load: lower-cased; `github.com`, or a name of letters, digits, `-` and `.` with at least one `.`, optionally `:` and a port from 1 to 65535; no scheme, path, user or query. `api.github.com` raises `SettingsError` saying to use `github.com`; a name ending in `.ghe.com` raises `SettingsError` saying GitHub Enterprise Cloud with data residency is not supported. Every message names `fetch.github_host` and never echoes the value, as the other settings errors do
-- [ ] Make `fetch.cache_path` `pathlib.Path | None`, default `None`, and add `cache_path_for(settings: FetchSettings) -> pathlib.Path`: the setting when set, else `~/.cache/wambatic/cache.sqlite3` for `github.com` and `~/.cache/wambatic/cache-<host>.sqlite3` for another host, `:` replaced by `-`
-- [ ] Replace every read of `settings.fetch.cache_path` with `cache_path_for(settings.fetch)`: `src/wambatic/cli.py` (the `report` and `cache` commands) and `src/wambatic/reports/web.py` (`serve`)
-- [ ] Update the fixture settings in `src/tests/fixtures/settings.py` and the tests that set `cache_path`, keeping their temporary paths
-- [ ] Tests in `src/tests/test_settings.py`: accepted names (with and without a port, upper case lower-cased), each refusal (`api.github.com`, `*.ghe.com`, a scheme, a path, a port of 0 and of 65536, no dot), and `cache_path_for` for an unset path on both kinds of host and for a set path
-- [ ] Add `fetch.github_host` to `docs/reference/settings.md`, and the new `fetch.cache_path` type and default
+- [x] Add `github_host: str = 'github.com'` to `FetchSettings` in `src/wambatic/settings.py`, checked when settings load: lower-cased; `github.com`, or a name of letters, digits, `-` and `.` with at least one `.`, optionally `:` and a port from 1 to 65535; no scheme, path, user or query. `api.github.com` raises `SettingsError` saying to use `github.com`; a name ending in `.ghe.com` raises `SettingsError` saying GitHub Enterprise Cloud with data residency is not supported. Every message names `fetch.github_host` and never echoes the value, as the other settings errors do
+- [x] Make `fetch.cache_path` `pathlib.Path | None`, default `None`, and add `cache_path_for(settings: FetchSettings) -> pathlib.Path`: the setting when set, else `~/.cache/wambatic/cache.sqlite3` for `github.com` and `~/.cache/wambatic/cache-<host>.sqlite3` for another host, `:` replaced by `-`
+- [x] Replace every read of `settings.fetch.cache_path` with `cache_path_for(settings.fetch)`: `src/wambatic/cli.py` (the `report` and `cache` commands) and `src/wambatic/reports/web.py` (`serve`)
+- [x] Update the fixture settings in `src/tests/fixtures/settings.py` and the tests that set `cache_path`, keeping their temporary paths
+- [x] Tests in `src/tests/test_settings.py`: accepted names (with and without a port, upper case lower-cased), each refusal (`api.github.com`, `*.ghe.com`, a scheme, a path, a port of 0 and of 65536, no dot), and `cache_path_for` for an unset path on both kinds of host and for a set path
+- [x] Add `fetch.github_host` to `docs/reference/settings.md`, and the new `fetch.cache_path` type and default
 
 **Acceptance Criteria:**
 
-- [ ] `load_settings` with `{"fetch": {"github_host": "GHE.Example.com:8443"}}` gives `ghe.example.com:8443`, and `cache_path_for` gives `~/.cache/wambatic/cache-ghe.example.com-8443.sqlite3`
-- [ ] A default github.com run opens `~/.cache/wambatic/cache.sqlite3`, as before
-- [ ] `pytest src/tests/test_docs.py` passes with the new setting
+- [x] `load_settings` with `{"fetch": {"github_host": "GHE.Example.com:8443"}}` gives `ghe.example.com:8443`, and `cache_path_for` gives `~/.cache/wambatic/cache-ghe.example.com-8443.sqlite3`
+- [x] A default github.com run opens `~/.cache/wambatic/cache.sqlite3`, as before
+- [x] `pytest src/tests/test_docs.py` passes with the new setting
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/test_settings.py src/tests/test_cli.py src/tests/reports/test_web.py src/tests/test_docs.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/test_settings.py src/tests/test_cli.py src/tests/reports/test_web.py src/tests/test_docs.py` passes
 
 **Notes:**
 

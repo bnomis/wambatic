@@ -4,14 +4,16 @@ import datetime
 import json
 import os
 import pathlib
+import re
 import types
 import typing
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class FetchSettings:
-    cache_path: pathlib.Path = pathlib.Path('~/.cache/wambatic/cache.sqlite3').expanduser()
+    cache_path: pathlib.Path | None = None
     full_refresh_after: datetime.timedelta = datetime.timedelta(days=30)
+    github_host: str = 'github.com'
     include_archived: bool = False
     include_forks: bool = False
     max_age: datetime.timedelta = datetime.timedelta(0)
@@ -90,6 +92,43 @@ def parse_duration(text: str) -> datetime.timedelta:
         raise SettingsError(f'the duration {text} is too long') from None
 
 
+DEFAULT_CACHE_DIR = pathlib.Path('~/.cache/wambatic')
+
+
+def check_github_host(value: str) -> str:
+    """Return `value` lower-cased as a host name with an optional port.
+
+    Raises:
+        SettingsError: `value` is not `github.com` or an Enterprise Server host name.
+    """
+    host = value.lower()
+    if host == 'github.com':
+        return host
+    name, separator, port = host.partition(':')
+    if name == 'api.github.com':
+        raise SettingsError('fetch.github_host must be github.com, not the API host')
+    if name.endswith('.ghe.com'):
+        raise SettingsError(
+            'fetch.github_host: GitHub Enterprise Cloud with data residency is not supported'
+        )
+    port_ok = not separator or (port.isascii() and port.isdigit() and 1 <= int(port) <= 65535)
+    if not (re.fullmatch(r'[a-z0-9.-]+', name) and '.' in name and port_ok):
+        raise SettingsError(
+            'fetch.github_host must be github.com or a host name with a dot and an optional port'
+        )
+    return host
+
+
+def cache_path_for(settings: FetchSettings) -> pathlib.Path:
+    """The configured cache path, else the default cache file for the host."""
+    if settings.cache_path is not None:
+        return settings.cache_path
+    directory = DEFAULT_CACHE_DIR.expanduser()
+    if settings.github_host == 'github.com':
+        return directory / 'cache.sqlite3'
+    return directory / f'cache-{settings.github_host.replace(":", "-")}.sqlite3'
+
+
 def convert(key: str, annotation: object, value: object) -> object:
     """Check `value` against a setting's type and return it in that type.
 
@@ -113,7 +152,9 @@ def convert(key: str, annotation: object, value: object) -> object:
         if isinstance(value, list | tuple) and all(isinstance(item, str) for item in value):
             return tuple(value)
         ok = False
-    elif annotation is pathlib.Path:
+    elif annotation is pathlib.Path or annotation == pathlib.Path | None:
+        if value is None and annotation != pathlib.Path:
+            return None
         if isinstance(value, str | pathlib.Path):
             return pathlib.Path(value).expanduser()
         ok = False
@@ -142,7 +183,10 @@ def apply_section(name: str, current: object, values: object, source: str) -> ob
     for field, value in values.items():
         if field not in hints:
             raise SettingsError(f'{source}: unknown setting {name}.{field}')
-        changes[field] = convert(f'{name}.{field}', hints[field], value)
+        converted = convert(f'{name}.{field}', hints[field], value)
+        if name == 'fetch' and field == 'github_host':
+            converted = check_github_host(converted)  # type: ignore[arg-type]
+        changes[field] = converted
     return dataclasses.replace(current, **changes)  # type: ignore[type-var]
 
 

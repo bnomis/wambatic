@@ -1,7 +1,7 @@
 # Reports
 
-**Version:** 1.13
-**Status:** implemented
+**Version:** 1.14
+**Status:** proposed
 **Date:** 2026-11-02
 
 The three ways a user sees a `StatsResult`: a terminal report, a self-contained static HTML report, and a local web app. All three render the same result object, so they never disagree. It also defines the `wambatic` command line.
@@ -17,6 +17,8 @@ Version 1.11 brings the spec in line with the code after [audit review 1](../../
 Version 1.12 corrects the text to the code after [audit review 2](../../audit-reviews/review-2.md) (G15): `inspect_cache`, `OutputError` and `ServeError` in the error table and the binding paragraph, the `--since`, `--until` and `--groups` refusals, and `redact_error` in the module table.
 
 Version 1.13 splits this spec, as [audit review 2](../../audit-reviews/review-2.md) Decision 2 (answer A, 2026-10-31) asked, on 2026-11-02. Each front end has its own spec, with its text moved there and only its cross-references updated: the [CLI](../cli/spec.md) (the command line, its flags and exit statuses), the [Terminal report](../terminal-report/spec.md), the [HTML report](../html-report/spec.md) (figures, the page, palette and browser test) and the [Web app](../web-app/spec.md). This spec keeps what they share: the module layout and its import rules, the errors, the JSON output, `service.py`, the settings and the dependencies.
+
+Version 1.14 adds the Enterprise host to the `AuthError` message rule, for GitHub Enterprise Server ([Fetch](../fetch/spec.md) 1.16, [fetch review 1](../fetch/review-1.md)).
 
 ## Module location
 
@@ -95,7 +97,7 @@ class ServeError(ReportsError):
 
 Each front end converts errors once: the exit statuses are in the [CLI](../cli/spec.md) spec and the HTTP statuses in the [Web app](../web-app/spec.md) spec. In both:
 
-- Messages state the fix: `AuthError` says to set `GITHUB_TOKEN` or run `gh auth login` when there is no token, `GitHub rejected the token (401)` for a 401 and `GitHub denied access (403)` with the reason for a 403; `RateLimitError` gives the reset time, `CacheVersionError` names `wambatic cache clear` and `--ignore-cache-version`, and `EmptySubjectError` with `--no-fetch` adds that the cache may only need a sync. These texts come from the errors themselves where they already carry them.
+- Messages state the fix: `AuthError` says to set `GITHUB_TOKEN` or run `gh auth login` when there is no token (for an Enterprise host, `GH_ENTERPRISE_TOKEN` or `gh auth login --hostname HOST`), `GitHub rejected the token (401)` for a 401 and `GitHub denied access (403)` with the reason for a 403; `RateLimitError` gives the reset time, `CacheVersionError` names `wambatic cache clear` and `--ignore-cache-version`, and `EmptySubjectError` with `--no-fetch` adds that the cache may only need a sync. These texts come from the errors themselves where they already carry them.
 - No message repeats a token or a config value (system spec, Settings).
 
 ## Implementation

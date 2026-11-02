@@ -1,12 +1,14 @@
 # Cache
 
-**Version:** 1.0
-**Status:** implemented
-**Date:** 2026-10-31
+**Version:** 1.1
+**Status:** proposed
+**Date:** 2026-11-02
 
 The local SQLite store behind [Fetch](../fetch/spec.md): repositories, commits, pull requests, issues, releases, workflow runs, stars and forks, the per-repository sync state that makes a later sync incremental, REST ETags, and the identity (schema, wambatic and query versions) that refuses a cache written by different code. It knows nothing about GitHub requests or metrics; `Fetcher` writes it and reads it back for [Stats](../stats/spec.md).
 
 **Prerequisite:** the record dataclasses of the [Fetch spec](../fetch/spec.md) exist in `src/wambatic/fetch/base.py` (check: `python -c 'import wambatic.fetch.base'`). Terms such as "step 5" and "Incremental sync" below refer to the [implementation order](../implementation-order.md) and to the Implementation section of the Fetch spec.
+
+Version 1.1 records the GitHub host in the identity, refuses a cache made for another host with `CacheHostError`, records the Enterprise server's version, and gives each host its own default file, for GitHub Enterprise Server ([Fetch](../fetch/spec.md) 1.16); the choices are in the [fetch review 1](../fetch/review-1.md), decided 2026-11-02.
 
 ## Module location
 
@@ -32,16 +34,22 @@ SCHEMA_VERSION: int = 4   # 2 from step 6: the pull_requests and issues tables; 
 
 class Cache:
     @classmethod
-    def open(cls, path: pathlib.Path, *, ignore_version: bool = False) -> Cache:
+    def open(cls, path: pathlib.Path, *, host: str = 'github.com', ignore_version: bool = False) -> Cache:
         """Create the parent directory and file if absent, set WAL mode, create the schema,
         then check or write the identity; raises CacheVersionError on a mismatch unless
-        `ignore_version`, which is recorded in `meta` as `version_override_at`."""
+        `ignore_version`, which is recorded in `meta` as `version_override_at`. Raises
+        CacheHostError when the recorded `github_host` is not `host`, whatever
+        `ignore_version` says (1.1)."""
     def close(self) -> None: ...
 
     def identity(self) -> dict[str, str]:
         """The recorded `meta` rows except `version_override_at`."""
     def version_override_at(self) -> str | None:
         """The recorded `version_override_at`, or None when the identity matched."""
+    def server_version(self) -> str | None:
+        """The recorded `server_version` row, or None (1.1)."""
+    def write_server_version(self, version: str) -> None:
+        """Insert or replace the `server_version` row (1.1)."""
     def upsert_repos(self, owner: str, repos: list[Repo], *, complete: bool) -> None:
         """Insert or replace each repo; with `complete`, mark the owner's other repos missing."""
     def read_repos(self, subject: Subject) -> list[Repo]: ...
@@ -110,6 +118,7 @@ def clear_cache(path: pathlib.Path) -> list[pathlib.Path]:
 
 - `FetchError` and its other subclasses are in the [Fetch spec](../fetch/spec.md); the errors below are `FetchError`s too.
 - `CacheError`: the cache file cannot be opened, read or written (a locked or corrupt file, a full disc, a directory that cannot be created); `sqlite3` and `OSError` failures are translated to it at the `Cache` boundary and by `inspect_cache`.
+- `CacheHostError` (1.1), a `CacheError`: the cache was made for another GitHub host. It names the cache path and both hosts, and says to set `fetch.cache_path` to another file or run `wambatic cache clear` with that host. `--ignore-cache-version` does not override it: records from two hosts must never share a cache.
 - `CacheVersionError`: the cache was written under a different schema or query version (see Cache). It names both versions and tells the user to run `wambatic cache clear` or pass `--ignore-cache-version`. It never warns and carries on, per the shared versions rule.
 
 ## Implementation
@@ -118,11 +127,15 @@ def clear_cache(path: pathlib.Path) -> list[pathlib.Path]:
 
 **Cache identity.** `meta` records `schema_version` (`SCHEMA_VERSION` in `cache.py`), the wambatic version (`wambatic.version.VERSION`), and `query:<NAME>` = the SHA-256 hex digest of each query text constant in `queries.py`. A new file has its identity written; opening a file whose recorded identity differs in any key from the running code raises `CacheVersionError` naming each differing key with both values, unless `ignore_version` is passed. Provenance reads the same values from `Cache.identity()`.
 
+**The host (1.1).** `meta` also records `github_host`, the `fetch.github_host` the cache was made for. A file without that row was made before 1.1, when only github.com could be read, so `open` reads it as `github.com` and writes the row; nothing else changes, so a github.com cache made before 1.1 keeps working. `github_host` is checked before the other keys and apart from them (`CacheHostError` above), and is part of `Cache.identity()`, so provenance names it. `server_version`, the Enterprise server's `installed_version` at the last sync, is a `meta` row outside the identity, like `version_override_at`: a server upgrade changes it without refusing the cache. `inspect_cache` reports both rows.
+
+**One file per host (1.1).** `wambatic.settings.cache_path_for(settings: FetchSettings) -> pathlib.Path` gives the file: `fetch.cache_path` when set; otherwise `~/.cache/wambatic/cache.sqlite3` for github.com, as before, and `~/.cache/wambatic/cache-<host>.sqlite3` for another host, with `:` in the host replaced by `-`. Every caller that opened `settings.fetch.cache_path` (the `report`, `serve` and `cache` commands) uses `cache_path_for`.
+
 ## Settings
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `fetch.cache_path` | `Path` | `~/.cache/wambatic/cache.sqlite3` | SQLite cache file |
+| `fetch.cache_path` | `Path \| None` | `None` | SQLite cache file; `None` gives the host's default file (see One file per host) |
 
 ## External dependencies
 

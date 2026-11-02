@@ -1,10 +1,12 @@
 # System
 
-**Version:** 1.9
-**Status:** implemented
-**Date:** 2026-10-31
+**Version:** 1.10
+**Status:** proposed
+**Date:** 2026-11-02
 
-wambatic reports statistics from github.com for a user, a repository or an organisation, as a terminal report, a static HTML report or a local web app, with the numbers bucketed by year, month, week or day. This spec is the top of the set: it fixes the architecture, the boundaries between components, the data flow, the stack and the build order. The detail of each component is in its own spec; where this spec and a component spec differ, the component spec wins and this one is amended.
+wambatic reports statistics from github.com, or from a GitHub Enterprise Server, for a user, a repository or an organisation, as a terminal report, a static HTML report or a local web app, with the numbers bucketed by year, month, week or day. This spec is the top of the set: it fixes the architecture, the boundaries between components, the data flow, the stack and the build order. The detail of each component is in its own spec; where this spec and a component spec differ, the component spec wins and this one is amended.
+
+Version 1.10 lifts the first release's GitHub Enterprise Server limit ([Fetch](../fetch/spec.md) 1.16): the token variables of an Enterprise host, and the limits that remain; the choices are in the [fetch review 1](../fetch/review-1.md), decided 2026-11-02.
 
 ## Module location
 
@@ -64,7 +66,7 @@ Rules that hold across the system:
 - **Pure core.** The aggregation functions in `stats` perform no I/O, so every metric is testable from fixture records; only `compute` awaits the fetcher, then hands the records to them.
 - **Cache is the only state.** Everything else is derived and reproducible from the cache plus the request.
 - **Provenance travels with the data.** Every `StatsResult` carries wambatic version, cache schema version, query hashes and fetch times. The cache refuses a mismatch rather than mixing versions, per the shared versions rule.
-- **Secrets stay in the environment.** The token is read from `GITHUB_TOKEN` (or `gh auth token`) and never reaches the cache, logs, reports or the browser.
+- **Secrets stay in the environment.** The token is read from `GITHUB_TOKEN` (or `gh auth token`), or for an Enterprise host from `GH_ENTERPRISE_TOKEN` or `GITHUB_ENTERPRISE_TOKEN` (or `gh auth token --hostname HOST`), and never reaches the cache, logs, reports or the browser.
 
 ## Data flow
 
@@ -92,7 +94,7 @@ Errors are typed in the layer that detects them and presented only at the edge:
 
 **Testing.** Unit tests run on recorded fixture responses and never touch the network. The opt-in live tests, skipped without `GITHUB_TOKEN`, fetch a small public repository and check line totals against the REST `stats/code_frequency` endpoint, and read its star events and forks. Tests are scoped to changed modules, as the shared rules require.
 
-**Limits accepted for the first release.** Default-branch history only; line counts are not filtered for generated files; one timezone per report; GitHub Enterprise Server is out of scope.
+**Limits accepted for the first release.** Default-branch history only; line counts are not filtered for generated files; one timezone per report. Since 1.10 GitHub Enterprise Server is supported from the oldest release GitHub supported when the wambatic release was made (3.19 on 2026-11-02); GitHub Enterprise Cloud with data residency (`*.ghe.com`) is out of scope.
 
 ## Settings
 
@@ -100,7 +102,8 @@ Layered, later wins: built-in defaults, `~/.config/wambatic/config.json`, comman
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `GITHUB_TOKEN` | string | none | API token |
+| `GITHUB_TOKEN` | string | none | API token for github.com |
+| `GH_ENTERPRISE_TOKEN`, then `GITHUB_ENTERPRISE_TOKEN` | string | none | API token for a GitHub Enterprise Server host (1.10) |
 | `WAMBATIC_CONFIG` | path | `~/.config/wambatic/config.json` | Config file path |
 
 **Config file.** A JSON object with optional `fetch`, `stats` and `report` objects whose keys are the setting names without their prefix, for example `{"fetch": {"workers": 8}}`. The file is chosen as `config_path`, else `WAMBATIC_CONFIG`, else the default path. A missing default file means built-in defaults; a missing file named by `config_path` or `WAMBATIC_CONFIG` raises `SettingsError`.

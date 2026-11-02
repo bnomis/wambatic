@@ -1,8 +1,8 @@
 # Implementation order
 
-**Version:** 1.10
-**Status:** implemented
-**Date:** 2026-10-31
+**Version:** 1.11
+**Status:** proposed
+**Date:** 2026-11-02
 
 The order in which wambatic is built, with what each step delivers, what it depends on and how to tell it is done. It sequences the components in the [system spec](system/spec.md) into steps that [taskdev](../../.agents/claude/skills/taskdev/SKILL.md) can break into tasks. Component detail stays in the component specs; this document only sequences them.
 
@@ -30,6 +30,7 @@ The order in which wambatic is built, with what each step delivers, what it depe
 | 10 | Popularity data and stats (stars, forks, watchers, languages) | [fetch](fetch/spec.md), [cache](cache/spec.md), [stats](stats/spec.md), [reports](reports/spec.md) | 7 | done: [tasks-4](../tasks/stats/tasks-4.md) |
 | 11 | Audit work: errors, specs and code fixes from the two audit reviews | every spec | 10 | done: [tasks-1](../tasks/audit-reviews/tasks-1.md), [tasks-2](../tasks/audit-reviews/tasks-2.md) |
 | 12 | User guide: MkDocs site, reference pages, screenshots, drift test | [user guide](user-guide/spec.md) | 11 | done: [tasks-1](../tasks/user-guide/tasks-1.md) |
+| 13 | GitHub Enterprise Server: host setting, addresses, token, rate limits off, version check, cache per host | [fetch](fetch/spec.md), [cache](cache/spec.md), [system](system/spec.md), [CLI](cli/spec.md), [reports](reports/spec.md), [terminal report](terminal-report/spec.md), [HTML report](html-report/spec.md) | 12 | proposed |
 
 Steps 6 and 7 are independent and may be built in either order or in parallel once 5 is done. Step 10 was split from step 8 on 2026-10-30 (stats review 3), because its fetch resources were not specified and the two together were more than one task list; it was specified on 2026-10-30 (stats review 4). Steps 9 and 10 are independent of each other. Step 11 is the audit work after step 10; it changes no feature. Step 12 is the user guide; it changes no source module.
 
@@ -95,6 +96,11 @@ Done when: `bin/audit-check.sh` reports no unaccepted hit and every task in both
 Deliver: the MkDocs site in `docs/` and `mkdocs.yml`, the reference pages and the drift test that checks them against the code, the screenshot script, the guide pages, the slimmed README and the `docs` workflow that deploys the site.
 Done when: `mkdocs build --strict` exits 0, `pytest src/tests/test_docs.py` passes and the README points at the guide.
 
+### 13. GitHub Enterprise Server
+
+Deliver: `fetch.github_host` and its checks in `wambatic.settings`, `cache_path_for`, `hosts.py` (`GitHubHost`, `parse_host`, `MIN_SERVER_VERSION`, `parse_server_version`), `GitHubClient` taking a `GitHubHost` in place of `api_url`, `fetch_token(host)`, `GitHubClient.server_version` and `ServerVersionError`, rate limits that may be switched off on an Enterprise host, the `github_host` identity row, `CacheHostError` and the `server_version` row, `--github-host` on `report`, `serve` and `cache`, the host line in the terminal and HTML provenance footers, and the user guide's Enterprise page and setting. Fetch spec 1.16, cache spec 1.1, system spec 1.10, CLI spec 1.1, reports spec 1.14, terminal report and HTML report specs 1.1; the choices are in the [fetch review 1](fetch/review-1.md).
+Done when: replayed Enterprise fixtures show every request going to `/api/v3` or `/api/graphql` on the host with the Enterprise token and never `GITHUB_TOKEN`; a server below `MIN_SERVER_VERSION` is refused before any other request; a response without rate-limit headers or `rateLimit` syncs on an Enterprise host and still fails on github.com; a cache made for one host is refused for another even with `--ignore-cache-version`; a github.com cache made before this step opens unchanged; and `mkdocs build --strict` and `pytest src/tests/test_docs.py` pass.
+
 ## Not in scope for this order
 
-GitHub Enterprise Server, default-branch-only history changes, per-file line filtering and multi-timezone reports are listed as accepted limits in the system spec and have no step here.
+Default-branch-only history, per-file line filtering and multi-timezone reports are listed as accepted limits in the system spec and have no step here; each is an item in `TODO.md`.

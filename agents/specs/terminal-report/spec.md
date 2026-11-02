@@ -1,12 +1,14 @@
 # Terminal report
 
-**Version:** 1.0
-**Status:** implemented
+**Version:** 1.1
+**Status:** proposed
 **Date:** 2026-11-02
 
 The `rich` report `wambatic report` prints by default, and the table rows it shares with the HTML page. Part of [Reports](../reports/spec.md).
 
 Version 1.0 is the reports spec 1.12 text moved here, with only its cross-references updated, when that spec was split on 2026-11-02, as [audit review 2](../../audit-reviews/review-2.md) Decision 2 (answer A, 2026-10-31) asked. `review-N.md` in the text below means the [reports reviews](../reports/review-1.md) in `agents/specs/reports/`.
+
+Version 1.1 names the GitHub host, and the server version, in the provenance footer when the host is not github.com ([Fetch](../fetch/spec.md) 1.16, [fetch review 1](../fetch/review-1.md)).
 
 ## Module location
 
@@ -40,4 +42,4 @@ def sparkline(values: list[float]) -> str:
 11. **Popularity now**: `tables['popularity']`, columns Repository, Stars, Forks, Watchers, with a `Total` footer row summing each column when there is more than one row. The caption says `as of the last sync; forks: whole network`.
 12. **Languages**: `tables['languages']`, columns Language, Bytes and Share (percentage with one decimal place), when the table is not empty: every row up to `TOP_LANGUAGES_SHOWN = 10`; with more, the first `TOP_LANGUAGES_SHOWN - 1` rows and one `Other` row summing the rest (the JSON output has every row).
 13. **Unavailable**: `tables['unavailable']`, columns Metric and Reason, when not empty. With the popularity group it also holds one row per repository whose stargazers the token could not see ([Metric groups](../metric-groups/spec.md), popularity), so a star series that leaves that repository out is never shown without the reason. Popularity now still shows GitHub's star count for it. The JSON output carries the same rows in `tables`, and the HTML page lists them in its Unavailable section.
-14. A provenance footer: `computed_at`, each `fetched_at:<resource>`, `wambatic_version` and `schema_version`; when `version_override_at` is present, a warning line that the cache was read with `--ignore-cache-version` at that time.
+14. A provenance footer: when `github_host` is not `github.com`, a first line `GitHub host: <host> (Enterprise Server <server_version>)` (1.1); then `computed_at`, each `fetched_at:<resource>`, `wambatic_version` and `schema_version`; when `version_override_at` is present, a warning line that the cache was read with `--ignore-cache-version` at that time.

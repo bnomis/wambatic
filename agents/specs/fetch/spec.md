@@ -1,8 +1,8 @@
 # Fetch
 
-**Version:** 1.15
-**Status:** implemented
-**Date:** 2026-10-31
+**Version:** 1.16
+**Status:** proposed
+**Date:** 2026-11-02
 
 Fetches raw data about a GitHub user, repository or organisation and hands it to the [Cache](../cache/spec.md), the local SQLite store that keeps repeated and incremental runs inside the API rate limits. It uses the [GraphQL API](https://docs.github.com/en/graphql) for almost everything and the [REST API](https://docs.github.com/en/rest) only where GraphQL has no equivalent (workflow runs, the `stats/*` endpoints, comparing two commits, and the list of a repository's forks). It knows nothing about metrics; [Stats](../stats/spec.md) consumes its output.
 
@@ -15,14 +15,14 @@ Fetches raw data about a GitHub user, repository or organisation and hands it to
 | Module | Holds | Built in implementation step |
 |--------|-------|------------------------------|
 | `errors.py` | `FetchError` and every typed error below | 2 (`CacheVersionError` in 3) |
-| `auth.py` | `fetch_token`, `redact` | 2 |
+| `auth.py` | `fetch_token`, `redact` | 2 (the host argument in 13) |
+| `hosts.py` | `GitHubHost`, `GITHUB_COM`, `parse_host`, `MIN_SERVER_VERSION`, `parse_server_version` | 13 |
 | `ratelimit.py` | `RateLimitState`, `backoff_delay` | 2 |
 | `client.py` | `GitHubClient`, `RestResponse`: the aiohttp transport | 2 |
 | `queries.py` | GraphQL query texts | 2 (first query), 3 onwards |
 | `base.py` | `Subject`, `RESOURCES`, `BUILT_RESOURCES`, the record dataclasses (`Repo`, `Commit` and `SyncState` in 3, `PullRequest` and `Issue` in 6, `Release` and `WorkflowRun` in 8, `StarEvent` and `Fork` in 10), `SyncReport`, `SyncProgress`, `Fetcher` | 3 (`SyncProgress` in 9; `BUILT_RESOURCES`, `Fetcher.owner_kind` in 5; `pull_requests`, `issues` in 6; `releases`, `workflow_runs` in 8; `star_events`, `forks` and the `Repo` popularity fields in 10) |
 
 The cache module `cache.py` is specified in the [Cache spec](../cache/spec.md).
-
 
 `Fetcher` owns one `GitHubClient` and one `Cache`; its `__aenter__` enters the client and its `__aexit__` exits it. `Fetcher` is therefore built in step 3, when `Cache` exists; step 2 builds the client it wraps.
 
@@ -51,6 +51,8 @@ Version 1.13 corrects the text to the code after [audit review 1](../../audit-re
 Version 1.14 corrects the Errors text to the code after [audit review 2](../../audit-reviews/review-2.md) (G15): exhausted retries, other non-2xx statuses and other `aiohttp.ClientError`s raise `FetchError`, as does a non-JSON 2xx body.
 
 Version 1.15 splits the [Cache spec](../cache/spec.md) out of this one (audit review 2, Decision 2, option A, answered 2026-10-31): `cache.py`, its tables, its identity check, `CacheError` and `CacheVersionError` moved there. Nothing else changes.
+
+Version 1.16 adds GitHub Enterprise Server, lifting the limit the [system spec](../system/spec.md) accepted for the first release: the `fetch.github_host` setting, each host's REST and GraphQL addresses, the token for an Enterprise host, rate limits that may be switched off, a check of the server's version, and the host in the cache identity and the provenance (see GitHub hosts). The choices are in [review-1.md](review-1.md), decided 2026-11-02. Step 13 of the [implementation order](../implementation-order.md) builds it.
 
 ## API
 
@@ -232,11 +234,33 @@ class Fetcher:
     async def forks(self, repo: Repo) -> typing.AsyncIterator[Fork]:
         """From the cache: the repo's direct forks, oldest `created_at` first (then `id`), all of them."""
 
-def fetch_token() -> str:
-    """GITHUB_TOKEN from the environment, else `gh auth token`; raises AuthError if neither."""
+def fetch_token(host: GitHubHost = GITHUB_COM) -> str:
+    """For github.com: GITHUB_TOKEN from the environment, else `gh auth token`. For an
+    Enterprise host (1.16): GH_ENTERPRISE_TOKEN, else GITHUB_ENTERPRISE_TOKEN, else
+    `gh auth token --hostname <host.name>`. Raises AuthError if none gives a token."""
 
 def redact(text: str, token: str) -> str:
     """`text` with every occurrence of `token` replaced by `***`."""
+
+# hosts.py (1.16)
+@dataclasses.dataclass(frozen=True, slots=True)
+class GitHubHost:
+    name: str          # 'github.com', or an Enterprise Server host: 'ghe.example.com', 'ghe.example.com:8443'
+    rest_url: str      # 'https://api.github.com', or 'https://<name>/api/v3'
+    graphql_url: str   # 'https://api.github.com/graphql', or 'https://<name>/api/graphql'
+    @property
+    def is_dotcom(self) -> bool:
+        """`name == 'github.com'`."""
+
+GITHUB_COM: GitHubHost   # parse_host('github.com')
+MIN_SERVER_VERSION: tuple[int, int] = (3, 19)   # the oldest Enterprise Server release GitHub supported on 2026-11-02
+
+def parse_host(name: str) -> GitHubHost:
+    """The addresses of a host name already checked by the settings (see GitHub hosts);
+    InvalidRequestError for any other text."""
+def parse_server_version(text: str) -> tuple[int, int]:
+    """(3, 19) from '3.19.2'; ServerVersionError when `text` does not start with two
+    dot-separated integers."""
 ```
 
 `SyncState` is the record the cache stores for each repository and resource; the [Cache spec](../cache/spec.md) uses it.
@@ -295,7 +319,7 @@ class GitHubClient:
         token: str,
         settings: FetchSettings,
         *,
-        api_url: str = 'https://api.github.com',
+        host: GitHubHost = GITHUB_COM,
         sleep: collections.abc.Callable[[float], collections.abc.Awaitable[None]] = asyncio.sleep,
         clock: collections.abc.Callable[[], datetime.datetime] | None = None,  # None: utc_now
         rng: random.Random | None = None,
@@ -307,7 +331,7 @@ class GitHubClient:
         """Closes it."""
 
     async def graphql(self, query: str, variables: collections.abc.Mapping[str, object]) -> dict[str, object]:
-        """POST `{api_url}/graphql`; returns `data`; raises the typed errors below."""
+        """POST `host.graphql_url`; returns `data`; raises the typed errors below."""
 
     async def graphql_dated(self, query: str, variables: collections.abc.Mapping[str, object]) -> tuple[dict[str, object], datetime.datetime]:
         """As `graphql`, with the response's `Date` header as an aware UTC datetime (added in 1.5
@@ -315,7 +339,12 @@ class GitHubClient:
         (`MALFORMED`). `graphql` returns the first item of this, so there is one request path."""
 
     async def rest_get(self, path: str, params: collections.abc.Mapping[str, str] | None = None, etag: str | None = None) -> RestResponse:
-        """GET `{api_url}{path}` with `If-None-Match: etag` when given; retries 202 per `fetch.stats_retries`."""
+        """GET `{host.rest_url}{path}` with `If-None-Match: etag` when given; retries 202 per `fetch.stats_retries`."""
+
+    async def server_version(self) -> str | None:
+        """None on github.com, with no request. Otherwise `installed_version` from REST
+        `GET /meta`, read once and kept for the client's life; ServerVersionError when it is
+        missing, unparseable or older than MIN_SERVER_VERSION (1.16)."""
 
     @property
     def graphql_limit(self) -> RateLimitState: ...
@@ -323,17 +352,18 @@ class GitHubClient:
     def rest_limit(self) -> RateLimitState: ...
 ```
 
-`api_url`, `sleep`, `clock` and `rng` exist so tests can point the client at a local server and run without real waits; production code passes none of them. `utc_now` returns `datetime.datetime.now(datetime.UTC)`.
+`host`, `sleep`, `clock` and `rng` exist so tests can point the client at a local server (a test builds a `GitHubHost` directly, with the replay server's URLs) and run without real waits; production code passes only `host`, which `Fetcher` builds with `parse_host(settings.github_host)` (1.16). `utc_now` returns `datetime.datetime.now(datetime.UTC)`.
 
 ## Error handling
 
 - `FetchError(Exception)`: base class of every error below, so the edge can catch the fetch layer's errors in one clause.
 - `InvalidRequestError`: a caller mistake, such as an unknown resource name, a `Subject` whose name does not fit its kind, or records that belong to another repository
 - `CacheError` and `CacheVersionError`, which are `FetchError`s, are in the [Cache spec](../cache/spec.md).
-- `AuthError`: no token found, or GitHub returns 401. With no token the message says to set `GITHUB_TOKEN` or run `gh auth login`; a 401 says `GitHub rejected the token (401)`; and no message echoes a token. A 403 that is not a rate limit (see Requests, retries and rate limits) is also `AuthError`; its message names the scopes from GitHub's `x-accepted-oauth-scopes` header when present.
+- `AuthError`: no token found, or GitHub returns 401. With no token the message says to set `GITHUB_TOKEN` or run `gh auth login`, or, for an Enterprise host, to set `GH_ENTERPRISE_TOKEN` or run `gh auth login --hostname <host>` (1.16); a 401 says `GitHub rejected the token (401)`; and no message echoes a token. A 403 that is not a rate limit (see Requests, retries and rate limits) is also `AuthError`; its message names the scopes from GitHub's `x-accepted-oauth-scopes` header when present.
+- `ServerVersionError` (1.16): an Enterprise host whose `GET /meta` has no `installed_version`, one that is not two dot-separated integers, or one older than `MIN_SERVER_VERSION`. The message names the host, the version found and the oldest version wambatic supports. It is raised before any other request of a sync or an owner lookup, and is never retried.
 - `RateLimitError`: primary limit exhausted (`x-ratelimit-remaining: 0` or a GraphQL `RATE_LIMITED` error) and `fetch.on_rate_limit` is `fail`. Carries the reset time. With `wait` the fetcher sleeps until reset, logging an `ETA:` line.
 - Secondary rate limits (HTTP 403/429, see Requests, retries and rate limits) are always honoured, then retried up to `fetch.max_retries` with exponential backoff and jitter. When the retries run out, `RateLimitError` is raised whatever `fetch.on_rate_limit` says, with `reset_at` set to the time the last wait would have ended.
-- `GraphQLError`: a GraphQL response whose `errors` contain a type other than `NOT_FOUND` and `RATE_LIMITED`. It carries each error's `type` and `message`; partial `data` is discarded.
+- `GraphQLError`: a GraphQL response whose `errors` contain a type other than `NOT_FOUND` and `RATE_LIMITED`. It carries each error's `type` and `message`; partial `data` is discarded. On an Enterprise host its message also names the host and the server version, so a field the server's schema lacks is reported with the version that lacks it (1.16).
 - `NotFoundError`: user, org or repo does not exist or is not visible to the token: REST 404, or a GraphQL error of type `NOT_FOUND`.
 - REST `stats/*` returning 202 (still computing) is retried with backoff up to `fetch.stats_retries`, then raised as `StatsPendingError`.
 - Transient failures (HTTP 500, 502, 503 and 504, `aiohttp.ClientConnectionError` and `TimeoutError`) are retried up to `fetch.max_retries` with the same backoff; when the retries run out `FetchError` is raised, with the last exception chained as its cause.
@@ -352,11 +382,11 @@ class GitHubClient:
 3. 403 or 429 with `x-ratelimit-remaining: 0`: primary limit; handled as in step 6.
 4. 403 or 429 whose JSON `message` contains `secondary rate limit`, with neither header: secondary limit; wait 60 seconds, then retry.
 5. Any other 403: `AuthError`. 404: `NotFoundError`. Transient statuses: back off and retry.
-6. *Primary limit.* The client keeps one `RateLimitState` for GraphQL and one for REST, each updated from the `x-ratelimit-*` headers of every response on its endpoint; a GraphQL response's `rateLimit` object, when present, then overrides the GraphQL state. If a primary-limit response leaves no `reset_at` to wait for, it is handled as a secondary limit with the 60-second wait. Before each request, and on a primary-limit response or a GraphQL `RATE_LIMITED` error, if the state is exhausted: with `fetch.on_rate_limit = 'fail'` raise `RateLimitError(reset_at)`; with `'wait'` log `ETA: GitHub rate limit resets in <duration>` at `info` and sleep until `reset_at` plus one second, then retry. Waiting for a primary reset does not count against `fetch.max_retries`. This is the whole of the pacing: there is no proactive slow-down while budget remains.
+6. *Primary limit.* The client keeps one `RateLimitState` for GraphQL and one for REST, each updated from the `x-ratelimit-*` headers of every response on its endpoint; a GraphQL response's `rateLimit` object, when present, then overrides the GraphQL state. If a primary-limit response leaves no `reset_at` to wait for, it is handled as a secondary limit with the 60-second wait. Before each request, and on a primary-limit response or a GraphQL `RATE_LIMITED` error, if the state is exhausted: with `fetch.on_rate_limit = 'fail'` raise `RateLimitError(reset_at)`; with `'wait'` log `ETA: GitHub rate limit resets in <duration>` at `info` and sleep until `reset_at` plus one second, then retry. Waiting for a primary reset does not count against `fetch.max_retries`. This is the whole of the pacing: there is no proactive slow-down while budget remains. A response with no `x-ratelimit-*` headers leaves its state as it was, so a server whose rate limits are switched off never exhausts it (see GitHub hosts).
 
 Backoff for transient failures and repeated secondary limits is full jitter ([AWS, Exponential backoff and jitter](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/)) with `BACKOFF_BASE = 1.0` and `BACKOFF_CAP = 60.0` seconds; for a secondary limit the wait is the larger of the header or 60-second wait and the backoff delay. A REST 202 is retried after `backoff_delay` up to `fetch.stats_retries` times, then raises `StatsPendingError`. All waits go through the client's `sleep`.
 
-Every query text in `queries.py` selects `rateLimit { cost remaining resetAt }`; a response with `data` and no `errors` that lacks it raises `GraphQLError`, so a query that forgot it fails its first test.
+Every query text in `queries.py` selects `rateLimit { cost remaining resetAt }`; a response with `data` and no `errors` that lacks it raises `GraphQLError`, so a query that forgot it fails its first test. On an Enterprise host only, a `rateLimit` that is absent or `null` is accepted and leaves the GraphQL state as it was (1.16, see GitHub hosts).
 
 **GraphQL cost control.** Queries are built to stay under the 500,000-node cap and the 5,000-points/hour budget ([limits](https://docs.github.com/en/graphql/overview/rate-limits-and-node-limits-for-the-github-graphql-api)): 100 nodes per page, only requested fields, and `rateLimit { cost remaining resetAt }` on every query so the fetcher can pace itself. Per-commit `additions` and `deletions` come from the `Commit` object's history connection, or, for commits found by a compare, from aliased `repository { object(oid:) { ... on Commit { additions deletions } } }` fields (`queries.commit_counts`; since 1.11, never `nodes(ids:)`, because the compare's `node_id` can be a deprecated legacy global ID); the REST `stats/code_frequency` endpoint is used only by the opt-in live test, as a cross-check of the summed line totals on a repo under 10,000 commits, and never at run time.
 
@@ -380,10 +410,24 @@ Every query text in `queries.py` selects `rateLimit { cost remaining resetAt }`;
 
 **Testing.** Unit tests replay fixture responses from an `aiohttp.web.Application` served by `aiohttp.test_utils.TestServer`, which ships with aiohttp, and point `GitHubClient` at it with `api_url`; async tests run their body with `asyncio.run`, so no pytest async plugin is added. Fixture responses live in `src/tests/fixtures/fetch/` as Python modules. Successful responses are recorded once from the live API (date of recording in a comment, trimmed to the fields used, no token or personal data beyond public logins); error responses (401, 403, 404, 429, 202, `RATE_LIMITED`) are written from the shapes in GitHub's documentation, each with the page it came from. The opt-in live tests, skipped when `GITHUB_TOKEN` is unset and marked `live`, run one small query against the public `octocat` account, and sync `octocat/Hello-World` into a temporary cache and check that its summed non-merge additions and deletions equal the sums of REST `stats/code_frequency`. Sync tests drive `Fetcher` with a `GitHubClient` pointed at the replay server and a `Cache` in a temporary directory. `bin/record-fixtures.sh` makes the recordings: it sends wambatic's own queries and REST requests, trims REST bodies to the fields the fetcher reads (REST lists to a page of five), and writes `src/tests/fixtures/fetch/recorded.py` with the date, the wambatic version and the sha256 of each query text; a test fails when a query no longer matches its recorded hash, until the recorder is run again. The subjects are `octocat` (listing), `octocat/Hello-World` (repository, history, compare, commit counts, REST repo), `miguelangellv/ha-gas-station-spain` (pull requests, issues, releases, workflow runs), the users `octocat` and `github`, one Copilot review page of `microsoft/vscode` (the type and login of an automatic reviewer), and `bnomis/ab2cb` (a repository of the recording account) for stargazers and forks, because a fine-grained token is refused the stargazers and a classic one lists only its own repositories' stargazers (an empty list elsewhere). The recordings of 2026-10-30 and 2026-10-31 confirmed that an automatic reviewer such as Copilot has the `Bot` type, that GraphQL gives a bot's login without `[bot]`, that a run's `path` is the short form (`.github/workflows/ci.yml`) with `name`, `status` and `run_started_at` present, that a repository with no recognised code has an empty `languages` connection (`totalSize` 0) rather than `null`, and that `forkCount` is larger than the REST list of direct forks. The recording of 2026-10-31 also holds the `COMMIT_COUNTS_OK` response, recorded rather than derived (the recording subject `octocat/Hello-World` has legacy ids, so it also shows the compare's `node_id` format). Variations no recording holds (a draft release, a queued run, a `null` languages connection) are built by the helpers in `responses.py` from the shapes in GitHub's documentation. The test upstream can serve a repository's stargazers as an empty list or as a `FORBIDDEN` error while its listed star count is unchanged. The opt-in live test also syncs `star_events` and `forks` for `octocat/Hello-World` and checks that rows are stored; it does not compare them with the listed counts, because the REST fork list of that repository holds more forks than its `forkCount`, and it skips the stars when the token is refused the stargazers (an Actions installation token).
 
+## GitHub hosts
+
+Since 1.16 wambatic reads either github.com or one GitHub Enterprise Server, chosen by `fetch.github_host` (the [CLI](../cli/spec.md) overrides it with `--github-host`). One run, one `Fetcher` and one cache talk to one host. The queries, requests and records are the same on every host; only the addresses, the token, the rate limits and the version check differ.
+
+- *Host names.* `wambatic.settings` checks the setting when it loads, raising `SettingsError` naming `fetch.github_host`: the value is lower-cased; it is `github.com`, or a host name of letters, digits, `-` and `.` with at least one `.`, optionally followed by `:` and a port from 1 to 65535; it has no scheme, path, user or query. `api.github.com` is refused with a message to use `github.com`, and a name ending in `.ghe.com` is refused because GitHub Enterprise Cloud with data residency is not supported. `parse_host` assumes a checked name.
+- *Addresses.* github.com keeps `https://api.github.com` for REST and `https://api.github.com/graphql` for GraphQL. An Enterprise host uses `https://<name>/api/v3` for REST and `https://<name>/api/graphql` for GraphQL, as GitHub's Enterprise Server documentation gives them (checked 2026-11-02): GraphQL is not under `/api/v3`. Only HTTPS is used. Every request carries the same headers as on github.com; Enterprise Server 3.19 to 3.22 support the REST API version `2022-11-28`, the only one (checked 2026-11-02).
+- *Token.* `fetch_token(host)` follows the `gh` CLI: for github.com `GITHUB_TOKEN`, else `gh auth token`; for an Enterprise host `GH_ENTERPRISE_TOKEN`, else `GITHUB_ENTERPRISE_TOKEN`, else `gh auth token --hostname <name>`. A github.com token in the environment is therefore never sent to another server.
+- *Rate limits.* GitHub documents that rate limits are disabled by default on Enterprise Server, and does not document what the GraphQL `rateLimit` object returns then (checked 2026-11-02). A response with no `x-ratelimit-*` headers leaves the state unchanged on any host, and on an Enterprise host a `rateLimit` that is absent or `null` is accepted. When the administrator has switched limits on, the headers and the object are present and are handled exactly as on github.com. On github.com a missing `rateLimit` is still a `GraphQLError`, so a query that forgot to select it still fails its first test.
+- *Server version.* `Fetcher.sync` and `Fetcher.owner_kind` call `GitHubClient.server_version()` before their first other request. On an Enterprise host that is one `GET /meta`, whose `installed_version` must parse and be at least `MIN_SERVER_VERSION`, else `ServerVersionError`. `MIN_SERVER_VERSION` is the oldest release GitHub supported when the wambatic release was made, and is raised by a release, not at run time. A sync writes the version it read to the cache's `server_version` row ([Cache](../cache/spec.md)), so a report made from the cache later names it.
+- *Provenance.* `Fetcher.provenance` carries the cache's `github_host` identity row (every result names its host) and, for an Enterprise host, `server_version`.
+- *What does not change.* Every query, every REST path and every record is the same. GitHub Actions may be switched off on an Enterprise server; a 404 on the workflow-run list is already read as no runs. Stargazer visibility, the compare endpoint and the `stats/*` endpoints behave as on github.com as far as GitHub documents them.
+- *Testing.* No Enterprise server is available to record from, so the Enterprise fixtures are written from the shapes in GitHub's Enterprise Server documentation, each with the page it came from: a `GET /meta` body with `installed_version` (3.19.0, 3.18.4 to be refused, and none), a GraphQL response with `rateLimit: null` and one without it, and REST responses without `x-ratelimit-*` headers. The replay server serves them under `/api/v3` and `/api/graphql`, and the tests check every request's path, that the Enterprise token is sent and `GITHUB_TOKEN` is not, that a github.com response without `rateLimit` still raises, and that `server_version` is requested once per client. The live tests stay on github.com.
+
 ## Settings
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
+| `fetch.github_host` | `str` | `'github.com'` | The GitHub host to read: `github.com` or a GitHub Enterprise Server host name, with an optional port (see GitHub hosts) |
 | `fetch.include_forks` | `bool` | `False` | Include forked repos for user/org subjects |
 | `fetch.full_refresh_after` | `timedelta` | `30 days` | Age of the last full read after which a resource is fully re-read to catch deletions |
 | `fetch.include_archived` | `bool` | `False` | Include archived repos |

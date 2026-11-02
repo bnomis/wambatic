@@ -1,12 +1,14 @@
 # CLI
 
-**Version:** 1.0
-**Status:** implemented
+**Version:** 1.1
+**Status:** proposed
 **Date:** 2026-11-02
 
 The `wambatic` command line: its commands and flags, the order `report` runs in, the `cache` commands, and the one place every error becomes an exit status. Part of [Reports](../reports/spec.md), which holds what the front ends share.
 
 Version 1.0 is the reports spec 1.12 text moved here, with only its cross-references updated, when that spec was split on 2026-11-02, as [audit review 2](../../audit-reviews/review-2.md) Decision 2 (answer A, 2026-10-31) asked. `review-N.md` in the text below means the [reports reviews](../reports/review-1.md) in `agents/specs/reports/`.
+
+Version 1.1 adds `--github-host` to `report`, `serve` and `cache`, for GitHub Enterprise Server ([Fetch](../fetch/spec.md) 1.16); the choices are in the [fetch review 1](../fetch/review-1.md), decided 2026-11-02.
 
 **Prerequisites:** [Reports](../reports/spec.md), [Terminal report](../terminal-report/spec.md), [HTML report](../html-report/spec.md) and [Web app](../web-app/spec.md), whose renderers it dispatches to.
 
@@ -32,10 +34,10 @@ wambatic [-v | -q] report <target> [--format terminal|html|json] [--out PATH]
                          [--by year|month|week|day|total] [--since DATE] [--until DATE]
                          [--groups activity,flow,delivery,popularity] [--by-author] [--tz ZONE]
                          [--full-refresh | --no-fetch] [--max-age DURATION]
-                         [--ignore-cache-version]
+                         [--ignore-cache-version] [--github-host HOST]
 wambatic [-v | -q] serve  [<target>] [--host 127.0.0.1] [--port 8000] [--allow-remote]
                          [--max-age DURATION] [--ignore-cache-version]
-wambatic [-v | -q] cache  clear|info
+wambatic [-v | -q] cache  clear|info [--github-host HOST]
 ```
 
 The CLI is defined with [cappa](https://cappa.readthedocs.io/) dataclasses, as the shared Python rules require: a root command holding `-v`/`--verbose` and `-q`/`--quiet` and a `cappa.Subcommands` field of the `report`, `serve` and `cache` command classes. Step 5 built `report` (without `--format html` and `--out`) and `cache`; step 7 added `--format html` and `--out`, and step 9 adds `serve`.
@@ -54,6 +56,7 @@ The CLI is defined with [cappa](https://cappa.readthedocs.io/) dataclasses, as t
 - `--ignore-cache-version` opens the cache with `Cache.open(..., ignore_version=True)`, as `CacheVersionError`'s message tells the user to; provenance then records it.
 - `-v` sets the log level to `DEBUG`, `-q` to `WARNING`; the default is `INFO`. Both together are a `UsageError`. Logs go to stderr, as `{level}: {message}` at `INFO` and `WARNING` and in loguru's default format (time and source location) at `DEBUG`, through `wambatic.logs.configure_logging`; reports go to stdout.
 - `serve`'s `<target>` is optional and parsed as `report`'s, at start-up (a bad one is a `UsageError`); it fills the form's default and the start-up line names its report URL. `--host`, `--port` and `--allow-remote` override `report.web_host`, `report.web_port` and `report.allow_remote`; a port outside 1 to 65535 is a `UsageError`. `--max-age` and `--ignore-cache-version` are as for `report` (review-3.md choice 9).
+- `--github-host HOST` (1.1) overrides `fetch.github_host` for `report`, `serve` and `cache`; the setting's checks apply, so a bad host is a `SettingsError`. It is not `--host`, which `serve` already uses for its bind address. `cache clear` and `cache info` act on that host's cache file (`cache_path_for`, [Cache](../cache/spec.md)).
 - The config file is chosen as the system spec says (`WAMBATIC_CONFIG`, else the default path); there is no `--config` flag.
 
 **Running `report`.** In this order:

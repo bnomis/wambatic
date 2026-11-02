@@ -32,3 +32,24 @@ the hooks are adopted, or `python3 ~/.claude/skills/auditme/checks/audit.py .`.
 Spec: agents/audit-reviews/review-2.md (G2); tasks: agents/tasks/audit-reviews/tasks-2.md.
 
 Done: 2026-10-31 - fixed by review-2 G2 (tasks-2 Task 1); the UNITS hit was already fixed by tasks-1 Task 7. Source: agents/audit-reviews/review-2.md; tasks: agents/tasks/audit-reviews/tasks-2.md.
+
+## The reports and stats specs are still one file each
+
+Found on 2026-11-02 by `/todo-review`. Audit review 2 decided on 2026-10-31
+(`agents/audit-reviews/review-2.md`, Decision 2, answer A) to split
+`fetch-and-cache/spec.md` at once and to split `reports` and `stats` "when
+they next change". Both changed later that day (commits `1072e10` and
+`e4bd689`, audit-review tasks-2 Tasks 5 and 6) and neither was split. Measured
+on 2026-11-02: `agents/specs/reports/spec.md` was 347 lines and
+`agents/specs/stats/spec.md` 274, against the specdev guide of about 200.
+
+Cause: the split was tied to the next change, and the changes that came were
+audit fixes made inside a task list that did not include it.
+
+Fix direction: split them with `/specdev` before any feature below edits them:
+`reports` into the CLI, terminal, HTML and web app specs, and `stats` into its
+API and its metric groups, as `cdb829e` did for fetch and cache. Update
+`agents/specs/index.md`, the implementation order's links and every
+cross-reference.
+
+Done: 2026-11-02 - split on branch `docs/split-reports-stats-specs`: reports spec 1.13 keeps what the front ends share, with the CLI, Terminal report, HTML report and Web app specs 1.0; stats spec 1.10 keeps the API, with the Metric groups spec 1.0. Source: agents/audit-reviews/review-2.md (Decision 2).

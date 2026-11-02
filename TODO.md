@@ -4,25 +4,6 @@ Open work only, in implementation order, nearest first. Finished items move to
 `DONE.md` unchanged. See the shared `todo-add` and `todo-review` skills for
 the shape of an item.
 
-## The reports and stats specs are still one file each
-
-Found on 2026-11-02 by `/todo-review`. Audit review 2 decided on 2026-10-31
-(`agents/audit-reviews/review-2.md`, Decision 2, answer A) to split
-`fetch-and-cache/spec.md` at once and to split `reports` and `stats` "when
-they next change". Both changed later that day (commits `1072e10` and
-`e4bd689`, audit-review tasks-2 Tasks 5 and 6) and neither was split. Measured
-on 2026-11-02: `agents/specs/reports/spec.md` was 347 lines and
-`agents/specs/stats/spec.md` 274, against the specdev guide of about 200.
-
-Cause: the split was tied to the next change, and the changes that came were
-audit fixes made inside a task list that did not include it.
-
-Fix direction: split them with `/specdev` before any feature below edits them:
-`reports` into the CLI, terminal, HTML and web app specs, and `stats` into its
-API and its metric groups, as `cdb829e` did for fetch and cache. Update
-`agents/specs/index.md`, the implementation order's links and every
-cross-reference.
-
 ## GitHub Enterprise Server is not supported
 
 Found on 2026-11-02 by `/todo-review`, from the limits the system spec

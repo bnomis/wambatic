@@ -39,7 +39,7 @@ The user guide is at <https://bnomis.github.io/wambatic/>. It covers every optio
 
 ## More
 
-The design is in [the system spec](agents/specs/system/spec.md), [fetch](agents/specs/fetch/spec.md), [cache](agents/specs/cache/spec.md), [stats](agents/specs/stats/spec.md) and [reports](agents/specs/reports/spec.md); the order of work is in [the implementation order](agents/specs/implementation-order.md). Contributors: the project layout, tools and checks are in [AGENTS.md](AGENTS.md), and the shared rules are in the `.agents` submodule. The user guide is at <https://bnomis.github.io/wambatic/>.
+The design is in [the system spec](agents/specs/system/spec.md), [fetch](agents/specs/fetch/spec.md), [cache](agents/specs/cache/spec.md), [stats](agents/specs/stats/spec.md) with its [metric groups](agents/specs/metric-groups/spec.md), and [reports](agents/specs/reports/spec.md) with the [CLI](agents/specs/cli/spec.md), [terminal report](agents/specs/terminal-report/spec.md), [HTML report](agents/specs/html-report/spec.md) and [web app](agents/specs/web-app/spec.md); the order of work is in [the implementation order](agents/specs/implementation-order.md). Contributors: the project layout, tools and checks are in [AGENTS.md](AGENTS.md), and the shared rules are in the `.agents` submodule. The user guide is at <https://bnomis.github.io/wambatic/>.
 
 ## Updating the shared rules
 

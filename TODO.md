@@ -20,7 +20,28 @@ address, a check of what the server supports (GraphQL fields the listing
 selects, rate-limit reporting) that fails with a typed error, and the cache
 identity recording the host so two hosts never share a cache.
 
-## Line counts include generated files
+## The commit sync reads only default-branch totals
+
+Consolidated on 2026-11-02 by `/todo-review` from the two findings below.
+Both lift a limit the system spec accepted for the first release by changing
+the same artefact: how commits are synced from GitHub and stored in the cache.
+Line counts need per-file figures for each commit, and other branches need a
+sync state each, so either one changes the commit records, the cache schema
+and the incremental sync. Done apart, the second would rework the schema and
+sync the first had just changed.
+
+Fix direction: one spec change to `fetch`, `cache` and `metric-groups` (the
+`activity` line counts; the metric groups were split out of the stats spec on
+2026-11-02, commit `1110cec`) that covers both findings, with one cache schema
+version raise: per-file line counts and exclude patterns recorded in the
+provenance, then the branches to follow, a sync state per branch, commits
+de-duplicated by oid across branches and rewritten-history detection per
+branch. Measure the extra requests against the rate limit before choosing how
+per-file counts are fetched. Generated files are filtered before other
+branches are counted, so commits from other branches are filtered from the
+start.
+
+### Line counts include generated files
 
 Found on 2026-11-02 by `/todo-review`, from the limits the system spec
 (`agents/specs/system/spec.md`, "Limits accepted for the first release")
@@ -37,7 +58,7 @@ the provenance so reports made with different patterns are not mixed. Do this
 before counting all branches, so commits from other branches are filtered from
 the start.
 
-## Only default-branch history is counted
+### Only default-branch history is counted
 
 Found on 2026-11-02 by `/todo-review`, from the limits the system spec
 (`agents/specs/system/spec.md`, "Limits accepted for the first release")
@@ -64,3 +85,7 @@ Fix direction: a spec change to `stats` and `reports`: a timezone per author
 (from settings, or the commit's own offset), how buckets are formed when
 authors are in different zones, and how the report says which zone each
 figure uses.
+
+Note 2026-11-02: since `1110cec` split the reports and stats specs, `--tz` is in the
+`cli` spec and how a zone is shown is in the `terminal-report` and
+`html-report` specs; bucketing stays in `stats`.

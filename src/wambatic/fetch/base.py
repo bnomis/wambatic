@@ -29,6 +29,7 @@ RESOURCE_ORDER: tuple[Resource, ...] = typing.get_args(Resource)
 RESOURCES: frozenset[str] = frozenset(RESOURCE_ORDER)
 BUILT_RESOURCES = RESOURCES
 PAGE_SIZE = 100
+COMMIT_FILES_PAGE = 300
 STARS_HIDDEN = 'hidden'
 BOT_SUFFIX = '[bot]'
 
@@ -634,6 +635,34 @@ def repository_connection(
     return connection
 
 
+def history_connection(
+    ref: str,
+) -> collections.abc.Callable[[dict[str, object]], dict[str, object]]:
+    """Finds the commit `history` of the repository field `ref` in a response's `data`."""
+
+    def connection(data: dict[str, object]) -> dict[str, object]:
+        repository = mapping(data.get('repository'), 'repository')
+        branch = mapping(repository.get(ref), ref)
+        target = mapping(branch.get('target'), 'target')
+        return mapping(target.get('history'), 'history')
+
+    return connection
+
+
+def branch_heads_connection(data: dict[str, object]) -> dict[str, object]:
+    repository = mapping(data.get('repository'), 'repository')
+    return mapping(repository.get('refs'), 'refs')
+
+
+def parse_commit_file(node: object) -> CommitFile:
+    fields = mapping(node, 'commit file')
+    return CommitFile(
+        path=text(fields.get('filename'), 'filename'),
+        additions=integer(fields.get('additions'), 'additions'),
+        deletions=integer(fields.get('deletions'), 'deletions'),
+    )
+
+
 def split_name(name_with_owner: str) -> tuple[str, str]:
     owner, _, name = name_with_owner.partition('/')
     return owner, name
@@ -954,15 +983,11 @@ class Fetcher:
         if repo.default_branch is not None:
             owner, name = split_name(repo.name_with_owner)
 
-            def history(data: dict[str, object]) -> dict[str, object]:
-                repository = mapping(data.get('repository'), 'repository')
-                branch = mapping(repository.get('defaultBranchRef'), 'defaultBranchRef')
-                target = mapping(branch.get('target'), 'target')
-                return mapping(target.get('history'), 'history')
-
             async with contextlib.aclosing(
                 self.pages(
-                    wambatic.fetch.queries.COMMIT_HISTORY, {'owner': owner, 'name': name}, history
+                    wambatic.fetch.queries.COMMIT_HISTORY,
+                    {'owner': owner, 'name': name},
+                    history_connection('defaultBranchRef'),
                 )
             ) as pages:
                 async for nodes, _ in pages:
@@ -1102,6 +1127,143 @@ class Fetcher:
             self.cache.write_commits, repo.name_with_owner, commits, new_state, replace=False
         )
 
+    async def branch_heads(self, repo: Repo) -> dict[str, str]:
+        """Every branch of the repo with its head oid."""
+        owner, name = split_name(repo.name_with_owner)
+        heads: dict[str, str] = {}
+        async with contextlib.aclosing(
+            self.pages(
+                wambatic.fetch.queries.BRANCHES,
+                {'owner': owner, 'name': name},
+                branch_heads_connection,
+            )
+        ) as pages:
+            async for nodes, _ in pages:
+                for node in nodes:
+                    fields = mapping(node, 'branch')
+                    target = mapping(fields.get('target'), 'branch target')
+                    heads[text(fields.get('name'), 'branch name')] = text(
+                        target.get('oid'), 'branch head'
+                    )
+        return heads
+
+    async def branch_history(self, repo: Repo, branch: str) -> list[Commit]:
+        """Every commit reachable from the branch, newest first, with GitHub's line totals."""
+        owner, name = split_name(repo.name_with_owner)
+        commits: list[Commit] = []
+        async with contextlib.aclosing(
+            self.pages(
+                wambatic.fetch.queries.BRANCH_HISTORY,
+                {'owner': owner, 'name': name, 'branch': f'refs/heads/{branch}'},
+                history_connection('ref'),
+            )
+        ) as pages:
+            async for nodes, _ in pages:
+                commits.extend(parse_history_node(repo.name_with_owner, node) for node in nodes)
+        return commits
+
+    async def commit_files(self, repo: Repo, oid: str) -> tuple[CommitFile, ...]:
+        """The files of one commit from REST, paged past COMMIT_FILES_PAGE files.
+
+        Raises:
+            FetchError: GitHub has no such commit, though a history just listed it.
+        """
+        path = f'/repos/{repo.name_with_owner}/commits/{oid}'
+        files: list[CommitFile] = []
+        page = 1
+        while True:
+            try:
+                response = await self.client.rest_get(path, {'page': str(page)})
+            except wambatic.fetch.errors.NotFoundError as error:
+                raise wambatic.fetch.errors.FetchError(
+                    f'GitHub has no commit {oid} of {repo.name_with_owner}, which a branch lists'
+                ) from error
+            nodes = sequence(mapping(response.data, 'commit').get('files'), 'files')
+            files.extend(parse_commit_file(node) for node in nodes)
+            if len(nodes) < COMMIT_FILES_PAGE:
+                return tuple(files)
+            page += 1
+
+    async def sync_api_files(
+        self, repo: Repo, state: SyncState | None, reason: str
+    ) -> tuple[int, bool]:
+        """The `api-files` method: the followed branches' histories through GraphQL and each new
+        commit's files through REST. `reason` is why the repo is read from scratch, '' for an
+        incremental read.
+
+        Raises:
+            GraphQLError: a response is malformed.
+            FetchError: another failure, retries run out, or a listed commit has no REST record.
+        """
+        name = repo.name_with_owner
+        patterns = tuple(self.settings.branches)
+        replace = bool(reason)
+        if reason:
+            loguru.logger.info(f'Reading all commits of {name}: {reason}')
+        empty = repo.default_branch is None
+        followed: dict[str, str] = {}
+        if not empty:
+            followed = followed_branches(
+                typing.cast('str', repo.default_branch), await self.branch_heads(repo), patterns
+            )
+            if repo.default_branch not in followed:
+                raise wambatic.fetch.errors.FetchError(
+                    f'{name} has no branch {repo.default_branch}'
+                )
+        stored = {} if replace or state is None else await self.db(self.cache.branch_heads, name)
+        cached = frozenset() if replace else await self.db(self.cache.commit_oids, name)
+        rewrite = replace or empty or bool(set(stored) - set(followed))
+        found: dict[str, Commit] = {}
+        counted: dict[str, NewCommit] = {}
+        if not rewrite:
+            for branch, head in followed.items():
+                if stored.get(branch) == head:
+                    continue
+                if branch not in stored:
+                    found.update({c.oid: c for c in await self.branch_history(repo, branch)})
+                    continue
+                ahead = await self.compare(repo, stored[branch], head)
+                if ahead is None:
+                    rewrite = True
+                    break
+                counted.update({c.oid: c for c in ahead})
+        if rewrite:
+            counted = {}
+            found = {}
+            for branch in followed:
+                found.update({c.oid: c for c in await self.branch_history(repo, branch)})
+        gone = frozenset(cached - set(found) - set(counted)) if rewrite else frozenset[str]()
+        fresh = [commit for oid, commit in found.items() if oid not in cached]
+        fresh += await self.line_counts(
+            repo,
+            [commit for oid, commit in counted.items() if oid not in found and oid not in cached],
+        )
+        commits = [
+            dataclasses.replace(commit, files=await self.commit_files(repo, commit.oid))
+            for commit in fresh
+        ]
+        if gone:
+            loguru.logger.info(f'Dropping {len(gone)} commits of {name} no followed branch reaches')
+        new_state = dataclasses.replace(
+            self.new_state(
+                repo,
+                'commits',
+                None if state is None or replace else state.full_synced_at,
+                commit_probe('api-files', None, patterns),
+            ),
+            head_oid=repo.head_oid,
+        )
+        written = await self.db(
+            self.cache.write_commits,
+            name,
+            commits,
+            new_state,
+            replace=replace,
+            gone=gone,
+            branch_heads=followed,
+        )
+        return written, replace or bool(gone)
+
     async def sync_clone(
         self, repo: Repo, state: SyncState | None, recorded: CommitProbe | None, reason: str
     ) -> tuple[int, bool]:
@@ -1192,17 +1354,12 @@ class Fetcher:
         of its last sync it is read in full, replacing its rows, so its rows come from one method.
 
         Raises:
-            InvalidRequestError: the method is `api-files`, which is not built yet.
             GitError: git fails, or the clone lacks the default branch.
             GraphQLError: a new commit has no GitHub object or author field.
             FetchError: another failure, or retries run out.
         """
         state = await self.stored_state(repo, 'commits', state)
         method = commit_method(repo, self.settings)
-        if method == 'api-files':
-            raise wambatic.fetch.errors.InvalidRequestError(
-                f'{repo.name_with_owner} needs the api-files commit method, which is not built yet'
-            )
         recorded = None if state is None else parse_commit_probe(state.probe)
         if state is None or recorded is None:
             reason = 'no previous sync'
@@ -1214,6 +1371,11 @@ class Fetcher:
             reason = ''
         if method == 'clone':
             return await self.sync_clone(repo, state, recorded, reason)
+        if method == 'api-files':
+            result = await self.sync_api_files(repo, state, reason)
+            if recorded is not None and recorded.method == 'clone':
+                await asyncio.to_thread(self.git.remove, repo.name_with_owner)
+            return result
         if state is not None and not reason:
             written = await self.update_commits(repo, state)
             if written is not None:

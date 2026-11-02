@@ -201,7 +201,7 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 ## Task 6: Sync uncloned repositories with per-file counts by API
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** large
 **Spec Reference:** commit sync 1.0, The `api-files` method, Error handling, Cost, Accepted limits, Testing
@@ -210,24 +210,24 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 **Subtasks:**
 
-- [ ] Add `BRANCHES` (`refs(refPrefix: "refs/heads/", first: 100, after:)` with each target oid) and `BRANCH_HISTORY` (`ref(qualifiedName:)` history with the fields of `COMMIT_HISTORY`) to `src/wambatic/fetch/queries.py`, each with `rateLimit`
-- [ ] Implement the `api-files` method's steps 1 to 5: branches and followed heads; per branch, `compare` from a stored head, `BRANCH_HISTORY` for a new branch, and every followed branch in full after a `diverged` or `behind` compare, a 404 or a branch dropped, with gone commits those no branch listed
-- [ ] Read each new commit's files with REST `GET /repos/{owner}/{name}/commits/{sha}`, paged with `page` past 300 files; `generated` and `binary` False; the commit's totals from the history or `COMMIT_COUNTS`; a 404 for a listed commit is a `FetchError` naming the oid; remove Task 5's `InvalidRequestError` for this method
-- [ ] Write with `probe` `method=api-files branches=<JSON list>`
-- [ ] Re-run `bin/record-fixtures.sh` for `BRANCHES`, `BRANCH_HISTORY` and one REST commit with its files (`octocat/Hello-World`); build a two-page file list in `responses.py` from GitHub's documented shape
-- [ ] Tests in `src/tests/fetch/test_fetcher.py`: a first sync, a moved head, a new branch, a force-push (every branch re-read, gone commits deleted), a commit with more than 300 files (two pages), and a cached commit never read again
-- [ ] Hoist anything this method duplicates from the `api` method to a single owner: grep the tree for each literal collection, constant and one-line helper the new code defines (history parsing, compare paging, the 100-per-query constants), and import rather than copy. Choose the owner from the existing import graph; prefer a module the consumer already imports over adding a new edge
+- [x] Add `BRANCHES` (`refs(refPrefix: "refs/heads/", first: 100, after:)` with each target oid) and `BRANCH_HISTORY` (`ref(qualifiedName:)` history with the fields of `COMMIT_HISTORY`) to `src/wambatic/fetch/queries.py`, each with `rateLimit`
+- [x] Implement the `api-files` method's steps 1 to 5: branches and followed heads; per branch, `compare` from a stored head, `BRANCH_HISTORY` for a new branch, and every followed branch in full after a `diverged` or `behind` compare, a 404 or a branch dropped, with gone commits those no branch listed
+- [x] Read each new commit's files with REST `GET /repos/{owner}/{name}/commits/{sha}`, paged with `page` past 300 files; `generated` and `binary` False; the commit's totals from the history or `COMMIT_COUNTS`; a 404 for a listed commit is a `FetchError` naming the oid; remove Task 5's `InvalidRequestError` for this method
+- [x] Write with `probe` `method=api-files branches=<JSON list>`
+- [x] Re-run `bin/record-fixtures.sh` for `BRANCHES`, `BRANCH_HISTORY` and one REST commit with its files (`octocat/Hello-World`); build a two-page file list in `responses.py` from GitHub's documented shape
+- [x] Tests in `src/tests/fetch/test_fetcher.py`: a first sync, a moved head, a new branch, a force-push (every branch re-read, gone commits deleted), a commit with more than 300 files (two pages), and a cached commit never read again
+- [x] Hoist anything this method duplicates from the `api` method to a single owner: grep the tree for each literal collection, constant and one-line helper the new code defines (history parsing, compare paging, the 100-per-query constants), and import rather than copy. Choose the owner from the existing import graph; prefer a module the consumer already imports over adding a new edge
 
 **Acceptance Criteria:**
 
-- [ ] With `fetch.api_history = 'files'`, a private repository's commits on every followed branch are stored once, each with its files
-- [ ] No REST request is made for a commit already cached
+- [x] With `fetch.api_history = 'files'`, a private repository's commits on every followed branch are stored once, each with its files
+- [x] No REST request is made for a commit already cached
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/fetch/test_fetcher.py src/tests/fetch/test_queries.py src/tests/fetch/test_client.py src/tests/test_record_fixtures.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/fetch/test_fetcher.py src/tests/fetch/test_queries.py src/tests/fetch/test_client.py src/tests/test_record_fixtures.py` passes
 
 **Notes:**
 

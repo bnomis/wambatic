@@ -13,11 +13,13 @@ are trimmed to the fields the fetcher reads.
 
 import types
 
-RECORDED_AT = '2026-11-02T20:51:38Z'
+RECORDED_AT = '2026-11-02T21:12:15Z'
 WAMBATIC_VERSION = '0.1.0'
 # sha256 of each wambatic.fetch.queries text the recording was made with
 QUERY_SHA256 = types.MappingProxyType(
     {
+        'BRANCHES': '4b277c1c69b1862609c465eec9eec13626ec4343208560020e788c45a2f39898',
+        'BRANCH_HISTORY': '08f9c3d7518b7b0391d231acd9141af8e70473cb35a88306fecddc2c312a19e4',
         'COMMIT_AUTHORS': 'ebb5226965d85789f6d617ccc557b7965212c66ea4c2440e57b40384b57f699b',
         'COMMIT_COUNTS': 'f0ff534684ce491b40712fe59760a95418a97b5713042ce9cb86317c717c80e2',
         'COMMIT_HISTORY': 'e390724dbc61a80de490efc8274d16854c3abef5819a7986b68d56ab1f120343',
@@ -35,7 +37,7 @@ OWNER_REPOSITORIES_OK = types.MappingProxyType(
         'data': types.MappingProxyType(
             {
                 'rateLimit': types.MappingProxyType(
-                    {'cost': 4, 'remaining': 4911, 'resetAt': '2026-11-02T21:03:57Z'}
+                    {'cost': 4, 'remaining': 4972, 'resetAt': '2026-11-02T22:04:23Z'}
                 ),
                 'repositoryOwner': types.MappingProxyType(
                     {
@@ -54,7 +56,7 @@ OWNER_REPOSITORIES_OK = types.MappingProxyType(
                                                     ),
                                                 }
                                             ),
-                                            'forkCount': 160850,
+                                            'forkCount': 160852,
                                             'isArchived': False,
                                             'isFork': False,
                                             'issues': types.MappingProxyType(
@@ -94,7 +96,7 @@ OWNER_REPOSITORIES_OK = types.MappingProxyType(
                                                 {
                                                     'nodes': (
                                                         types.MappingProxyType(
-                                                            {'updatedAt': '2026-11-02T19:36:01Z'}
+                                                            {'updatedAt': '2026-11-02T20:56:37Z'}
                                                         ),
                                                     )
                                                 }
@@ -104,9 +106,9 @@ OWNER_REPOSITORIES_OK = types.MappingProxyType(
                                                 {'nodes': (), 'totalCount': 0}
                                             ),
                                             'stargazerCount': 14161,
-                                            'updatedAt': '2026-11-02T19:14:30Z',
+                                            'updatedAt': '2026-11-02T20:53:16Z',
                                             'visibility': 'PUBLIC',
-                                            'watchers': types.MappingProxyType({'totalCount': 909}),
+                                            'watchers': types.MappingProxyType({'totalCount': 910}),
                                         }
                                     ),
                                     types.MappingProxyType(
@@ -121,7 +123,7 @@ OWNER_REPOSITORIES_OK = types.MappingProxyType(
                                                     ),
                                                 }
                                             ),
-                                            'forkCount': 7348,
+                                            'forkCount': 7350,
                                             'isArchived': False,
                                             'isFork': False,
                                             'issues': types.MappingProxyType(
@@ -492,7 +494,7 @@ REPOSITORY_OK = types.MappingProxyType(
         'data': types.MappingProxyType(
             {
                 'rateLimit': types.MappingProxyType(
-                    {'cost': 1, 'remaining': 4908, 'resetAt': '2026-11-02T21:03:57Z'}
+                    {'cost': 1, 'remaining': 4971, 'resetAt': '2026-11-02T22:04:23Z'}
                 ),
                 'repository': types.MappingProxyType(
                     {
@@ -504,7 +506,7 @@ REPOSITORY_OK = types.MappingProxyType(
                                 ),
                             }
                         ),
-                        'forkCount': 7348,
+                        'forkCount': 7350,
                         'isArchived': False,
                         'isFork': False,
                         'issues': types.MappingProxyType(
@@ -536,12 +538,158 @@ REPOSITORY_OK = types.MappingProxyType(
     }
 )
 
+BRANCHES_OK = types.MappingProxyType(
+    {
+        'data': types.MappingProxyType(
+            {
+                'rateLimit': types.MappingProxyType(
+                    {'cost': 1, 'remaining': 4970, 'resetAt': '2026-11-02T22:04:23Z'}
+                ),
+                'repository': types.MappingProxyType(
+                    {
+                        'refs': types.MappingProxyType(
+                            {
+                                'nodes': (
+                                    types.MappingProxyType(
+                                        {
+                                            'name': 'master',
+                                            'target': types.MappingProxyType(
+                                                {'oid': '7fd1a60b01f91b314f59955a4e4d4e80d8edf11d'}
+                                            ),
+                                        }
+                                    ),
+                                    types.MappingProxyType(
+                                        {
+                                            'name': 'octocat-patch-1',
+                                            'target': types.MappingProxyType(
+                                                {'oid': 'b1b3f9723831141a31a1a7252a213e216ea76e56'}
+                                            ),
+                                        }
+                                    ),
+                                    types.MappingProxyType(
+                                        {
+                                            'name': 'test',
+                                            'target': types.MappingProxyType(
+                                                {'oid': 'b3cbd5bbd7e81436d2eee04537ea2b4c0cad4cdf'}
+                                            ),
+                                        }
+                                    ),
+                                ),
+                                'pageInfo': types.MappingProxyType(
+                                    {'endCursor': 'Mw', 'hasNextPage': False}
+                                ),
+                            }
+                        )
+                    }
+                ),
+            }
+        )
+    }
+)
+
+BRANCH_HISTORY_OK = types.MappingProxyType(
+    {
+        'data': types.MappingProxyType(
+            {
+                'rateLimit': types.MappingProxyType(
+                    {'cost': 1, 'remaining': 4999, 'resetAt': '2026-11-02T22:12:17Z'}
+                ),
+                'repository': types.MappingProxyType(
+                    {
+                        'ref': types.MappingProxyType(
+                            {
+                                'target': types.MappingProxyType(
+                                    {
+                                        'history': types.MappingProxyType(
+                                            {
+                                                'nodes': (
+                                                    types.MappingProxyType(
+                                                        {
+                                                            'additions': 1,
+                                                            'author': types.MappingProxyType(
+                                                                {
+                                                                    'user': types.MappingProxyType(
+                                                                        {'login': 'octocat'}
+                                                                    )
+                                                                }
+                                                            ),
+                                                            'authoredDate': '2012-03-06T23:06:50Z',
+                                                            'deletions': 1,
+                                                            'oid': '7fd1a60b01f91b314f59955a4e4d4e80d8edf11d',
+                                                            'parents': types.MappingProxyType(
+                                                                {'totalCount': 2}
+                                                            ),
+                                                        }
+                                                    ),
+                                                    types.MappingProxyType(
+                                                        {
+                                                            'additions': 1,
+                                                            'author': types.MappingProxyType(
+                                                                {
+                                                                    'user': types.MappingProxyType(
+                                                                        {'login': 'Spaceghost'}
+                                                                    )
+                                                                }
+                                                            ),
+                                                            'authoredDate': '2011-09-14T04:42:41Z',
+                                                            'deletions': 1,
+                                                            'oid': '762941318ee16e59dabbacb1b4049eec22f0d303',
+                                                            'parents': types.MappingProxyType(
+                                                                {'totalCount': 1}
+                                                            ),
+                                                        }
+                                                    ),
+                                                    types.MappingProxyType(
+                                                        {
+                                                            'additions': 1,
+                                                            'author': types.MappingProxyType(
+                                                                {
+                                                                    'user': types.MappingProxyType(
+                                                                        {'login': 'Cameron423698'}
+                                                                    )
+                                                                }
+                                                            ),
+                                                            'authoredDate': '2011-01-26T19:06:08Z',
+                                                            'deletions': 0,
+                                                            'oid': '553c2077f0edc3d5dc5d17262f6aa498e69d6f8e',
+                                                            'parents': types.MappingProxyType(
+                                                                {'totalCount': 0}
+                                                            ),
+                                                        }
+                                                    ),
+                                                ),
+                                                'pageInfo': types.MappingProxyType(
+                                                    {
+                                                        'endCursor': '7fd1a60b01f91b314f59955a4e4d4e80d8edf11d 2',
+                                                        'hasNextPage': False,
+                                                    }
+                                                ),
+                                            }
+                                        )
+                                    }
+                                )
+                            }
+                        )
+                    }
+                ),
+            }
+        )
+    }
+)
+
+COMMIT_FILES_OK = types.MappingProxyType(
+    {
+        'files': (types.MappingProxyType({'additions': 1, 'deletions': 1, 'filename': 'README'}),),
+        'sha': '7fd1a60b01f91b314f59955a4e4d4e80d8edf11d',
+    }
+)
+
 COMMIT_HISTORY_OK = types.MappingProxyType(
     {
         'data': types.MappingProxyType(
             {
                 'rateLimit': types.MappingProxyType(
-                    {'cost': 1, 'remaining': 4915, 'resetAt': '2026-11-02T21:03:57Z'}
+                    {'cost': 1, 'remaining': 4976, 'resetAt': '2026-11-02T22:04:23Z'}
                 ),
                 'repository': types.MappingProxyType(
                     {
@@ -667,7 +815,7 @@ COMMIT_AUTHORS_OK = types.MappingProxyType(
         'data': types.MappingProxyType(
             {
                 'rateLimit': types.MappingProxyType(
-                    {'cost': 1, 'remaining': 4907, 'resetAt': '2026-11-02T21:03:57Z'}
+                    {'cost': 1, 'remaining': 4998, 'resetAt': '2026-11-02T22:12:17Z'}
                 ),
                 'repository': types.MappingProxyType(
                     {
@@ -699,7 +847,7 @@ COMMIT_COUNTS_OK = types.MappingProxyType(
         'data': types.MappingProxyType(
             {
                 'rateLimit': types.MappingProxyType(
-                    {'cost': 1, 'remaining': 4906, 'resetAt': '2026-11-02T21:03:57Z'}
+                    {'cost': 1, 'remaining': 4969, 'resetAt': '2026-11-02T22:04:23Z'}
                 ),
                 'repository': types.MappingProxyType(
                     {
@@ -728,7 +876,7 @@ REPO = types.MappingProxyType(
     {'default_branch': 'master', 'full_name': 'octocat/Hello-World', 'id': 1296269}
 )
 
-REPO_ETAG = '"f1bd4887af2c7a43da3d2f8f3e54f8da999a77f1271a0cdadebceec80e39043c"'
+REPO_ETAG = '"90ca51e9f87e10a5cff7e9cf0cc3b0538ffcd9001188b4d36021652a07d15aec"'
 
 USER_OK = types.MappingProxyType({'login': 'octocat', 'type': 'User'})
 
@@ -739,7 +887,7 @@ PULL_REQUESTS_OK = types.MappingProxyType(
         'data': types.MappingProxyType(
             {
                 'rateLimit': types.MappingProxyType(
-                    {'cost': 3, 'remaining': 4903, 'resetAt': '2026-11-02T21:03:57Z'}
+                    {'cost': 3, 'remaining': 4966, 'resetAt': '2026-11-02T22:04:23Z'}
                 ),
                 'repository': types.MappingProxyType(
                     {
@@ -1585,7 +1733,7 @@ ISSUES_OK = types.MappingProxyType(
         'data': types.MappingProxyType(
             {
                 'rateLimit': types.MappingProxyType(
-                    {'cost': 1, 'remaining': 4902, 'resetAt': '2026-11-02T21:03:57Z'}
+                    {'cost': 1, 'remaining': 4965, 'resetAt': '2026-11-02T22:04:23Z'}
                 ),
                 'repository': types.MappingProxyType(
                     {
@@ -2033,7 +2181,7 @@ RELEASES_OK = types.MappingProxyType(
         'data': types.MappingProxyType(
             {
                 'rateLimit': types.MappingProxyType(
-                    {'cost': 1, 'remaining': 4901, 'resetAt': '2026-11-02T21:03:57Z'}
+                    {'cost': 1, 'remaining': 4964, 'resetAt': '2026-11-02T22:04:23Z'}
                 ),
                 'repository': types.MappingProxyType(
                     {
@@ -2259,7 +2407,7 @@ STARGAZERS_OK = types.MappingProxyType(
         'data': types.MappingProxyType(
             {
                 'rateLimit': types.MappingProxyType(
-                    {'cost': 1, 'remaining': 4900, 'resetAt': '2026-11-02T21:03:57Z'}
+                    {'cost': 1, 'remaining': 4997, 'resetAt': '2026-11-02T22:12:17Z'}
                 ),
                 'repository': types.MappingProxyType(
                     {
@@ -2693,7 +2841,7 @@ BOT_REVIEWS_OK = types.MappingProxyType(
         'data': types.MappingProxyType(
             {
                 'rateLimit': types.MappingProxyType(
-                    {'cost': 1, 'remaining': 4969, 'resetAt': '2026-11-02T21:11:05Z'}
+                    {'cost': 1, 'remaining': 4996, 'resetAt': '2026-11-02T22:12:17Z'}
                 ),
                 'repository': types.MappingProxyType(
                     {

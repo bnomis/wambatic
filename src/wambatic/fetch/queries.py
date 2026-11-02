@@ -73,6 +73,39 @@ query CommitHistory($owner: String!, $name: String!, $cursor: String) {
 }
 """
 
+BRANCHES = """
+query Branches($owner: String!, $name: String!, $cursor: String) {
+  repository(owner: $owner, name: $name) {
+    refs(refPrefix: "refs/heads/", first: 100, after: $cursor) {
+      pageInfo { hasNextPage endCursor }
+      nodes { name target { oid } }
+    }
+  }
+  rateLimit { cost remaining resetAt }
+}
+"""
+
+BRANCH_HISTORY = """
+query BranchHistory($owner: String!, $name: String!, $branch: String!, $cursor: String) {
+  repository(owner: $owner, name: $name) {
+    ref(qualifiedName: $branch) {
+      target {
+        ... on Commit {
+          history(first: 100, after: $cursor) {
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              oid authoredDate author { user { login } } additions deletions
+              parents { totalCount }
+            }
+          }
+        }
+      }
+    }
+  }
+  rateLimit { cost remaining resetAt }
+}
+"""
+
 COMMIT_COUNT_PAGE = 100
 
 

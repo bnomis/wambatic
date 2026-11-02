@@ -18,6 +18,7 @@ import tests.fixtures.fetch.responses
 import tests.fixtures.fetch.server
 import tests.fixtures.thaw
 
+COMMIT_PATH = re.compile(r'/repos/(?P<name>[^/]+/[^/]+)/commits/(?P<oid>\w+)')
 COMPARE_PATH = re.compile(r'/repos/(?P<name>[^/]+/[^/]+)/compare/(?P<base>\w+)\.\.\.(?P<head>\w+)')
 RUNS_PATH = re.compile(r'/repos/(?P<name>[^/]+/[^/]+)/actions/runs(?:/(?P<id>\d+))?')
 FORKS_PATH = re.compile(r'/repos/(?P<name>[^/]+/[^/]+)/forks')
@@ -32,6 +33,7 @@ class FakeCommit:
     additions: int = 1
     deletions: int = 0
     parents: int = 1
+    files: list[tuple[str, int, int]] | None = None
 
 
 @dataclasses.dataclass(slots=True)
@@ -119,6 +121,11 @@ class FakeRepo:
     languages: list[tuple[str, int]] | None = None
     has_forks: bool = True
     visibility: str = 'PRIVATE'
+    branches: dict[str, list[FakeCommit]] = dataclasses.field(default_factory=dict)
+
+    def lines_of_branches(self) -> dict[str, list[FakeCommit]]:
+        """Every branch with its commits, oldest first, the default branch first."""
+        return {self.branch: self.history, **self.branches}
 
     @property
     def head(self) -> str | None:
@@ -161,6 +168,7 @@ class Upstream:
         self.history_delay = 0.0
         self.unknown_base = 'not found'
         self.dropped_counts: set[str] = set()
+        self.missing_files: set[str] = set()
         self.flow_page_size = 100
         self.failing_flow_cursors: set[str] = set()
         self.release_page_size = 100
@@ -180,6 +188,9 @@ class Upstream:
         match = COMPARE_PATH.fullmatch(received.path)
         if match:
             return self.compare(match, received.query)
+        match = COMMIT_PATH.fullmatch(received.path)
+        if match:
+            return self.commit_files(match, received.query)
         match = RUNS_PATH.fullmatch(received.path)
         if match:
             return self.actions_runs(match, received)
@@ -239,6 +250,18 @@ class Upstream:
                 )
             return tests.fixtures.fetch.server.Canned(
                 200, self.history_page(name, variables['cursor']), headers, self.history_delay
+            )
+        if 'query BranchHistory' in query:
+            return tests.fixtures.fetch.server.Canned(
+                200, self.branch_history_page(variables), headers
+            )
+        if 'query Branches' in query:
+            repo = self.repos[f'{variables["owner"]}/{variables["name"]}']
+            heads = {
+                branch: line[-1].oid for branch, line in repo.lines_of_branches().items() if line
+            }
+            return tests.fixtures.fetch.server.Canned(
+                200, tests.fixtures.fetch.responses.branches_page(heads), headers
             )
         if 'query Releases' in query:
             return self.release_page(variables, headers)
@@ -457,6 +480,44 @@ class Upstream:
             str(end),
         )
 
+    def branch_history_page(self, variables: dict[str, object]) -> dict[str, object]:
+        repo = self.repos[f'{variables["owner"]}/{variables["name"]}']
+        line = repo.lines_of_branches()[str(variables['branch']).removeprefix('refs/heads/')]
+        start = int(str(variables['cursor'] or 0))
+        end = start + self.history_page_size
+        newest_first = list(reversed(line))
+        return tests.fixtures.fetch.responses.branch_history_page(
+            [
+                tests.fixtures.fetch.responses.history_node(
+                    c.oid, c.authored_at, c.login, c.additions, c.deletions, c.parents
+                )
+                for c in newest_first[start:end]
+            ],
+            end < len(newest_first),
+            str(end),
+        )
+
+    def commit_files(
+        self, match: re.Match[str], query: dict[str, str]
+    ) -> tests.fixtures.fetch.server.Canned:
+        repo = self.repos.get(match['name'])
+        found = [
+            c
+            for line in (repo.lines_of_branches().values() if repo else [])
+            for c in line
+            if c.oid == match['oid']
+        ]
+        if not found or match['oid'] in self.missing_files:
+            return tests.fixtures.fetch.server.Canned(404, tests.fixtures.fetch.responses.NOT_FOUND)
+        files = found[0].files or [(f'{found[0].oid}.txt', found[0].additions, found[0].deletions)]
+        page = int(query.get('page', '1'))
+        return tests.fixtures.fetch.server.Canned(
+            200,
+            tests.fixtures.fetch.responses.commit_files_response(
+                found[0].oid, files[(page - 1) * 300 : page * 300]
+            ),
+        )
+
     def commit_authors(self, variables: dict[str, object]) -> dict[str, object]:
         by_oid = {
             c.oid: c
@@ -504,7 +565,15 @@ class Upstream:
         self, match: re.Match[str], query: dict[str, str]
     ) -> tests.fixtures.fetch.server.Canned:
         repo = self.repos.get(match['name'])
-        oids = [c.oid for c in repo.history] if repo else []
+        line = next(
+            (
+                commits
+                for commits in (repo.lines_of_branches().values() if repo else [])
+                if match['head'] in [c.oid for c in commits]
+            ),
+            [],
+        )
+        oids = [c.oid for c in line]
         if match['head'] not in oids:
             return tests.fixtures.fetch.server.Canned(404, tests.fixtures.fetch.responses.NOT_FOUND)
         head = oids.index(match['head'])
@@ -524,7 +593,7 @@ class Upstream:
         assert repo is not None
         commits = [
             tests.fixtures.fetch.responses.compare_commit(c.oid, c.authored_at, c.login, c.parents)
-            for c in repo.history[base + 1 : head + 1]
+            for c in line[base + 1 : head + 1]
         ]
         per_page, page = int(query['per_page']), int(query['page'])
         status = 'ahead' if commits else 'identical'
@@ -539,6 +608,8 @@ class Upstream:
             'query OwnerRepositories': 'listing',
             'query Repository(': 'repository',
             'query CommitHistory': 'history',
+            'query BranchHistory': 'branch_history',
+            'query Branches': 'branches',
             'query CommitAuthors': 'authors',
             'query CommitCounts': 'nodes',
             'query PullRequests': 'pull_requests',
@@ -551,6 +622,9 @@ class Upstream:
             if received.path != '/graphql':
                 if FORKS_PATH.fullmatch(received.path):
                     found.append('forks')
+                    continue
+                if COMMIT_PATH.fullmatch(received.path):
+                    found.append('commit')
                     continue
                 match = RUNS_PATH.fullmatch(received.path)
                 found.append('compare' if match is None else 'run' if match['id'] else 'runs')

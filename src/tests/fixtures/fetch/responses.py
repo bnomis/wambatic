@@ -380,6 +380,54 @@ def compare_response(
     }
 
 
+# https://docs.github.com/en/graphql/reference/objects#refconnection
+def branches_page(
+    branches: dict[str, str], has_next: bool = False, cursor: str = '0'
+) -> dict[str, object]:
+    return {
+        'data': {
+            'repository': {
+                'refs': {
+                    'pageInfo': {'hasNextPage': has_next, 'endCursor': cursor},
+                    'nodes': [
+                        {'name': name, 'target': {'oid': oid}} for name, oid in branches.items()
+                    ],
+                }
+            },
+            'rateLimit': RATE_LIMIT,
+        }
+    }
+
+
+# https://docs.github.com/en/graphql/reference/objects#ref: `history_page` under `ref`.
+def branch_history_page(
+    commits: list[dict[str, object]], has_next: bool, cursor: str
+) -> dict[str, object]:
+    page = history_page(commits, has_next, cursor)
+    data = page['data']
+    assert isinstance(data, dict)
+    repository = data['repository']
+    repository['ref'] = repository.pop('defaultBranchRef')
+    return page
+
+
+# https://docs.github.com/en/rest/commits/commits#get-a-commit: one page of the file list.
+def commit_files_response(oid: str, files: list[tuple[str, int, int]]) -> dict[str, object]:
+    return {
+        'sha': oid,
+        'files': [
+            {
+                'filename': path,
+                'status': 'modified',
+                'additions': additions,
+                'deletions': deletions,
+                'changes': additions + deletions,
+            }
+            for path, additions, deletions in files
+        ],
+    }
+
+
 # Times for the synthetic upstream in `tests.fixtures.fetch.upstream`.
 HELLO_PUSHED_AT = datetime.datetime(2026, 10, 20, 9, 0, tzinfo=datetime.UTC)
 HELLO_UPDATED_AT = datetime.datetime(2026, 10, 21, 9, 0, tzinfo=datetime.UTC)

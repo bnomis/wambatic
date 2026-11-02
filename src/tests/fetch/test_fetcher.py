@@ -18,6 +18,7 @@ import tests.fixtures.fetch.recorded
 import tests.fixtures.fetch.responses
 import tests.fixtures.fetch.server
 import tests.fixtures.fetch.upstream
+import tests.fixtures.thaw
 import wambatic.fetch.base
 import wambatic.fetch.cache
 import wambatic.fetch.client
@@ -3145,15 +3146,139 @@ def test_an_empty_clone_repo_has_no_commits_and_no_clone(
     assert not git.path(HELLO).exists()
 
 
-def test_the_api_files_method_is_not_built_yet(
+def sync_files(
     make_fetcher: tests.conftest.MakeFetcher,
-    fetch_settings: wambatic.settings.FetchSettings,
+    upstream: tests.fixtures.fetch.upstream.Upstream,
+    settings: wambatic.settings.FetchSettings,
+    after: Run | None = None,
+) -> Run:
+    kwargs: dict[str, typing.Any] = {'settings': settings}
+    if after is not None:
+        kwargs['cache'] = after.cache
+    return sync_once(make_fetcher, upstream, **kwargs)
+
+
+def move_on(repo: tests.fixtures.fetch.upstream.FakeRepo) -> None:
+    repo.pushed_at += datetime.timedelta(hours=1)
+    repo.updated_at += datetime.timedelta(hours=1)
+
+
+def run_heads(run: Run) -> dict[str, str]:
+    return run.cache.branch_heads(HELLO)
+
+
+def test_an_api_files_first_sync_stores_every_commit_once_with_its_files(
+    make_fetcher: tests.conftest.MakeFetcher, fetch_settings: wambatic.settings.FetchSettings
+) -> None:
+    repo = hello()
+    repo.history[0].files = [('a.py', 1, 0), ('b.py', 2, 3)]
+    run = sync_files(
+        make_fetcher,
+        tests.fixtures.fetch.upstream.Upstream([repo]),
+        dataclasses.replace(fetch_settings, api_history='files'),
+    )
+    commits = rows_of(run)
+    assert set(commits) == {'h1', 'h2', 'h3'}
+    assert commits['h1'].files == (
+        wambatic.fetch.base.CommitFile('a.py', 1, 0),
+        wambatic.fetch.base.CommitFile('b.py', 2, 3),
+    )
+    assert probe_of(run) == 'method=api-files branches=[]'
+    assert run_heads(run) == {'main': 'h3'}
+    assert run.kinds == ('listing', 'branches', 'branch_history', 'commit', 'commit', 'commit')
+
+
+def test_an_api_files_sync_with_a_moved_head_reads_only_the_new_commits(
+    make_fetcher: tests.conftest.MakeFetcher, fetch_settings: wambatic.settings.FetchSettings
 ) -> None:
     settings = dataclasses.replace(fetch_settings, api_history='files')
-    with pytest.raises(wambatic.fetch.errors.InvalidRequestError, match='api-files'):
-        sync_once(
-            make_fetcher,
-            tests.fixtures.fetch.upstream.Upstream([hello()]),
-            resources=tests.fixtures.stats.RESOURCES_ACTIVITY,
-            settings=settings,
-        )
+    upstream = tests.fixtures.fetch.upstream.Upstream([hello()])
+    first = sync_files(make_fetcher, upstream, settings)
+    upstream.repos[HELLO].push(*history('n', 1, 10))
+    second = sync_files(make_fetcher, upstream, settings, first)
+    assert second.kinds == ('listing', 'branches', 'compare', 'nodes', 'commit')
+    assert set(rows_of(second)) == {'h1', 'h2', 'h3', 'n10'}
+    assert rows_of(second)['n10'].files
+    assert state_of(second).head_oid == 'n10'
+
+
+def test_an_api_files_sync_reads_a_new_branch_in_full_but_fetches_files_of_new_commits_only(
+    make_fetcher: tests.conftest.MakeFetcher, fetch_settings: wambatic.settings.FetchSettings
+) -> None:
+    upstream = tests.fixtures.fetch.upstream.Upstream([hello()])
+    first = sync_files(
+        make_fetcher, upstream, dataclasses.replace(fetch_settings, api_history='files')
+    )
+    repo = upstream.repos[HELLO]
+    repo.branches['feature'] = [*repo.history[:2], *history('f', 1, 20)]
+    move_on(repo)
+    second = sync_files(
+        make_fetcher,
+        upstream,
+        dataclasses.replace(fetch_settings, api_history='files', branches=('feature',)),
+        first,
+    )
+    assert second.kinds == ('listing', 'branches', 'branch_history', 'commit')
+    assert set(rows_of(second)) == {'h1', 'h2', 'h3', 'f20'}
+    assert run_heads(second) == {'feature': 'f20', 'main': 'h3'}
+    assert probe_of(second) == 'method=api-files branches=["feature"]'
+
+
+def test_an_api_files_sync_after_a_force_push_reads_every_branch_and_drops_gone_commits(
+    make_fetcher: tests.conftest.MakeFetcher, fetch_settings: wambatic.settings.FetchSettings
+) -> None:
+    settings = dataclasses.replace(fetch_settings, api_history='files')
+    upstream = tests.fixtures.fetch.upstream.Upstream([hello()])
+    first = sync_files(make_fetcher, upstream, settings)
+    repo = upstream.repos[HELLO]
+    repo.history[:] = [*repo.history[:2], *history('x', 1, 30)]
+    move_on(repo)
+    second = sync_files(make_fetcher, upstream, settings, first)
+    assert set(rows_of(second)) == {'h1', 'h2', 'x30'}
+    assert second.report.full_refetches == (HELLO,)
+    assert second.kinds == ('listing', 'branches', 'compare', 'branch_history', 'commit')
+
+
+def test_an_api_files_commit_with_more_than_300_files_is_read_in_two_pages(
+    make_fetcher: tests.conftest.MakeFetcher, fetch_settings: wambatic.settings.FetchSettings
+) -> None:
+    repo = hello(1)
+    repo.history[0].files = [(f'f{n}.py', 1, 0) for n in range(301)]
+    run = sync_files(
+        make_fetcher,
+        tests.fixtures.fetch.upstream.Upstream([repo]),
+        dataclasses.replace(fetch_settings, api_history='files'),
+    )
+    assert len(rows_of(run)['h1'].files) == 301
+    assert run.kinds == ('listing', 'branches', 'branch_history', 'commit', 'commit')
+
+
+def test_an_api_files_commit_the_api_does_not_have_is_an_error_naming_it(
+    make_fetcher: tests.conftest.MakeFetcher, fetch_settings: wambatic.settings.FetchSettings
+) -> None:
+    upstream = tests.fixtures.fetch.upstream.Upstream([hello(1)])
+    upstream.missing_files = {'h1'}
+    with pytest.raises(wambatic.fetch.errors.FetchError, match='commit h1'):
+        sync_files(make_fetcher, upstream, dataclasses.replace(fetch_settings, api_history='files'))
+
+
+def test_the_recorded_api_files_responses_parse() -> None:
+    recorded = tests.fixtures.fetch.recorded
+    branches = wambatic.fetch.base.branch_heads_connection(
+        tests.fixtures.thaw.thaw(recorded.BRANCHES_OK['data'])
+    )
+    nodes = wambatic.fetch.base.sequence(branches.get('nodes'), 'nodes')
+    assert nodes
+    history = wambatic.fetch.base.history_connection('ref')(
+        tests.fixtures.thaw.thaw(recorded.BRANCH_HISTORY_OK['data'])
+    )
+    commit = wambatic.fetch.base.parse_history_node(
+        HELLO, wambatic.fetch.base.sequence(history.get('nodes'), 'nodes')[0]
+    )
+    assert commit.oid
+    files = [
+        wambatic.fetch.base.parse_commit_file(node)
+        for node in tests.fixtures.thaw.thaw(recorded.COMMIT_FILES_OK)['files']
+    ]
+    assert files
+    assert all(file.path for file in files)

@@ -51,7 +51,7 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 ## Task 2: Keep each commit's recorded offset, cache schema 6
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** medium
 **Spec Reference:** author timezones 1.0, API (`Commit.authored_offset`, `GitCommit.authored_offset`), Implementation (Keeping the offset, Cache); fetch 1.18; commit sync 1.1; cache 1.3
@@ -60,21 +60,21 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 **Subtasks:**
 
-- [ ] Add `authored_offset: int` to `GitCommit` in `src/wambatic/fetch/git.py`: the parsed `%aI` value's `utcoffset()` in whole minutes, taken before `authored_at` is converted to UTC
-- [ ] Add `authored_offset: int | None = None` to `Commit` in `src/wambatic/fetch/base.py`; the `clone` method copies it from the `GitCommit`; the `api` and `api-files` methods leave it `None`
-- [ ] In `src/wambatic/fetch/cache.py`: set `SCHEMA_VERSION` to 6, add the nullable `commits` column `authored_offset INTEGER`, write it with the commit and read it back into `Commit.authored_offset`
-- [ ] Tests in `src/tests/fetch/test_git.py`: a commit made with `GIT_AUTHOR_DATE='2026-11-02T01:00:00+09:00'` in a `git init` repository has `authored_offset == 540` and a UTC `authored_at`; a negative offset (`-07:00` gives `-420`); in `src/tests/fetch/test_cache.py`: an offset and a `None` written and read back, a cache of schema 5 refused with `CacheVersionError`; in `src/tests/fetch/test_fetcher.py`: a clone sync stores the offset and an `api` sync stores `None`
+- [x] Add `authored_offset: int` to `GitCommit` in `src/wambatic/fetch/git.py`: the parsed `%aI` value's `utcoffset()` in whole minutes, taken before `authored_at` is converted to UTC
+- [x] Add `authored_offset: int | None = None` to `Commit` in `src/wambatic/fetch/base.py`; the `clone` method copies it from the `GitCommit`; the `api` and `api-files` methods leave it `None`
+- [x] In `src/wambatic/fetch/cache.py`: set `SCHEMA_VERSION` to 6, add the nullable `commits` column `authored_offset INTEGER`, write it with the commit and read it back into `Commit.authored_offset`
+- [x] Tests in `src/tests/fetch/test_git.py`: a commit made with `GIT_AUTHOR_DATE='2026-11-02T01:00:00+09:00'` in a `git init` repository has `authored_offset == 540` and a UTC `authored_at`; a negative offset (`-07:00` gives `-420`); in `src/tests/fetch/test_cache.py`: an offset and a `None` written and read back, a cache of schema 5 refused with `CacheVersionError`; in `src/tests/fetch/test_fetcher.py`: a clone sync stores the offset and an `api` sync stores `None`
 
 **Acceptance Criteria:**
 
-- [ ] A clone-read commit's offset survives a write and a read of the cache
-- [ ] Every existing fetch test still passes, and `authored_at` is UTC everywhere
+- [x] A clone-read commit's offset survives a write and a read of the cache
+- [x] Every existing fetch test still passes, and `authored_at` is UTC everywhere
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/fetch/test_git.py src/tests/fetch/test_cache.py src/tests/fetch/test_fetcher.py src/tests/fetch/test_base.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/fetch/test_git.py src/tests/fetch/test_cache.py src/tests/fetch/test_fetcher.py src/tests/fetch/test_base.py` passes
 
 **Notes:**
 

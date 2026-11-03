@@ -35,6 +35,7 @@ class GitCommit:
     oid: str
     parents: tuple[str, ...]
     authored_at: datetime.datetime
+    authored_offset: int
     files: tuple[wambatic.fetch.base.CommitFile, ...]
 
 
@@ -327,16 +328,23 @@ def parse_log(repo: str, text: str) -> list[GitCommit]:
             )
         oid, parents, date = fields
         try:
-            authored_at = datetime.datetime.fromisoformat(date).astimezone(datetime.UTC)
+            written = datetime.datetime.fromisoformat(date)
+            offset = written.utcoffset()
+            authored_at = written.astimezone(datetime.UTC)
         except ValueError:
             raise wambatic.fetch.errors.GitError(
                 f'git log for {repo} printed a date that does not parse for {oid}'
             ) from None
+        if offset is None:
+            raise wambatic.fetch.errors.GitError(
+                f'git log for {repo} printed a date with no offset for {oid}'
+            )
         commits.append(
             GitCommit(
                 oid=oid,
                 parents=tuple(parents.split()),
                 authored_at=authored_at,
+                authored_offset=offset // datetime.timedelta(minutes=1),
                 files=parse_numstat(repo, oid, body),
             )
         )

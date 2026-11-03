@@ -164,6 +164,7 @@ class Commit:
     deletions: int
     is_merge: bool
     files: tuple[CommitFile, ...] = ()
+    authored_offset: int | None = None
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -1344,6 +1345,7 @@ class Fetcher:
                 repo=name,
                 oid=commit.oid,
                 authored_at=commit.authored_at,
+                authored_offset=commit.authored_offset,
                 author_login=logins[commit.oid],
                 additions=sum(file.additions for file in commit.files),
                 deletions=sum(file.deletions for file in commit.files),

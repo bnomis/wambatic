@@ -561,6 +561,7 @@ def test_a_multi_page_history_is_stored_in_full(make_fetcher: tests.conftest.Mak
     assert [c.is_merge for c in commits] == [False, False, True, False, False]
     assert [(c.additions, c.deletions) for c in commits] == [(5, 0), (2, 2), (0, 0), (7, 3), (1, 1)]
     assert all(c.authored_at.tzinfo is not None for c in commits)
+    assert [c.authored_offset for c in commits] == [None] * 5
 
 
 def test_the_stored_state_records_the_listed_head_and_times(
@@ -3046,6 +3047,15 @@ def test_a_public_repo_is_read_by_clone_with_files_authors_and_branch_heads(
     assert run.report.rows_written == {'commits': 2}
     assert run.report.full_refetches == (HELLO,)
     assert asyncio.run(run.fetcher.commit_method(listed_repo('PUBLIC'))) == 'clone'
+
+
+def test_a_clone_sync_stores_the_recorded_offset(
+    make_fetcher: tests.conftest.MakeFetcher, world: CloneWorld
+) -> None:
+    first = world.add('a.py', 'x\n', 'first')
+    world.remote.push()
+    run = clone_sync(make_fetcher, world)
+    assert rows_of(run)[first].authored_offset == 120
 
 
 def test_an_unchanged_clone_repo_is_skipped_and_a_push_reads_only_the_new_commit(

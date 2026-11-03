@@ -17,7 +17,7 @@ import wambatic.fetch.errors
 import wambatic.fetch.queries
 import wambatic.version
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS commits (
     additions INTEGER NOT NULL,
     deletions INTEGER NOT NULL,
     is_merge INTEGER NOT NULL,
+    authored_offset INTEGER,
     PRIMARY KEY (repo, oid)
 );
 CREATE INDEX IF NOT EXISTS commits_repo_authored_at ON commits (repo, authored_at);

@@ -553,6 +553,34 @@ def test_upsert_replaces_a_commit_with_the_same_oid(cache: wambatic.fetch.cache.
     assert [c.additions for c in cache.read_commits(HELLO, None, None)] == [9]
 
 
+def test_the_authored_offset_and_its_absence_round_trip(
+    cache: wambatic.fetch.cache.Cache,
+) -> None:
+    commits = [
+        commit('c1', 1, authored_offset=540),
+        commit('c2', 2, authored_offset=-420),
+        commit('c3', 3, authored_offset=0),
+        commit('c4', 4),
+    ]
+    cache.write_commits(HELLO, commits, state(), replace=False)
+    read = cache.read_commits(HELLO, None, None)
+    assert [c.authored_offset for c in read] == [540, -420, 0, None]
+    assert read == commits
+
+
+def test_a_cache_of_schema_5_is_refused(cache_path: pathlib.Path) -> None:
+    wambatic.fetch.cache.Cache.open(cache_path).close()
+    connection = sqlite3.connect(cache_path)
+    try:
+        with connection:
+            connection.execute("UPDATE meta SET value = '5' WHERE key = 'schema_version'")
+    finally:
+        connection.close()
+    with pytest.raises(wambatic.fetch.errors.CacheVersionError) as caught:
+        wambatic.fetch.cache.Cache.open(cache_path)
+    assert caught.value.differences['schema_version'] == ('5', str(CURRENT_SCHEMA_VERSION))
+
+
 def test_write_commits_returns_the_rows_written(cache: wambatic.fetch.cache.Cache) -> None:
     assert cache.write_commits(HELLO, [commit('c1'), commit('c2')], state(), replace=False) == 2
 

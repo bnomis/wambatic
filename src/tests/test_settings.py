@@ -37,7 +37,9 @@ def test_fetch_defaults() -> None:
 
 def test_stats_defaults() -> None:
     stats = wambatic.settings.Settings().stats
+    assert stats.author_timezones == ()
     assert stats.bot_logins == tests.fixtures.constants.BOT_LOGINS
+    assert stats.commit_timezone == 'report'
     assert stats.deploy_workflow is None
     assert stats.exclude_merge_commits is True
     assert stats.failure_window == datetime.timedelta(days=7)
@@ -493,3 +495,38 @@ def test_clones_dir_for_is_per_cache_file() -> None:
 def test_clones_dir_for_a_set_directory_is_that_directory(tmp_path: pathlib.Path) -> None:
     settings = wambatic.settings.FetchSettings(clone_dir=tmp_path / 'c')
     assert wambatic.settings.clones_dir_for(settings) == tmp_path / 'c'
+
+
+def test_author_timezones_are_casefolded_and_sorted() -> None:
+    loaded = wambatic.settings.load_settings(
+        None,
+        {'stats': {'author_timezones': {'OctoCat': 'Asia/Tokyo', 'alice': 'Europe/London'}}},
+    )
+    assert loaded.stats.author_timezones == (('alice', 'Europe/London'), ('octocat', 'Asia/Tokyo'))
+    zones = wambatic.settings.author_zones(loaded.stats)
+    assert str(zones['octocat']) == 'Asia/Tokyo'
+    hash(loaded)
+
+
+@pytest.mark.parametrize('value', [['octocat'], 'Asia/Tokyo', {'octocat': 3}])
+def test_author_timezones_of_the_wrong_type_are_refused(value: object) -> None:
+    with pytest.raises(
+        wambatic.settings.SettingsError, match='stats.author_timezones has the wrong type'
+    ):
+        wambatic.settings.load_settings(None, {'stats': {'author_timezones': value}})
+
+
+def test_unknown_author_zone_is_refused_at_load() -> None:
+    with pytest.raises(wambatic.settings.SettingsError) as raised:
+        wambatic.settings.load_settings(
+            None, {'stats': {'author_timezones': {'octocat': 'Mars/Base'}}}
+        )
+    assert 'stats.author_timezones.octocat' in str(raised.value)
+    assert 'Mars/Base' in str(raised.value)
+
+
+def test_commit_timezone_is_one_of_two_values() -> None:
+    loaded = wambatic.settings.load_settings(None, {'stats': {'commit_timezone': 'author'}})
+    assert loaded.stats.commit_timezone == 'author'
+    with pytest.raises(wambatic.settings.SettingsError, match='stats.commit_timezone'):
+        wambatic.settings.load_settings(None, {'stats': {'commit_timezone': 'local'}})

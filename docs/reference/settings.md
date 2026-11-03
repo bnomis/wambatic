@@ -29,7 +29,9 @@ A duration is a whole number and one unit, `s`, `m`, `h`, `d` or `w`, such as `3
 | `report.out_dir` | path | `./wambatic-reports` | The directory the HTML report is written to when `--out` is absent |
 | `report.web_host` | string | `127.0.0.1` | The address `serve` listens on |
 | `report.web_port` | integer | `8000` | The port `serve` listens on |
+| `stats.author_timezones` | object of strings | `{}` | Login to IANA zone (`{"octocat": "Europe/London"}`), compared without regard to case; in `author` mode it overrides a commit's recorded offset and dates the commits of a repository that records none; an unknown zone is an error |
 | `stats.bot_logins` | list of strings | `["dependabot[bot]", "renovate[bot]"]` | Authors left out of contributor counts and the top-contributors table |
+| `stats.commit_timezone` | `report` or `author` | `report` | `report` dates every commit in the report zone (`--tz`, `stats.timezone`); `author` dates each commit in its author's zone, which changes `active_days` and the daily buckets for authors far from the report zone |
 | `stats.deploy_workflow` | string or none | `none` | The workflow whose successful runs are the deployments, matched against a run's workflow file name (`deploy.yml`) or its name; unset, releases that are not prereleases are the deployments |
 | `stats.exclude_merge_commits` | boolean | `true` | Leave merge commits out of line counts |
 | `stats.exclude_paths` | list of strings | `["**/*.lock", "**/package-lock.json", "**/pnpm-lock.yaml", "**/go.sum", "**/vendor/**", "**/node_modules/**", "**/dist/**", "**/*.min.js", "**/*.min.css", "**/*.map"]` | Path patterns whose files are left out of line counts |

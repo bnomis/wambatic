@@ -16,7 +16,7 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 ## Task 1: Add the commit timezone settings
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** small
 **Spec Reference:** author timezones 1.0, API (`CommitTimezone`, `StatsSettings`, `author_zones`), Error handling, Settings; stats 1.12, Settings
@@ -25,22 +25,22 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 **Subtasks:**
 
-- [ ] Add `CommitTimezone = typing.Literal['report', 'author']`, `commit_timezone: CommitTimezone = 'report'` and `author_timezones: tuple[tuple[str, str], ...] = ()` to `StatsSettings` in `src/wambatic/settings.py`
-- [ ] Add a `convert` branch for `tuple[tuple[str, str], ...]`: a JSON object of strings becomes pairs `(login.casefold(), zone)` sorted by login; anything else is `SettingsError('stats.author_timezones has the wrong type')`
-- [ ] Add `author_zones(settings)`, returning `zoneinfo.ZoneInfo` per casefolded login, and call it when settings load, so an unknown zone is a `SettingsError` naming `stats.author_timezones.<login>` and the value before any sync
-- [ ] Add both settings to `docs/reference/settings.md`
-- [ ] Tests in `src/tests/test_settings.py`: the defaults; a JSON object read and sorted, mixed-case logins casefolded; a non-object and a non-string zone refused; an unknown zone refused with the setting name and value; `commit_timezone` outside the two values refused
+- [x] Add `CommitTimezone = typing.Literal['report', 'author']`, `commit_timezone: CommitTimezone = 'report'` and `author_timezones: tuple[tuple[str, str], ...] = ()` to `StatsSettings` in `src/wambatic/settings.py`
+- [x] Add a `convert` branch for `tuple[tuple[str, str], ...]`: a JSON object of strings becomes pairs `(login.casefold(), zone)` sorted by login; anything else is `SettingsError('stats.author_timezones has the wrong type')`
+- [x] Add `author_zones(settings)`, returning `zoneinfo.ZoneInfo` per casefolded login, and call it when settings load, so an unknown zone is a `SettingsError` naming `stats.author_timezones.<login>` and the value before any sync
+- [x] Add both settings to `docs/reference/settings.md`
+- [x] Tests in `src/tests/test_settings.py`: the defaults; a JSON object read and sorted, mixed-case logins casefolded; a non-object and a non-string zone refused; an unknown zone refused with the setting name and value; `commit_timezone` outside the two values refused
 
 **Acceptance Criteria:**
 
-- [ ] `{"stats": {"author_timezones": {"OctoCat": "Asia/Tokyo"}}}` loads as `(('octocat', 'Asia/Tokyo'),)`
-- [ ] `{"stats": {"author_timezones": {"octocat": "Mars/Base"}}}` fails at load with `stats.author_timezones.octocat` in the message
+- [x] `{"stats": {"author_timezones": {"OctoCat": "Asia/Tokyo"}}}` loads as `(('octocat', 'Asia/Tokyo'),)`
+- [x] `{"stats": {"author_timezones": {"octocat": "Mars/Base"}}}` fails at load with `stats.author_timezones.octocat` in the message
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/test_settings.py src/tests/test_docs.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/test_settings.py src/tests/test_docs.py` passes
 
 **Notes:**
 

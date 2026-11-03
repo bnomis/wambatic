@@ -107,6 +107,8 @@ def parse_default(text: str, annotation: object) -> object:
         return pathlib.Path(value).expanduser()
     if annotation == tuple[str, ...]:
         return tuple(json.loads(value))
+    if annotation == tuple[tuple[str, str], ...]:
+        return tuple(sorted((k.casefold(), v) for k, v in json.loads(value).items()))
     if annotation is bool:
         return json.loads(value)
     if annotation is int:

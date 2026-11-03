@@ -119,6 +119,35 @@ def test_the_title_names_the_subject_range_granularity_and_zone(
     )
 
 
+def test_the_title_names_both_zones_in_author_mode_only(
+    org_result: wambatic.stats.base.StatsResult,
+) -> None:
+    def title(mode: str) -> str:
+        provenance = {**org_result.provenance, 'commit_timezone': mode}
+        return render(dataclasses.replace(org_result, provenance=provenance)).splitlines()[0]
+
+    assert title('author') == (
+        'org octo-org, 2026-10-01 to 2027-01-31, by month, '
+        "commits in authors' zones, other events in UTC"
+    )
+    assert title('report') == render(org_result).splitlines()[0]
+    keyless = {k: v for k, v in org_result.provenance.items() if k != 'commit_timezone'}
+    first = render(dataclasses.replace(org_result, provenance=keyless)).splitlines()[0]
+    assert first == render(org_result).splitlines()[0]
+    assert first.endswith(', UTC')
+
+
+def test_the_commit_dates_unavailable_row_appears_in_the_terminal_report(
+    org_result: wambatic.stats.base.StatsResult,
+) -> None:
+    rows = [{'metric': 'commit dates: octo-org/alpha', 'reason': 'dated in UTC: no author offset'}]
+    output = render(
+        dataclasses.replace(org_result, tables={**org_result.tables, 'unavailable': rows})
+    )
+    assert 'Unavailable' in output
+    assert 'commit dates: octo-org/alpha' in output
+
+
 def test_the_period_table_and_total_row_equal_the_hand_checked_monthly_totals(
     org_result: wambatic.stats.base.StatsResult,
 ) -> None:

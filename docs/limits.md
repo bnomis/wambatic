@@ -17,8 +17,11 @@ What wambatic does not do, and why.
   branch's head, and pull request sizes still include generated files.
 - **Clones need disk space and `git`.** Bare clones are kept beside the cache until
   `wambatic cache clear`.
-- **A report uses one time zone.** Periods are cut by the zone in `--tz` or `stats.timezone`, so all
-  numbers in a report agree on where a day, week or month begins. A different zone means a different report.
+- **Only cloned repositories carry author offsets.** Periods are cut by the zone in `--tz` or
+  `stats.timezone`. With `--commit-tz author` commits are dated in their authors' zones, but GitHub's API
+  gives no offset, so only a repository read by clone has them. Any other commit is dated in the report
+  zone unless `stats.author_timezones` names its author, and the report lists the repository as unavailable.
+  See [Periods](guide/periods.md#commits-in-their-authors-zones).
 - **Only some GitHub Enterprise servers are supported.** Enterprise Server is supported from 3.19, as
   [the guide](guide/enterprise.md) describes. Enterprise Cloud with data residency (`*.ghe.com`) is not,
   because it uses different addresses.

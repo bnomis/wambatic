@@ -337,3 +337,46 @@ def test_removing_a_clone(upstream: Upstream, tmp_path: pathlib.Path) -> None:
 def test_unparsable_log_is_a_git_error() -> None:
     with pytest.raises(wambatic.fetch.errors.GitError, match='does not parse'):
         wambatic.fetch.git.parse_log(REPO, '\x01only-one-field\n')
+
+
+@pytest.mark.parametrize(
+    ('written', 'offset', 'utc_hour'),
+    [
+        ('2026-11-02T01:00:00+09:00', 540, 16),
+        ('2026-11-02T01:00:00-07:00', -420, 8),
+        ('2026-11-02T01:00:00+00:00', 0, 1),
+        ('2026-11-02T01:00:00+05:30', 330, 19),
+    ],
+)
+def test_parse_log_keeps_the_offset_and_converts_to_utc(
+    written: str, offset: int, utc_hour: int
+) -> None:
+    (commit,) = wambatic.fetch.git.parse_log(REPO, f'\x01abc\x02\x02{written}\n\0')
+    assert commit.authored_offset == offset
+    assert commit.authored_at.utcoffset().total_seconds() == 0  # type: ignore[union-attr]
+    assert commit.authored_at.hour == utc_hour
+
+
+def test_cloned_commit_records_the_authors_offset(
+    upstream: Upstream, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv('GIT_AUTHOR_DATE', '2026-11-02T01:00:00+09:00')
+    upstream.write('a.txt', 'a\n')
+    east = upstream.commit('east')
+    monkeypatch.setenv('GIT_AUTHOR_DATE', '2026-11-02T01:00:00-07:00')
+    upstream.write('b.txt', 'b\n')
+    west = upstream.commit('west')
+    upstream.push('main')
+    git = make_git(upstream, tmp_path)
+
+    async def scenario() -> dict[str, wambatic.fetch.git.GitCommit]:
+        await git.update(REPO)
+        heads = await git.branches(REPO)
+        oids = await git.reachable(REPO, list(heads.values()))
+        return {commit.oid: commit for commit in await git.commits(REPO, oids)}
+
+    commits = asyncio.run(scenario())
+    assert commits[east].authored_offset == 540
+    assert commits[east].authored_at.hour == 16
+    assert commits[west].authored_offset == -420
+    assert commits[west].authored_at.hour == 8

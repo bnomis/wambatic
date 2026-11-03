@@ -1,7 +1,7 @@
 # Metric groups
 
 **Version:** 1.2
-**Status:** proposed
+**Status:** implemented
 **Date:** 2026-11-03
 
 What each of the `activity`, `flow`, `delivery` and `popularity` groups counts: its series names, units and order, and its tables. Part of [Stats](../stats/spec.md), which holds the API, the range, the reading of the cache, aggregation and provenance.

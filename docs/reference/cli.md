@@ -26,6 +26,7 @@ Every command-line option. Global options come before the command: `wambatic -v 
 | `--groups NAMES` | `activity,flow` | Comma-separated metric groups: `activity`, `delivery`, `flow`, `popularity`. `delivery` and `popularity` are off by default because they read every workflow run, star and fork, which costs requests |
 | `--by-author` | off | Break activity down by author; not for a user target |
 | `--tz ZONE` | `stats.timezone` | An [IANA time zone](https://www.iana.org/time-zones) such as `Europe/Berlin` |
+| `--commit-tz report\|author` | `stats.commit_timezone` | `report` dates every commit in the report zone; `author` dates each commit in its author's zone |
 | `--full-refresh` | off | Read all history again and ignore `--max-age`; cannot be used with `--no-fetch` |
 | `--no-fetch` | off | Use the cache only, with no network and no token |
 | `--max-age DURATION` | `fetch.max_age` | Skip the network when every resource was synced more recently, for example `30m` or `1d` |

@@ -65,6 +65,21 @@ def test_overrides_are_only_the_flags_given() -> None:
     }
 
 
+@pytest.mark.parametrize(('setting', 'flag'), [('report', 'author'), ('author', 'report')])
+def test_commit_tz_overrides_the_setting_both_ways(setting: str, flag: str) -> None:
+    flags = report(commit_tz=flag)
+    assert wambatic.cli.overrides(flags) == {'stats': {'commit_timezone': flag}}
+    settings = wambatic.settings.load_settings(
+        None, {'stats': {'commit_timezone': setting}} | wambatic.cli.overrides(flags)
+    )
+    assert settings.stats.commit_timezone == flag
+
+
+def test_a_bad_commit_tz_is_a_usage_error() -> None:
+    with pytest.raises(wambatic.reports.errors.UsageError, match='--commit-tz'):
+        wambatic.cli.overrides(report(commit_tz='local'))
+
+
 def test_the_overrides_reach_the_settings() -> None:
     settings = settings_for(report(format='json', max_age='1d', tz='Europe/Berlin'))
     assert settings.report.format == 'json'
@@ -244,6 +259,8 @@ def test_cappa_reads_every_report_flag() -> None:
             '--by-author',
             '--tz',
             'UTC',
+            '--commit-tz',
+            'author',
             '--max-age',
             '1d',
             '--ignore-cache-version',
@@ -260,6 +277,7 @@ def test_cappa_reads_every_report_flag() -> None:
         groups='activity',
         by_author=True,
         tz='UTC',
+        commit_tz='author',
         max_age='1d',
         ignore_cache_version=True,
     )

@@ -189,6 +189,10 @@ ByAuthor = typing.Annotated[
     fastapi.Query(description='1, true or on to break activity down by author'),
 ]
 Tz = typing.Annotated[str | None, fastapi.Query(description='Time zone (default: stats.timezone)')]
+CommitTz = typing.Annotated[
+    str | None,
+    fastapi.Query(description='report or author (default: stats.commit_timezone)'),
+]
 JobId = typing.Annotated[
     str | None,
     fastapi.Query(description='The job a 202 answer named, to read the result once it is done'),
@@ -206,6 +210,7 @@ class RawQuery:
     groups: str | None
     by_author: str | None
     tz: str | None
+    commit_tz: str | None
     job: str | None
 
 
@@ -218,9 +223,10 @@ def raw_query(
     groups: Groups = None,
     by_author: ByAuthor = None,
     tz: Tz = None,
+    commit_tz: CommitTz = None,
     job: JobId = None,
 ) -> RawQuery:
-    return RawQuery(target, by, since, until, groups, by_author, tz, job)
+    return RawQuery(target, by, since, until, groups, by_author, tz, commit_tz, job)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -269,11 +275,15 @@ def parse_query(
     if by_author and not isinstance(target, str):
         wambatic.reports.service.check_by_author(target)
     tz = blank_to_none(raw.tz)
-    effective = (
-        settings
-        if tz is None
-        else dataclasses.replace(settings, stats=dataclasses.replace(settings.stats, timezone=tz))
-    )
+    commit_tz = blank_to_none(raw.commit_tz)
+    stats = settings.stats
+    if tz is not None:
+        stats = dataclasses.replace(stats, timezone=tz)
+    if commit_tz is not None:
+        stats = dataclasses.replace(
+            stats, commit_timezone=wambatic.reports.service.parse_commit_tz(commit_tz)
+        )
+    effective = dataclasses.replace(settings, stats=stats)
     request = wambatic.reports.service.make_request(
         by,
         blank_to_none(raw.since),
@@ -474,7 +484,15 @@ def make_app(
     @app.get('/', include_in_schema=False)
     async def form() -> fastapi.responses.HTMLResponse:
         target = wambatic.reports.html.escape(default_target or '')
-        return fastapi.responses.HTMLResponse(page('form.html', target=target))
+        mode = settings.stats.commit_timezone
+        return fastapi.responses.HTMLResponse(
+            page(
+                'form.html',
+                target=target,
+                report_selected=' selected' if mode == 'report' else '',
+                author_selected=' selected' if mode == 'author' else '',
+            )
+        )
 
     @app.get('/report', include_in_schema=False)
     async def report(

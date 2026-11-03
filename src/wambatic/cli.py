@@ -79,6 +79,14 @@ class Report:
     tz: typing.Annotated[
         str | None, cappa.Arg(long=True, help='Time zone (default: stats.timezone)')
     ] = None
+    commit_tz: typing.Annotated[
+        str | None,
+        cappa.Arg(
+            long=True,
+            help="Date commits in the report zone or the authors' zones: report or author "
+            '(default: stats.commit_timezone)',
+        ),
+    ] = None
     full_refresh: typing.Annotated[
         bool, cappa.Arg(long=True, help='Read all history again; ignores --max-age')
     ] = False
@@ -176,6 +184,10 @@ def overrides(report: Report) -> dict[str, object]:
         result.setdefault('fetch', {})['max_age'] = report.max_age
     if report.tz is not None:
         result.setdefault('stats', {})['timezone'] = report.tz
+    if report.commit_tz is not None:
+        result.setdefault('stats', {})['commit_timezone'] = (
+            wambatic.reports.service.parse_commit_tz(report.commit_tz)
+        )
     if report.github_host is not None:
         result.setdefault('fetch', {})['github_host'] = report.github_host
     return typing.cast(dict[str, object], result)

@@ -50,6 +50,12 @@ repositories".
 
 ![The report page](../images/web/report.png)
 
+## Commit dates
+
+The form has a "Commit dates" select: the report zone, or each commit's author's zone. It is preset from
+`stats.commit_timezone`, and is sent as `commit_tz`, which `/api/stats` takes too. See
+[Periods](periods.md#commits-in-their-authors-zones).
+
 ## How fresh is fresh
 
 The web app syncs on the same rule as `report`: `--max-age` (or `fetch.max_age`) says how recent a sync
@@ -60,7 +66,7 @@ page does not sync a second time.
 ## The JSON routes
 
 `/api/stats` takes the same parameters as the report (`target`, `by`, `since`, `until`, `groups`,
-`by_author`, `tz`) and returns what `report --format json` prints. `by=total` is allowed there, and
+`by_author`, `tz`, `commit_tz`) and returns what `report --format json` prints. `by=total` is allowed there, and
 `by_author` is `1`, `true` or `on`. When a sync is needed it answers 202 with a job to follow, and you ask
 again with `job=ID` once `/api/progress` says it is done:
 

@@ -7,6 +7,9 @@ import pathlib
 import re
 import types
 import typing
+import zoneinfo
+
+CommitTimezone = typing.Literal['report', 'author']
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -30,7 +33,9 @@ class FetchSettings:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class StatsSettings:
+    author_timezones: tuple[tuple[str, str], ...] = ()
     bot_logins: tuple[str, ...] = dataclasses.field(default=('dependabot[bot]', 'renovate[bot]'))
+    commit_timezone: CommitTimezone = 'report'
     deploy_workflow: str | None = None
     exclude_merge_commits: bool = True
     exclude_paths: tuple[str, ...] = dataclasses.field(
@@ -156,6 +161,24 @@ def clones_dir_for(settings: FetchSettings) -> pathlib.Path:
     return cache_file.parent / 'clones' / cache_file.stem
 
 
+def author_zones(settings: StatsSettings) -> dict[str, zoneinfo.ZoneInfo]:
+    """`stats.author_timezones` as zones keyed by casefolded login.
+
+    Raises:
+        SettingsError: a zone is not a known IANA zone; the message names
+            `stats.author_timezones.<login>` and the value.
+    """
+    zones: dict[str, zoneinfo.ZoneInfo] = {}
+    for login, name in settings.author_timezones:
+        try:
+            zones[login] = zoneinfo.ZoneInfo(name)
+        except zoneinfo.ZoneInfoNotFoundError, ValueError, OSError:
+            raise SettingsError(
+                f'stats.author_timezones.{login} is not a known time zone: {name}'
+            ) from None
+    return zones
+
+
 def convert(key: str, annotation: object, value: object) -> object:
     """Check `value` against a setting's type and return it in that type.
 
@@ -178,6 +201,12 @@ def convert(key: str, annotation: object, value: object) -> object:
     elif annotation == tuple[str, ...]:
         if isinstance(value, list | tuple) and all(isinstance(item, str) for item in value):
             return tuple(value)
+        ok = False
+    elif annotation == tuple[tuple[str, str], ...]:
+        if isinstance(value, dict) and all(
+            isinstance(zone, str) and isinstance(login, str) for login, zone in value.items()
+        ):
+            return tuple(sorted((login.casefold(), zone) for login, zone in value.items()))
         ok = False
     elif annotation is pathlib.Path or annotation == pathlib.Path | None:
         if value is None and annotation != pathlib.Path:
@@ -256,4 +285,6 @@ def read_config(config_path: pathlib.Path | None) -> object:
 def load_settings(config_path: pathlib.Path | None, overrides: dict[str, object]) -> Settings:
     """Defaults, then the JSON file, then `overrides`; later wins."""
     settings = apply_layer(Settings(), read_config(config_path), 'config file')
-    return apply_layer(settings, overrides, 'overrides')
+    settings = apply_layer(settings, overrides, 'overrides')
+    author_zones(settings.stats)
+    return settings

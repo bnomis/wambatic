@@ -422,6 +422,13 @@ def test_a_date_outside_the_bounds_is_a_usage_error(
         )
 
 
+def test_parse_commit_tz_takes_the_two_modes_and_refuses_another() -> None:
+    assert wambatic.reports.service.parse_commit_tz('report') == 'report'
+    assert wambatic.reports.service.parse_commit_tz('author') == 'author'
+    with pytest.raises(wambatic.reports.errors.UsageError, match='--commit-tz'):
+        wambatic.reports.service.parse_commit_tz('local')
+
+
 def test_tomorrow_is_taken_in_the_requested_time_zone() -> None:
     clock = datetime.datetime(2027, 2, 1, 20, 0, tzinfo=datetime.UTC)
 

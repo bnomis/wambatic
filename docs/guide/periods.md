@@ -29,6 +29,28 @@ UTC on 31 October is in October with `--tz UTC` and in November with `--tz Europ
 holds for the first and last day of the range: `--since` and `--until` are days in that zone. An unknown
 zone is an error.
 
+## Commits in their authors' zones
+
+By default (`--commit-tz report`, or `stats.commit_timezone` set to `report`) a commit is dated in the
+report zone like every other event. With `--commit-tz author` each commit is dated on the calendar its
+author saw, and every other record (pull requests, issues, releases, runs) stays in the report zone.
+
+A commit's author zone is the first of these that applies:
+
+1. the zone `stats.author_timezones` gives for the author's login (see [Configuration](config.md));
+2. the UTC offset git recorded when the commit was made, for a repository read by clone;
+3. the report zone.
+
+For example, a commit made on Monday 2 November at 01:00 +09:00 is stored as Sunday 1 November 16:00 UTC.
+In a UTC report it is on Sunday by default and on Monday with `--commit-tz author`, and it is inside
+`--since 2026-11-02` only in the second case. Bucket labels, the partial-period marks and every series
+that is not made of commits are unchanged, and the default `until` is still today in the report zone.
+
+GitHub's API gives commit times in UTC without the author's offset, so a repository that is not cloned has
+no offset. Its commits are dated in the report zone, unless `stats.author_timezones` names the author, and
+the report lists the repository in its unavailable section as `commit dates: owner/name`. The report
+title names both zones: "commits in authors' zones, other events in" the report zone.
+
 ## Partial periods
 
 A range rarely starts on the first day of a period or ends on the last. The first and last periods are

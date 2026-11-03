@@ -190,7 +190,7 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 ## Task 6: Document author timezones and close the list
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** small
 **Spec Reference:** system 1.12 (Limits accepted); implementation order 1.13, step 15; every spec section above (closing)
@@ -199,26 +199,26 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 **Subtasks:**
 
-- [ ] Update `docs/guide/periods.md` (the two modes, `--commit-tz`, a worked example of a `+09:00` commit, the default `until`), `docs/guide/config.md` (`stats.commit_timezone`, `stats.author_timezones`), `docs/guide/cache.md` (schema 6 refuses an older cache: clear and refetch), `docs/guide/web.md` (the commit dates select) and `docs/limits.md` (replace "A report uses one time zone" with the limit of system spec 1.12: only cloned repositories carry offsets)
-- [ ] Mark step 15 `done` in `agents/specs/implementation-order.md`, linking this list, and set its `**Status:**` to `implemented`
-- [ ] Set the spec's `**Status:**` to `implemented` in `agents/specs/author-timezones/spec.md`, and in each amended spec: system, stats, metric groups, cache, fetch, commit sync, CLI, reports, web app, terminal report and HTML report
-- [ ] Move the `TODO.md` item "A report has one timezone" to the end of `DONE.md`: append its heading and body unchanged, then `Done: <date> - built by agents/tasks/author-timezones/tasks-1.md against author timezones spec 1.0.`, and remove it from `TODO.md`
-- [ ] Add the list to `agents/tasks/index.md` if it is not there
+- [x] Update `docs/guide/periods.md` (the two modes, `--commit-tz`, a worked example of a `+09:00` commit, the default `until`), `docs/guide/config.md` (`stats.commit_timezone`, `stats.author_timezones`), `docs/guide/cache.md` (schema 6 refuses an older cache: clear and refetch), `docs/guide/web.md` (the commit dates select) and `docs/limits.md` (replace "A report uses one time zone" with the limit of system spec 1.12: only cloned repositories carry offsets)
+- [x] Mark step 15 `done` in `agents/specs/implementation-order.md`, linking this list, and set its `**Status:**` to `implemented`
+- [x] Set the spec's `**Status:**` to `implemented` in `agents/specs/author-timezones/spec.md`, and in each amended spec: system, stats, metric groups, cache, fetch, commit sync, CLI, reports, web app, terminal report and HTML report
+- [x] Move the `TODO.md` item "A report has one timezone" to the end of `DONE.md`: append its heading and body unchanged, then `Done: <date> - built by agents/tasks/author-timezones/tasks-1.md against author timezones spec 1.0.`, and remove it from `TODO.md`
+- [x] Add the list to `agents/tasks/index.md` if it is not there
 
 **Acceptance Criteria:**
 
-- [ ] The guide explains both modes, the per-author setting and what the `commit dates` unavailable row means
-- [ ] `TODO.md` no longer holds the timezone item, and `DONE.md` ends with it and its `Done:` line
+- [x] The guide explains both modes, the per-author setting and what the `commit dates` unavailable row means
+- [x] `TODO.md` no longer holds the timezone item, and `DONE.md` ends with it and its `Done:` line
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] `uv sync --group docs` succeeds
-- [ ] `mkdocs build --strict` exits 0
-- [ ] `pre-commit run --all-files` exits 0
-- [ ] `bin/audit-check.sh` exits 0
-- [ ] `python3 ~/.claude/skills/todo-review/verify_bodies.py <before> TODO.md DONE.md` exits 0, where `<before>` is `TODO.md` as of the commit that added this list (`git show "$(git log --diff-filter=A --format=%H -- agents/tasks/author-timezones/tasks-1.md)":TODO.md`)
-- [ ] `pytest src/tests/fetch src/tests/reports src/tests/stats src/tests/test_cli.py src/tests/test_settings.py src/tests/test_docs.py src/tests/test_layering.py src/tests/test_package.py src/tests/test_screenshots.py` passes: every test that reaches `settings`, `fetch`, `stats` or `reports`, the modules this list changes
+- [x] `source bin/activate.sh` succeeds
+- [x] `uv sync --group docs` succeeds
+- [x] `mkdocs build --strict` exits 0
+- [x] `pre-commit run --all-files` exits 0
+- [x] `bin/audit-check.sh` exits 0
+- [x] `python3 ~/.claude/skills/todo-review/verify_bodies.py <before> TODO.md DONE.md` exits 0, where `<before>` is `TODO.md` as of the commit that added this list (`git show "$(git log --diff-filter=A --format=%H -- agents/tasks/author-timezones/tasks-1.md)":TODO.md`)
+- [x] `pytest src/tests/fetch src/tests/reports src/tests/stats src/tests/test_cli.py src/tests/test_settings.py src/tests/test_docs.py src/tests/test_layering.py src/tests/test_package.py src/tests/test_screenshots.py` passes: every test that reaches `settings`, `fetch`, `stats` or `reports`, the modules this list changes
 
 **Notes:**
 

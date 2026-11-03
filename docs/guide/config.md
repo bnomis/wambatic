@@ -67,6 +67,11 @@ These settings decide how commits are read and what the line counts include; the
 - `fetch.api_history`: `totals` (the default) or `files`, for a repository that is not cloned.
 - `fetch.clone_dir`: where the bare clones are kept.
 - `stats.exclude_paths` and `stats.linguist`: which files the line counts leave out.
+- `stats.commit_timezone`: `report` (the default) dates commits in the report zone; `author` dates each
+  in its author's zone unless `--commit-tz` says otherwise. See [Periods](periods.md).
+- `stats.author_timezones`: a JSON object from login to [IANA time zone](https://www.iana.org/time-zones),
+  such as `{"octocat": "Asia/Tokyo"}`. Logins are matched without regard to case, and an unknown zone
+  stops the run before any sync. It applies in `author` mode and overrides the offset git recorded.
 
 [How commits are read](activity.md#how-commits-are-read) says what each combination does. A list replaces
 its default, it does not add to it.

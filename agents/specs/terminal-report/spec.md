@@ -1,7 +1,7 @@
 # Terminal report
 
 **Version:** 1.3
-**Status:** proposed
+**Status:** implemented
 **Date:** 2026-11-03
 
 The `rich` report `wambatic report` prints by default, and the table rows it shares with the HTML page. Part of [Reports](../reports/spec.md).

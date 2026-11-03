@@ -1,7 +1,7 @@
 # Author timezones
 
 **Version:** 1.0
-**Status:** proposed
+**Status:** implemented
 **Date:** 2026-11-03
 
 Dates each commit on its author's own calendar, when the user asks for it, instead of the one report timezone. Today every record is dated by its local date in `StatsRequest.tz` (`--tz`, or `stats.timezone`), so a commit made at 09:00 on a Monday in Tokyo is a Sunday commit in a UTC report, and its author's `active_days` and the daily buckets say so. In the new `author` mode a commit's local date is taken in its author's zone: from the per-author setting `stats.author_timezones` when it names the author, else from the UTC offset git recorded on the commit, else, when the commit has no recorded offset, in the report zone, and the report names the repositories whose commits that was. Every other record (pull requests, issues, workflow runs, releases, stars, forks) stays in the report zone. The default mode, `report`, is today's behaviour, so no existing report changes until the user switches.

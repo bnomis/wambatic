@@ -31,6 +31,11 @@ them elsewhere. Clones can be large; `cache info` shows their size. They are der
 holds the same history. See [Activity](activity.md#how-commits-are-read) for which repositories are
 cloned.
 
+## Older caches
+
+The cache records each cloned commit's author offset, which a cache made by an earlier wambatic lacks. It
+is refused with a version error: run `wambatic cache clear` and report again to fetch everything afresh.
+
 ## `cache info`
 
 `wambatic cache info` prints the path, the size, the identity the cache recorded (the schema version, the

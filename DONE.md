@@ -151,3 +151,23 @@ Note 2026-11-02: since `1110cec` split the reports and stats specs, `--tz` is in
 Spec: agents/specs/author-timezones/spec.md (1.0, with the amendments listed in its review); tasks: agents/tasks/author-timezones/tasks-1.md.
 
 Done: 2026-11-03 - built by agents/tasks/author-timezones/tasks-1.md against author timezones spec 1.0.
+
+## Dependabot reports open alerts the token cannot read
+
+Found on 2026-11-02 and again on 2026-11-03 in GitHub's reply to every push
+of `main`: "GitHub found 2 vulnerabilities on bnomis/wambatic's default
+branch (1 critical, 1 high)", pointing at
+https://github.com/bnomis/wambatic/security/dependabot. On 2026-11-03
+`gh api repos/bnomis/wambatic/dependabot/alerts` answered HTTP 403
+("Resource not accessible by personal access token"), so which packages and
+versions are affected is not known here.
+
+Cause: not known until the alerts are read; the token in use has no
+Dependabot alerts permission.
+
+Fix direction: read the alerts (on the page above, or with a token granted
+"Dependabot alerts: read"), then upgrade each affected dependency in
+`pyproject.toml` and `uv.lock` (`uv.lock` changes only with the user's
+explicit instruction), run the tests, and check the alerts close.
+
+Done: 2026-11-03 - dismissed by the user, not fixed: the alerts (certifi via httpx, virtualenv via pre-commit, both development-only) are to be ignored; uv.lock is unchanged.

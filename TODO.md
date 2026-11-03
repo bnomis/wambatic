@@ -4,24 +4,6 @@ Open work only, in implementation order, nearest first. Finished items move to
 `DONE.md` unchanged. See the shared `todo-add` and `todo-review` skills for
 the shape of an item.
 
-## Dependabot reports open alerts the token cannot read
-
-Found on 2026-11-02 and again on 2026-11-03 in GitHub's reply to every push
-of `main`: "GitHub found 2 vulnerabilities on bnomis/wambatic's default
-branch (1 critical, 1 high)", pointing at
-https://github.com/bnomis/wambatic/security/dependabot. On 2026-11-03
-`gh api repos/bnomis/wambatic/dependabot/alerts` answered HTTP 403
-("Resource not accessible by personal access token"), so which packages and
-versions are affected is not known here.
-
-Cause: not known until the alerts are read; the token in use has no
-Dependabot alerts permission.
-
-Fix direction: read the alerts (on the page above, or with a token granted
-"Dependabot alerts: read"), then upgrade each affected dependency in
-`pyproject.toml` and `uv.lock` (`uv.lock` changes only with the user's
-explicit instruction), run the tests, and check the alerts close.
-
 ## The screenshot cache and the cache info image are still at schema 5
 
 Found on 2026-11-03 by `/todo-review`, from the author timezones task list

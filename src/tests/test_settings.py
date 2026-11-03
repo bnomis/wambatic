@@ -17,7 +17,11 @@ import wambatic.settings
 def test_fetch_defaults() -> None:
     fetch = wambatic.settings.Settings().fetch
     assert fetch == wambatic.settings.FetchSettings(
+        api_history='totals',
+        branches=(),
         cache_path=None,
+        clone_dir=None,
+        clone_repos=(),
         full_refresh_after=datetime.timedelta(days=30),
         github_host='github.com',
         include_archived=False,
@@ -39,6 +43,19 @@ def test_stats_defaults() -> None:
     assert stats.failure_window == datetime.timedelta(days=7)
     assert stats.hotfix_labels == tests.fixtures.constants.HOTFIX_LABELS
     assert stats.timezone == 'UTC'
+    assert stats.exclude_paths == (
+        '**/*.lock',
+        '**/package-lock.json',
+        '**/pnpm-lock.yaml',
+        '**/go.sum',
+        '**/vendor/**',
+        '**/node_modules/**',
+        '**/dist/**',
+        '**/*.min.js',
+        '**/*.min.css',
+        '**/*.map',
+    )
+    assert stats.linguist is True
 
 
 def test_report_defaults() -> None:
@@ -428,3 +445,51 @@ def test_cache_path_for_an_unset_path_is_per_host() -> None:
 def test_cache_path_for_a_set_path_is_that_path(tmp_path: pathlib.Path) -> None:
     fetch = wambatic.settings.FetchSettings(cache_path=tmp_path / 'x.sqlite3', github_host='a.b')
     assert wambatic.settings.cache_path_for(fetch) == tmp_path / 'x.sqlite3'
+
+
+@pytest.mark.parametrize(
+    ('section', 'key', 'value', 'expected'),
+    [
+        ('fetch', 'api_history', 'files', 'files'),
+        ('fetch', 'branches', ['release/*', 'main'], ('release/*', 'main')),
+        ('fetch', 'clone_repos', ['acme/*'], ('acme/*',)),
+        ('stats', 'exclude_paths', ['**/*.snap'], ('**/*.snap',)),
+        ('stats', 'linguist', False, False),
+    ],
+)
+def test_commit_sync_settings_from_file_and_override(
+    tmp_path: pathlib.Path, section: str, key: str, value: object, expected: object
+) -> None:
+    path = tmp_path / 'config.json'
+    path.write_text(json.dumps({section: {key: value}}), encoding='utf-8')
+    from_file = wambatic.settings.load_settings(path, {})
+    assert getattr(getattr(from_file, section), key) == expected
+    from_flag = wambatic.settings.load_settings(None, {section: {key: value}})
+    assert getattr(getattr(from_flag, section), key) == expected
+
+
+def test_clone_dir_from_file_and_override(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / 'config.json'
+    path.write_text(json.dumps({'fetch': {'clone_dir': str(tmp_path / 'a')}}), encoding='utf-8')
+    assert wambatic.settings.load_settings(path, {}).fetch.clone_dir == tmp_path / 'a'
+    overrides: dict[str, object] = {'fetch': {'clone_dir': str(tmp_path / 'b')}}
+    assert wambatic.settings.load_settings(path, overrides).fetch.clone_dir == tmp_path / 'b'
+
+
+def test_api_history_outside_the_two_values_raises() -> None:
+    with pytest.raises(wambatic.settings.SettingsError) as raised:
+        wambatic.settings.load_settings(None, {'fetch': {'api_history': 'all'}})
+    assert 'fetch.api_history' in str(raised.value)
+
+
+def test_clones_dir_for_is_per_cache_file() -> None:
+    home = pathlib.Path('~/.cache/wambatic').expanduser()
+    default = wambatic.settings.FetchSettings()
+    assert wambatic.settings.clones_dir_for(default) == home / 'clones' / 'cache'
+    other = wambatic.settings.FetchSettings(github_host='ghe.example.com')
+    assert wambatic.settings.clones_dir_for(other) == home / 'clones' / 'cache-ghe.example.com'
+
+
+def test_clones_dir_for_a_set_directory_is_that_directory(tmp_path: pathlib.Path) -> None:
+    settings = wambatic.settings.FetchSettings(clone_dir=tmp_path / 'c')
+    assert wambatic.settings.clones_dir_for(settings) == tmp_path / 'c'

@@ -128,6 +128,39 @@ def test_a_repo_built_without_the_popularity_fields_has_their_defaults() -> None
     assert (repo.languages, repo.languages_size) == ((), 0)
 
 
+def test_a_repo_built_without_visibility_is_private() -> None:
+    repo = wambatic.fetch.base.Repo('octocat/Hello-World', 'main', None, False, False, None, NOW)
+    assert repo.visibility == 'PRIVATE'
+
+
+def test_a_commit_built_without_files_has_none() -> None:
+    commit = wambatic.fetch.base.Commit('octocat/x', 'c1', NOW, None, 1, 2, False)
+    assert commit.files == ()
+    file = wambatic.fetch.base.CommitFile('a.py', 1, 2)
+    assert (file.binary, file.generated) == (False, False)
+
+
+@pytest.mark.parametrize('visibility', ['PUBLIC', 'PRIVATE', 'INTERNAL'])
+def test_a_listing_node_visibility_is_parsed(visibility: str) -> None:
+    repo = wambatic.fetch.base.parse_repo(
+        tests.fixtures.fetch.responses.repo_node(
+            'octocat/x', head=None, pushed_at=None, updated_at=NOW, visibility=visibility
+        )
+    )
+    assert repo.visibility == visibility
+
+
+@pytest.mark.parametrize('value', ['SECRET', 'public', None])
+def test_a_listing_node_with_another_visibility_is_malformed(value: object) -> None:
+    node = tests.fixtures.fetch.responses.repo_node(
+        'octocat/x', head=None, pushed_at=None, updated_at=NOW
+    )
+    node['visibility'] = value
+    with pytest.raises(wambatic.fetch.errors.GraphQLError) as caught:
+        wambatic.fetch.base.parse_repo(node)
+    assert 'MALFORMED' in str(caught.value)
+
+
 def test_a_pull_request_and_a_sync_state_built_without_the_new_fields_have_defaults() -> None:
     pull = pull_request()
     assert (pull.labels, pull.first_commit_at) == ((), None)

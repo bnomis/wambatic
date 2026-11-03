@@ -1,4 +1,5 @@
 import asyncio
+import dataclasses
 import os
 import pathlib
 
@@ -35,14 +36,14 @@ def test_lists_octocat_repositories() -> None:
 @pytest.mark.live
 @pytest.mark.skipif(not TOKEN, reason='GITHUB_TOKEN is not set')
 def test_line_totals_match_code_frequency(tmp_path: pathlib.Path) -> None:
+    """The public repository is read through a real bare clone in a temporary directory."""
     subject = wambatic.fetch.base.Subject('repo', 'octocat', 'Hello-World')
+    settings = wambatic.settings.FetchSettings(clone_dir=tmp_path / 'clones')
 
     async def scenario() -> tuple[tuple[int, int], tuple[int, int]]:
         cache = wambatic.fetch.cache.Cache.open(tmp_path / 'cache.sqlite3')
         try:
-            async with wambatic.fetch.base.Fetcher(
-                TOKEN, cache, wambatic.settings.FetchSettings()
-            ) as fetcher:
+            async with wambatic.fetch.base.Fetcher(TOKEN, cache, settings) as fetcher:
                 await fetcher.sync(subject, tests.fixtures.stats.RESOURCES_ACTIVITY)
                 response = await fetcher.client.rest_get(
                     '/repos/octocat/Hello-World/stats/code_frequency'
@@ -63,6 +64,37 @@ def test_line_totals_match_code_frequency(tmp_path: pathlib.Path) -> None:
 
     summed, weekly = asyncio.run(scenario())
     assert summed == weekly
+    assert any((tmp_path / 'clones').iterdir())
+
+
+@pytest.mark.live
+@pytest.mark.skipif(not TOKEN, reason='GITHUB_TOKEN is not set')
+def test_api_files_sums_match_totals(tmp_path: pathlib.Path) -> None:
+    """A repository treated as private is not cloned: its commits' files come from REST."""
+    subject = wambatic.fetch.base.Subject('repo', 'octocat', 'Hello-World')
+    settings = wambatic.settings.FetchSettings(api_history='files', clone_dir=tmp_path / 'clones')
+
+    async def scenario() -> list[wambatic.fetch.base.Commit]:
+        cache = wambatic.fetch.cache.Cache.open(tmp_path / 'cache.sqlite3')
+        try:
+            async with wambatic.fetch.base.Fetcher(TOKEN, cache, settings) as fetcher:
+                listed = await fetcher.list_repos(subject)
+                repo = dataclasses.replace(listed[0], visibility='PRIVATE')
+                assert wambatic.fetch.base.commit_method(repo, settings) == 'api-files'
+                await fetcher.sync_commits(repo, False)
+            return cache.read_commits(subject.full_name, None, None)
+        finally:
+            cache.close()
+
+    commits = asyncio.run(scenario())
+    assert commits
+    assert not (tmp_path / 'clones').exists()
+    for commit in commits:
+        if commit.is_merge:
+            continue
+        assert commit.files
+        assert sum(file.additions for file in commit.files) == commit.additions
+        assert sum(file.deletions for file in commit.files) == commit.deletions
 
 
 @pytest.mark.live

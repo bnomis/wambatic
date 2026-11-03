@@ -440,7 +440,7 @@ def test_inspect_cache_reports_the_host_and_the_server_version(
         opened.write_server_version('3.19.1')
     finally:
         opened.close()
-    info = wambatic.fetch.cache.inspect_cache(cache_path)
+    info = wambatic.fetch.cache.inspect_cache(cache_path, cache_path.parent / 'clones')
     assert info is not None
     assert (info.github_host, info.server_version) == (ENTERPRISE, '3.19.1')
     assert info.identity['github_host'] == ENTERPRISE
@@ -452,7 +452,7 @@ def test_inspect_cache_reads_a_cache_without_the_host_row_as_github_com(
     cache_path: pathlib.Path,
 ) -> None:
     make_cache_before_the_host_row(cache_path)
-    info = wambatic.fetch.cache.inspect_cache(cache_path)
+    info = wambatic.fetch.cache.inspect_cache(cache_path, cache_path.parent / 'clones')
     assert info is not None
     assert (info.github_host, info.server_version) == ('github.com', None)
     assert info.differences == {}
@@ -1152,7 +1152,7 @@ def test_inspect_cache_counts_star_events_and_forks(
         HELLO, [star_event('U_1'), star_event('U_2')], state(resource='star_events'), replace=False
     )
     cache.write_forks(HELLO, [fork(1)], state(resource='forks'), replace=False)
-    info = wambatic.fetch.cache.inspect_cache(cache_path)
+    info = wambatic.fetch.cache.inspect_cache(cache_path, cache_path.parent / 'clones')
     assert info is not None
     assert (info.star_events, info.forks) == (2, 1)
 
@@ -1171,7 +1171,7 @@ def test_etag_round_trip(cache: wambatic.fetch.cache.Cache) -> None:
 def test_inspect_cache_of_a_missing_path_is_none_and_creates_nothing(
     cache_path: pathlib.Path,
 ) -> None:
-    assert wambatic.fetch.cache.inspect_cache(cache_path) is None
+    assert wambatic.fetch.cache.inspect_cache(cache_path, cache_path.parent / 'clones') is None
     assert not cache_path.exists()
     assert not cache_path.parent.exists()
 
@@ -1182,7 +1182,10 @@ def test_inspect_cache_leaves_the_file_unchanged_and_reads_a_read_only_file(
     before = stats_cache_path.stat().st_mtime_ns
     stats_cache_path.chmod(0o444)
     try:
-        assert wambatic.fetch.cache.inspect_cache(stats_cache_path) is not None
+        assert (
+            wambatic.fetch.cache.inspect_cache(stats_cache_path, stats_cache_path.parent / 'clones')
+            is not None
+        )
     finally:
         stats_cache_path.chmod(0o644)
     assert stats_cache_path.stat().st_mtime_ns == before
@@ -1192,7 +1195,7 @@ def test_inspect_cache_reports_counts_identity_and_latest_sync(
     stats_cache_path: pathlib.Path,
 ) -> None:
     path = stats_cache_path
-    info = wambatic.fetch.cache.inspect_cache(path)
+    info = wambatic.fetch.cache.inspect_cache(path, path.parent / 'clones')
     assert info is not None
     assert info.path == path
     assert info.repos == len(tests.fixtures.stats.REPOS)
@@ -1209,7 +1212,7 @@ def test_inspect_cache_counts_only_repos_not_marked_missing(
 ) -> None:
     cache.upsert_repos('octocat', [repo(HELLO), repo(SPOON)], complete=True)
     cache.upsert_repos('octocat', [repo(HELLO)], complete=True)
-    info = wambatic.fetch.cache.inspect_cache(cache_path)
+    info = wambatic.fetch.cache.inspect_cache(cache_path, cache_path.parent / 'clones')
     assert info is not None
     assert info.repos == 1
 
@@ -1235,7 +1238,7 @@ def test_inspect_cache_reads_a_cache_that_open_refuses_and_changes_nothing(
             connection.close()
 
     before = meta()
-    info = wambatic.fetch.cache.inspect_cache(cache_path)
+    info = wambatic.fetch.cache.inspect_cache(cache_path, cache_path.parent / 'clones')
     assert info is not None
     assert info.differences == {'schema_version': ('0', str(wambatic.fetch.cache.SCHEMA_VERSION))}
     assert info.version_override_at is None
@@ -1247,7 +1250,7 @@ def test_inspect_cache_reads_a_cache_that_open_refuses_and_changes_nothing(
 def test_inspect_cache_reports_the_version_override_time(cache_path: pathlib.Path) -> None:
     write_other_schema_version(cache_path)
     wambatic.fetch.cache.Cache.open(cache_path, ignore_version=True).close()
-    info = wambatic.fetch.cache.inspect_cache(cache_path)
+    info = wambatic.fetch.cache.inspect_cache(cache_path, cache_path.parent / 'clones')
     assert info is not None
     assert info.version_override_at is not None
     assert wambatic.fetch.cache.OVERRIDE_KEY not in info.identity
@@ -1260,7 +1263,7 @@ def test_inspect_cache_counts_pull_requests_and_issues(
         HELLO, [pull_request(1), pull_request(2)], state(resource='pull_requests'), replace=False
     )
     cache.write_issues(HELLO, [issue(1)], state(resource='issues'), replace=False)
-    info = wambatic.fetch.cache.inspect_cache(cache_path)
+    info = wambatic.fetch.cache.inspect_cache(cache_path, cache_path.parent / 'clones')
     assert info is not None
     assert (info.pull_requests, info.issues) == (2, 1)
 
@@ -1275,7 +1278,7 @@ def test_inspect_cache_counts_releases_and_runs(
         state(resource='workflow_runs'),
         replace=False,
     )
-    info = wambatic.fetch.cache.inspect_cache(cache_path)
+    info = wambatic.fetch.cache.inspect_cache(cache_path, cache_path.parent / 'clones')
     assert info is not None
     assert (info.releases, info.workflow_runs) == (2, 3)
 
@@ -1291,7 +1294,7 @@ def test_inspect_cache_gives_zero_pull_requests_and_issues_on_a_file_that_lacks_
             "INSERT INTO meta VALUES ('schema_version', '1');"
         )
     connection.close()
-    info = wambatic.fetch.cache.inspect_cache(cache_path)
+    info = wambatic.fetch.cache.inspect_cache(cache_path, cache_path.parent / 'clones')
     assert info is not None
     assert (info.pull_requests, info.issues) == (0, 0)
     assert (info.releases, info.workflow_runs) == (0, 0)
@@ -1303,7 +1306,7 @@ def test_inspect_cache_of_an_empty_sqlite_file_has_zero_counts_and_adds_no_table
 ) -> None:
     cache_path.parent.mkdir(parents=True)
     sqlite3.connect(cache_path).close()
-    info = wambatic.fetch.cache.inspect_cache(cache_path)
+    info = wambatic.fetch.cache.inspect_cache(cache_path, cache_path.parent / 'clones')
     assert info is not None
     assert (info.repos, info.commits, info.last_synced_at) == (0, 0, None)
     assert info.identity == {}
@@ -1322,11 +1325,36 @@ def test_clear_cache_removes_the_file_and_its_wal_and_shm_files(cache_path: path
     shm = cache_path.with_name(cache_path.name + '-shm')
     assert wal.exists()
     assert shm.exists()
-    removed = wambatic.fetch.cache.clear_cache(cache_path)
+    removed = wambatic.fetch.cache.clear_cache(cache_path, cache_path.parent / 'clones')
     assert removed == [cache_path, wal, shm]
     assert not any(path.exists() for path in removed)
-    assert wambatic.fetch.cache.clear_cache(cache_path) == []
+    assert wambatic.fetch.cache.clear_cache(cache_path, cache_path.parent / 'clones') == []
     cache.close()
+
+
+def test_clear_cache_removes_the_clones_tree_and_inspect_cache_sizes_it(
+    cache_path: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    clones = tmp_path / 'clones'
+    (clones / 'octocat').mkdir(parents=True)
+    (clones / 'octocat' / 'hello.git').write_bytes(b'x' * 100)
+    wambatic.fetch.cache.Cache.open(cache_path).close()
+    info = wambatic.fetch.cache.inspect_cache(cache_path, clones)
+    assert info is not None
+    assert info.clones_bytes == 100
+    removed = wambatic.fetch.cache.clear_cache(cache_path, clones)
+    assert clones in removed
+    assert not clones.exists()
+    assert wambatic.fetch.cache.clear_cache(cache_path, clones) == []
+
+
+def test_inspect_cache_reports_zero_clone_bytes_when_the_directory_is_absent(
+    cache_path: pathlib.Path, tmp_path: pathlib.Path
+) -> None:
+    wambatic.fetch.cache.Cache.open(cache_path).close()
+    info = wambatic.fetch.cache.inspect_cache(cache_path, tmp_path / 'none')
+    assert info is not None
+    assert info.clones_bytes == 0
 
 
 # Failures of the file itself
@@ -1381,7 +1409,7 @@ def test_a_file_that_is_not_a_database_is_a_cache_error_for_open_and_inspect(
     with pytest.raises(wambatic.fetch.errors.CacheError, match='not a database'):
         wambatic.fetch.cache.Cache.open(cache_path)
     with pytest.raises(wambatic.fetch.errors.CacheError, match='not a database'):
-        wambatic.fetch.cache.inspect_cache(cache_path)
+        wambatic.fetch.cache.inspect_cache(cache_path, cache_path.parent / 'clones')
 
 
 def test_clear_cache_of_a_file_that_cannot_be_deleted_is_a_cache_error(
@@ -1391,7 +1419,7 @@ def test_clear_cache_of_a_file_that_cannot_be_deleted_is_a_cache_error(
     cache_path.parent.chmod(0o555)
     try:
         with pytest.raises(wambatic.fetch.errors.CacheError, match='cannot delete'):
-            wambatic.fetch.cache.clear_cache(cache_path)
+            wambatic.fetch.cache.clear_cache(cache_path, cache_path.parent / 'clones')
     finally:
         cache_path.parent.chmod(0o755)
     assert cache_path.exists()
@@ -1422,7 +1450,8 @@ def stored_columns(cache: wambatic.fetch.cache.Cache, table: str) -> tuple[str, 
 def test_each_record_field_has_a_cache_column(
     cache: wambatic.fetch.cache.Cache, name: str, record_type: type, columns: tuple[str, ...]
 ) -> None:
-    assert columns == tuple(field.name for field in dataclasses.fields(record_type))
+    fields = tuple(field.name for field in dataclasses.fields(record_type))
+    assert columns == tuple(field for field in fields if field != 'files')
     assert stored_columns(cache, name) == columns
 
 
@@ -1454,6 +1483,8 @@ def test_every_time_flag_and_json_field_has_a_converter() -> None:
     for record_type, converters in pairs:
         hints = typing.get_type_hints(record_type)
         for field in dataclasses.fields(record_type):
+            if (record_type, field.name) == (wambatic.fetch.base.Commit, 'files'):
+                continue
             needs = {datetime.datetime, bool, tuple} & set(
                 [hints[field.name], *typing.get_args(hints[field.name])]
                 + [typing.get_origin(hints[field.name])]
@@ -1624,3 +1655,160 @@ def test_identity_differences_names_exactly_the_keys_that_differ(
         else:
             assert differences[key] == (recorded.get(key), expected.get(key))
     assert not wambatic.fetch.cache.identity_differences(recorded, recorded)
+
+
+# Per-file counts, branch heads and visibility (schema 5)
+
+
+def file_row(
+    path: str, additions: int = 2, deletions: int = 1, **changes: object
+) -> wambatic.fetch.base.CommitFile:
+    fields: dict[str, object] = {'path': path, 'additions': additions, 'deletions': deletions}
+    fields.update(changes)
+    return wambatic.fetch.base.CommitFile(**fields)  # type: ignore[arg-type]
+
+
+def test_commit_files_read_back_by_path(cache: wambatic.fetch.cache.Cache) -> None:
+    files = (file_row('b.py', binary=True), file_row('a.py'), file_row('c.lock', 5, 0))
+    cache.write_commits(HELLO, [commit('c1', files=files), commit('c2', 1)], state(), replace=False)
+    first, second = cache.read_commits(HELLO, None, None)
+    assert [file.path for file in first.files] == ['a.py', 'b.py', 'c.lock']
+    assert {file.path: file for file in first.files} == {file.path: file for file in files}
+    assert second.files == ()
+    assert cache.commit_paths(HELLO) == {'a.py', 'b.py', 'c.lock'}
+    assert cache.commit_oids(HELLO) == {'c1', 'c2'}
+
+
+def test_read_commits_returns_files_only_for_the_range(cache: wambatic.fetch.cache.Cache) -> None:
+    cache.write_commits(
+        HELLO,
+        [commit('c1', files=(file_row('a.py'),)), commit('c2', 5, files=(file_row('b.py'),))],
+        state(),
+        replace=False,
+    )
+    (late,) = cache.read_commits(HELLO, T0 + datetime.timedelta(hours=3), None)
+    assert late.oid == 'c2'
+    assert [file.path for file in late.files] == ['b.py']
+
+
+def test_a_rewritten_commit_replaces_its_file_rows(cache: wambatic.fetch.cache.Cache) -> None:
+    cache.write_commits(
+        HELLO, [commit('c1', files=(file_row('a.py'), file_row('b.py')))], state(), replace=False
+    )
+    cache.write_commits(HELLO, [commit('c1', files=(file_row('c.py'),))], state(), replace=False)
+    (read,) = cache.read_commits(HELLO, None, None)
+    assert [file.path for file in read.files] == ['c.py']
+
+
+def test_gone_deletes_commits_with_their_files(
+    cache: wambatic.fetch.cache.Cache, cache_path: pathlib.Path
+) -> None:
+    cache.write_commits(
+        HELLO,
+        [commit('c1', files=(file_row('a.py'),)), commit('c2', 1, files=(file_row('b.py'),))],
+        state(),
+        replace=False,
+    )
+    cache.write_commits(HELLO, [], state(), replace=False, gone={'c1'})
+    assert cache.commit_oids(HELLO) == {'c2'}
+    assert [row[1] for row in table_rows(cache_path, 'commit_files')] == ['c2']
+
+
+def test_replace_leaves_no_file_rows_of_the_old_commits(
+    cache: wambatic.fetch.cache.Cache, cache_path: pathlib.Path
+) -> None:
+    cache.write_commits(HELLO, [commit('c1', files=(file_row('a.py'),))], state(), replace=False)
+    cache.write_commits(
+        SPOON,
+        [commit('s1', repo_name=SPOON, files=(file_row('x'),))],
+        state(SPOON),
+        replace=False,
+    )
+    cache.write_commits(HELLO, [commit('c2')], state(), replace=True)
+    assert [row[:3] for row in table_rows(cache_path, 'commit_files')] == [(SPOON, 's1', 'x')]
+
+
+def test_generated_rewrites_every_flag(cache: wambatic.fetch.cache.Cache) -> None:
+    cache.write_commits(
+        HELLO,
+        [
+            commit('c1', files=(file_row('a.lock', generated=True), file_row('b.py'))),
+            commit('c2', 1, files=(file_row('a.lock', generated=True), file_row('b.py'))),
+        ],
+        state(),
+        replace=False,
+    )
+    cache.write_commits(HELLO, [], state(), replace=False, generated={'b.py'})
+    flags = {
+        (c.oid, f.path): f.generated for c in cache.read_commits(HELLO, None, None) for f in c.files
+    }
+    assert flags == {
+        ('c1', 'a.lock'): False,
+        ('c1', 'b.py'): True,
+        ('c2', 'a.lock'): False,
+        ('c2', 'b.py'): True,
+    }
+    cache.write_commits(HELLO, [], state(), replace=False, generated=set())
+    assert not any(f.generated for c in cache.read_commits(HELLO, None, None) for f in c.files)
+
+
+def test_branch_heads_are_replaced(cache: wambatic.fetch.cache.Cache) -> None:
+    assert cache.branch_heads(HELLO) == {}
+    cache.write_commits(
+        HELLO, [], state(), replace=False, branch_heads={'main': 'a' * 40, 'dev': 'b' * 40}
+    )
+    assert cache.branch_heads(HELLO) == {'main': 'a' * 40, 'dev': 'b' * 40}
+    cache.write_commits(HELLO, [], state(), replace=False, branch_heads={'main': 'c' * 40})
+    assert cache.branch_heads(HELLO) == {'main': 'c' * 40}
+    cache.write_commits(HELLO, [], state(), replace=False)
+    assert cache.branch_heads(HELLO) == {'main': 'c' * 40}
+    assert cache.branch_heads(SPOON) == {}
+
+
+def test_visibility_is_stored_with_the_repo(cache: wambatic.fetch.cache.Cache) -> None:
+    cache.upsert_repos(
+        'octocat', [repo(visibility='PUBLIC'), repo(SPOON, visibility='INTERNAL')], complete=True
+    )
+    found = {
+        r.name_with_owner: r.visibility
+        for r in cache.read_repos(wambatic.fetch.base.Subject('user', 'octocat'))
+    }
+    assert found == {HELLO: 'PUBLIC', SPOON: 'INTERNAL'}
+
+
+def test_a_cache_of_schema_4_is_refused(cache_path: pathlib.Path) -> None:
+    wambatic.fetch.cache.Cache.open(cache_path).close()
+    connection = sqlite3.connect(cache_path)
+    connection.execute("UPDATE meta SET value = '4' WHERE key = 'schema_version'")
+    connection.commit()
+    connection.close()
+    with pytest.raises(wambatic.fetch.errors.CacheVersionError) as caught:
+        wambatic.fetch.cache.Cache.open(cache_path)
+    assert caught.value.differences['schema_version'] == ('4', str(CURRENT_SCHEMA_VERSION))
+
+
+def test_inspect_cache_counts_commit_files(
+    cache: wambatic.fetch.cache.Cache, cache_path: pathlib.Path
+) -> None:
+    info = wambatic.fetch.cache.inspect_cache(cache_path, cache_path.parent / 'clones')
+    assert info is not None
+    assert info.commit_files == 0
+    cache.write_commits(
+        HELLO, [commit('c1', files=(file_row('a'), file_row('b')))], state(), replace=False
+    )
+    info = wambatic.fetch.cache.inspect_cache(cache_path, cache_path.parent / 'clones')
+    assert info is not None
+    assert info.commit_files == 2
+
+
+def test_inspect_cache_counts_zero_files_for_a_cache_without_the_table(
+    cache_path: pathlib.Path,
+) -> None:
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(cache_path)
+    connection.execute('CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)')
+    connection.commit()
+    connection.close()
+    info = wambatic.fetch.cache.inspect_cache(cache_path, cache_path.parent / 'clones')
+    assert info is not None
+    assert info.commit_files == 0

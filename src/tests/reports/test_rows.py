@@ -189,7 +189,10 @@ def test_the_subject_text_names_the_kind_and_the_login_or_repo(
 def test_the_provenance_lines_start_with_the_computed_time(
     org_result: wambatic.stats.base.StatsResult,
 ) -> None:
-    lines = wambatic.reports.rows.provenance_lines(org_result)
+    without_commits = {k: v for k, v in org_result.provenance.items() if k != 'commit_methods'}
+    lines = wambatic.reports.rows.provenance_lines(
+        dataclasses.replace(org_result, provenance=without_commits)
+    )
     assert lines[0].startswith('computed_at: ')
     assert lines[-1].startswith('schema_version: ')
     warned = dataclasses.replace(
@@ -197,6 +200,57 @@ def test_the_provenance_lines_start_with_the_computed_time(
         provenance={**org_result.provenance, 'version_override_at': '2027-01-20T12:00:00+00:00'},
     )
     assert 'ignore-cache-version' in wambatic.reports.rows.provenance_lines(warned)[-1]
+
+
+def commit_lines(org_result: wambatic.stats.base.StatsResult, **extra: str) -> list[str]:
+    result = dataclasses.replace(org_result, provenance={**org_result.provenance, **extra})
+    return [
+        line
+        for line in wambatic.reports.rows.provenance_lines(result)
+        if line.startswith(('Commits read by', 'Branches', 'Line counts'))
+    ]
+
+
+def test_no_commit_lines_when_commits_were_not_read(
+    org_result: wambatic.stats.base.StatsResult,
+) -> None:
+    without_commits = {k: v for k, v in org_result.provenance.items() if k != 'commit_methods'}
+    result = dataclasses.replace(org_result, provenance=without_commits)
+    assert commit_lines(result) == []
+
+
+def test_the_commit_lines_for_default_branches_with_linguist_on(
+    org_result: wambatic.stats.base.StatsResult,
+) -> None:
+    lines = commit_lines(
+        org_result,
+        commit_methods='clone',
+        branches='[]',
+        exclude_paths='["*.lock"]',
+        linguist='true',
+    )
+    assert lines == [
+        'Commits read by: local clone',
+        'Branches: default branch',
+        'Line counts leave out: *.lock; linguist-generated and linguist-vendored files',
+    ]
+
+
+def test_the_commit_lines_for_set_branches_with_linguist_off(
+    org_result: wambatic.stats.base.StatsResult,
+) -> None:
+    lines = commit_lines(
+        org_result,
+        commit_methods='clone,api',
+        branches='["release/*", "dev"]',
+        exclude_paths='[]',
+        linguist='false',
+    )
+    assert lines == [
+        'Commits read by: local clone, API totals',
+        'Branches: default branch and release/*, dev',
+        'Line counts leave out: nothing',
+    ]
 
 
 def delivery_expected(

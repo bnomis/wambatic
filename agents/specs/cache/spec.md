@@ -1,7 +1,7 @@
 # Cache
 
 **Version:** 1.2
-**Status:** proposed
+**Status:** implemented
 **Date:** 2026-11-02
 
 The local SQLite store behind [Fetch](../fetch/spec.md): repositories, commits, pull requests, issues, releases, workflow runs, stars and forks, the per-repository sync state that makes a later sync incremental, REST ETags, and the identity (schema, wambatic and query versions) that refuses a cache written by different code. It knows nothing about GitHub requests or metrics; `Fetcher` writes it and reads it back for [Stats](../stats/spec.md).
@@ -123,13 +123,11 @@ class CacheInfo:
     forks: int                                             # from step 10
     last_synced_at: datetime.datetime | None               # latest `sync_state.synced_at`
 
-# auditme: accept[spec-api-signature-drift] clones_dir is proposed in cache 1.2, built by step 14
 def inspect_cache(path: pathlib.Path, clones_dir: pathlib.Path) -> CacheInfo | None:
     """None when `path` does not exist. Otherwise reads the file with plain SELECTs on its own
     connection: no schema creation, no identity check or write, no WAL pragma, so a cache that
     `Cache.open` refuses can still be inspected. A table absent from the file counts as 0 rows."""
 
-# auditme: accept[spec-api-signature-drift] clones_dir is proposed in cache 1.2, built by step 14
 def clear_cache(path: pathlib.Path, clones_dir: pathlib.Path) -> list[pathlib.Path]:
     """Delete `path` and its `-wal` and `-shm` files where present, and the `clones_dir`
     tree (1.2); return those deleted. Callers pass `clones_dir_for(settings)`."""

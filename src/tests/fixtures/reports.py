@@ -51,6 +51,7 @@ def alpha_upstream() -> tests.fixtures.fetch.upstream.Upstream:
             ],
             watchers=repo.watcher_count,
             languages=list(repo.languages) or None,
+            visibility=repo.visibility,
         )
         for repo in (alpha, gamma)
     ]
@@ -153,13 +154,17 @@ Flow times by period
 hours; - no data
 
 Provenance
+Commits read by: local clone
+Branches: default branch
+Line counts leave out: **/*.lock, **/package-lock.json, **/pnpm-lock.yaml, **/go.sum, **/vendor/**, **/node_modules/**,
+**/dist/**, **/*.min.js, **/*.min.css, **/*.map; linguist-generated and linguist-vendored files
 computed_at: 2027-01-20T12:00:00+00:00
 fetched_at:commits: 2027-02-01T10:00:00+00:00
 fetched_at:issues: 2027-02-01T10:00:00+00:00
 fetched_at:pull_requests: 2027-02-01T10:00:00+00:00
 wambatic_version: $wambatic_version
 schema_version: $schema_version
-"""
+"""  # noqa: E501
 
 
 # The names of the files a report writes, and the one period its page shows at first

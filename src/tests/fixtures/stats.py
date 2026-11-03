@@ -105,6 +105,11 @@ DELIVERY_PROXIES = (  # auditme: accept[non-alphabetical-literal] the order of t
 )
 
 
+# The methods that read per-file counts, and a branch pattern for the sync tests.
+FILE_METHODS = ('api-files', 'clone')
+RELEASE_BRANCHES = ('release/*',)
+
+
 def repo(
     name: str,
     hours: int,
@@ -129,6 +134,7 @@ def repo(
         watcher_count=watcher_count,
         languages=languages,
         languages_size=languages_size,
+        visibility='PUBLIC',
     )
 
 

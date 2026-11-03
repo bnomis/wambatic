@@ -8,7 +8,11 @@ A duration is a whole number and one unit, `s`, `m`, `h`, `d` or `w`, such as `3
 
 | Setting | Type | Default | Meaning and trade-off |
 |---------|------|---------|-----------------------|
+| `fetch.api_history` | `totals` or `files` | `totals` | How a repository that is not cloned is read: `totals` reads the default branch with per-commit totals; `files` also reads each commit's files, one request per commit, and follows `fetch.branches` |
+| `fetch.branches` | list of strings | `[]` | Branch name patterns (shell wildcards) followed beside the default branch by a clone and by `api_history` `files`; empty follows the default branch only, `["*"]` every branch |
 | `fetch.cache_path` | path or none | `none` | Where the cache lives; unset uses `~/.cache/wambatic/cache.sqlite3` for `github.com` and `~/.cache/wambatic/cache-<host>.sqlite3` for another host, so each host has its own cache |
+| `fetch.clone_dir` | path or none | `none` | Where bare clones are kept; unset puts them in a `clones` directory beside the cache file, in a subdirectory named for the cache file |
+| `fetch.clone_repos` | list of strings | `[]` | `owner/name` patterns (shell wildcards) of private or internal repositories you allow to be cloned; public repositories are cloned without it |
 | `fetch.full_refresh_after` | duration | `30d` | Age of the last full read after which a resource is read in full again to catch deletions; shorter is more accurate and costs more requests |
 | `fetch.github_host` | host name | `github.com` | The GitHub host to read: `github.com`, or the host name of a GitHub Enterprise Server with an optional `:port`; lower-cased on load. `api.github.com` and `*.ghe.com` (data residency) are refused |
 | `fetch.include_archived` | boolean | `false` | Include archived repositories of a user or organisation |
@@ -28,8 +32,10 @@ A duration is a whole number and one unit, `s`, `m`, `h`, `d` or `w`, such as `3
 | `stats.bot_logins` | list of strings | `["dependabot[bot]", "renovate[bot]"]` | Authors left out of contributor counts and the top-contributors table |
 | `stats.deploy_workflow` | string or none | `none` | The workflow whose successful runs are the deployments, matched against a run's workflow file name (`deploy.yml`) or its name; unset, releases that are not prereleases are the deployments |
 | `stats.exclude_merge_commits` | boolean | `true` | Leave merge commits out of line counts |
+| `stats.exclude_paths` | list of strings | `["**/*.lock", "**/package-lock.json", "**/pnpm-lock.yaml", "**/go.sum", "**/vendor/**", "**/node_modules/**", "**/dist/**", "**/*.min.js", "**/*.min.css", "**/*.map"]` | Path patterns whose files are left out of line counts |
 | `stats.failure_window` | duration | `7d` | How long after a deployment a hotfix pull request marks it as failed |
 | `stats.hotfix_labels` | list of strings | `["hotfix"]` | Pull request labels that mark a failure fix, compared without regard to case |
+| `stats.linguist` | boolean | `true` | Also leave out files a repository marks `linguist-generated` or `linguist-vendored` in `.gitattributes` |
 | `stats.timezone` | string | `UTC` | The zone used when `--tz` is absent; an unknown zone is an error |
 
 ## Example

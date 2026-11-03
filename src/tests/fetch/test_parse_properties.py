@@ -130,6 +130,7 @@ def repo_node(name: str, updated: datetime.datetime) -> dict[str, object]:
         'forkCount': 2,
         'watchers': {'totalCount': 3},
         'languages': None,
+        'visibility': 'PUBLIC',
     }
 
 
@@ -340,7 +341,15 @@ def test_parse_compare_commit(
     updated=INSTANTS,
     name=NAMES,
     key=hypothesis.strategies.sampled_from(
-        ('nameWithOwner', 'updatedAt', 'stargazerCount', 'forkCount', 'watchers', 'releases')
+        (
+            'nameWithOwner',
+            'updatedAt',
+            'stargazerCount',
+            'forkCount',
+            'watchers',
+            'releases',
+            'visibility',
+        )
     ),
     junk=WRONG_TYPES,
 )

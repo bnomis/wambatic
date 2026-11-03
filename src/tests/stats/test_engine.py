@@ -3,6 +3,7 @@ import collections
 import collections.abc
 import dataclasses
 import datetime
+import json
 import pathlib
 import typing
 import zoneinfo
@@ -951,3 +952,81 @@ def test_compute_all_rejects_requests_that_differ_in_more_than_granularity() -> 
                 tests.fixtures.stats.ORG, fetcher, requests, clock=clock
             )
         )
+
+
+def set_probe(cache: wambatic.fetch.cache.Cache, name: str, probe: str) -> None:
+    state = cache.sync_state(name, 'commits')
+    assert state is not None
+    cache.write_state(dataclasses.replace(state, probe=probe))
+
+
+def test_a_cloned_and_an_api_repository_are_both_counted_and_the_api_one_is_named(
+    stats_cache: wambatic.fetch.cache.Cache, stats_fetcher: wambatic.fetch.base.Fetcher
+) -> None:
+    set_probe(stats_cache, tests.fixtures.stats.ALPHA, wambatic.fetch.base.commit_probe('api'))
+    result = compute(stats_fetcher)
+    assert [row['metric'] for row in result.tables['unavailable']] == [
+        f'lines_added, lines_deleted, lines_net: {tests.fixtures.stats.ALPHA}'
+    ]
+    assert result.provenance['commit_methods'] == 'clone,api'
+    by_repo = {s.by: s for s in result.series if s.metric == 'commits' and s.by_kind == 'repo'}
+    assert set(by_repo) == {tests.fixtures.stats.ALPHA, tests.fixtures.stats.BETA}
+
+
+def test_a_branches_setting_adds_the_commits_row_for_an_api_repository(
+    stats_cache: wambatic.fetch.cache.Cache,
+) -> None:
+    set_probe(stats_cache, tests.fixtures.stats.ALPHA, wambatic.fetch.base.commit_probe('api'))
+    set_probe(
+        stats_cache,
+        tests.fixtures.stats.BETA,
+        wambatic.fetch.base.commit_probe('clone', None, tests.fixtures.stats.RELEASE_BRANCHES),
+    )
+    fetcher = wambatic.fetch.base.Fetcher(
+        'test-token',
+        stats_cache,
+        wambatic.settings.FetchSettings(branches=tests.fixtures.stats.RELEASE_BRANCHES),
+    )
+    result = compute(fetcher)
+    assert [row['metric'] for row in result.tables['unavailable']] == [
+        f'lines_added, lines_deleted, lines_net: {tests.fixtures.stats.ALPHA}',
+        f'commits: {tests.fixtures.stats.ALPHA}',
+    ]
+    assert result.provenance['branches'] == '["release/*"]'
+
+
+def test_the_unavailable_rows_follow_the_recorded_method_of_an_api_files_repository(
+    stats_cache: wambatic.fetch.cache.Cache, stats_fetcher: wambatic.fetch.base.Fetcher
+) -> None:
+    set_probe(
+        stats_cache,
+        tests.fixtures.stats.ALPHA,
+        wambatic.fetch.base.commit_probe('api-files', None, ()),
+    )
+    result = compute(stats_fetcher)
+    (row,) = result.tables['unavailable']
+    assert row['reason'].startswith('linguist attributes not read')
+    off = compute(stats_fetcher, settings=wambatic.settings.StatsSettings(linguist=False))
+    assert off.tables['unavailable'] == []
+
+
+def test_the_provenance_records_the_line_filters(
+    stats_fetcher: wambatic.fetch.base.Fetcher,
+) -> None:
+    first = compute(stats_fetcher)
+    other = compute(
+        stats_fetcher, settings=wambatic.settings.StatsSettings(exclude_paths=('**/*.md',))
+    )
+    assert first.provenance['linguist'] == 'true'
+    assert json.loads(first.provenance['exclude_paths']) == list(
+        wambatic.settings.StatsSettings().exclude_paths
+    )
+    assert other.provenance['exclude_paths'] == '["**/*.md"]'
+    assert first.provenance['exclude_paths'] != other.provenance['exclude_paths']
+
+
+def test_a_flow_only_result_has_no_filter_provenance(
+    stats_fetcher: wambatic.fetch.base.Fetcher,
+) -> None:
+    result = compute(stats_fetcher, groups=FLOW)
+    assert not {'exclude_paths', 'linguist', 'commit_methods'} & result.provenance.keys()

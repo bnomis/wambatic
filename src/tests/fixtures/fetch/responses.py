@@ -49,6 +49,7 @@ def repo_node(
     watcher_count: int = 0,
     languages: list[tuple[str, int]] | None = None,
     languages_size: int | None = None,
+    visibility: str = 'PRIVATE',
 ) -> dict[str, object]:
     """A repository node as `OWNER_REPOSITORIES` and `REPOSITORY` select it. `languages` None is
     a `null` connection; `languages_size` None is the sum of the listed languages."""
@@ -56,6 +57,7 @@ def repo_node(
         'nameWithOwner': name_with_owner,
         'isArchived': is_archived,
         'isFork': is_fork,
+        'visibility': visibility,
         'pushedAt': None if pushed_at is None else iso(pushed_at),
         'updatedAt': iso(updated_at),
         'defaultBranchRef': None if head is None else {'name': branch, 'target': {'oid': head}},
@@ -342,7 +344,8 @@ def history_page(
 
 
 # https://docs.github.com/en/graphql/reference/objects#repository (`object`): one aliased
-# field per commit; null when the object does not exist.
+# field per commit (the CommitCounts and CommitAuthors queries alike); null when the object
+# does not exist.
 def commit_counts_response(commits: list[dict[str, object] | None]) -> dict[str, object]:
     return {
         'data': {
@@ -374,6 +377,54 @@ def compare_response(
         'behind_by': 0,
         'total_commits': len(commits) if total is None else total,
         'commits': commits,
+    }
+
+
+# https://docs.github.com/en/graphql/reference/objects#refconnection
+def branches_page(
+    branches: dict[str, str], has_next: bool = False, cursor: str = '0'
+) -> dict[str, object]:
+    return {
+        'data': {
+            'repository': {
+                'refs': {
+                    'pageInfo': {'hasNextPage': has_next, 'endCursor': cursor},
+                    'nodes': [
+                        {'name': name, 'target': {'oid': oid}} for name, oid in branches.items()
+                    ],
+                }
+            },
+            'rateLimit': RATE_LIMIT,
+        }
+    }
+
+
+# https://docs.github.com/en/graphql/reference/objects#ref: `history_page` under `ref`.
+def branch_history_page(
+    commits: list[dict[str, object]], has_next: bool, cursor: str
+) -> dict[str, object]:
+    page = history_page(commits, has_next, cursor)
+    data = page['data']
+    assert isinstance(data, dict)
+    repository = data['repository']
+    repository['ref'] = repository.pop('defaultBranchRef')
+    return page
+
+
+# https://docs.github.com/en/rest/commits/commits#get-a-commit: one page of the file list.
+def commit_files_response(oid: str, files: list[tuple[str, int, int]]) -> dict[str, object]:
+    return {
+        'sha': oid,
+        'files': [
+            {
+                'filename': path,
+                'status': 'modified',
+                'additions': additions,
+                'deletions': deletions,
+                'changes': additions + deletions,
+            }
+            for path, additions, deletions in files
+        ],
     }
 
 

@@ -37,6 +37,7 @@ import wambatic.version
 API = 'https://api.github.com'
 OUT = pathlib.Path(__file__).resolve().parent.parent / 'src/tests/fixtures/fetch/recorded.py'
 REST_PAGE = 5
+COMMIT_FILE_FIELDS = ('additions', 'deletions', 'filename')
 
 LISTING_OWNER = 'octocat'
 ORGANIZATION = 'github'
@@ -69,6 +70,9 @@ query PullRequestReviews($owner: String!, $name: String!, $number: Int!) {
 """
 
 RECORDED_QUERIES = (
+    'BRANCHES',
+    'BRANCH_HISTORY',
+    'COMMIT_AUTHORS',
     'COMMIT_COUNTS',
     'COMMIT_HISTORY',
     'ISSUES',
@@ -194,6 +198,15 @@ def record(recorder: Recorder) -> dict[str, object]:
     oids = [node['sha'] for node in compared['commits']]  # type: ignore[attr-defined]
     counts_variables = {**hello, **{f'o{i}': oid for i, oid in enumerate(oids)}}
 
+    branch = recorder.graphql(
+        queries.BRANCH_HISTORY, cursor=None, branch='refs/heads/master', **hello
+    )
+    commit = recorder.rest(f'{hello_path}/commits/{commits[0]["oid"]}')
+    commit_files = {
+        'sha': commit['sha'],  # type: ignore[index]
+        'files': [pick(node, COMMIT_FILE_FIELDS) for node in commit['files']],  # type: ignore[index]
+    }
+
     repo, repo_headers = recorder.send('GET', hello_path)
     runs = recorder.rest(
         f'{flow_path}/actions/runs',
@@ -209,8 +222,14 @@ def record(recorder: Recorder) -> dict[str, object]:
             queries.OWNER_REPOSITORIES, login=LISTING_OWNER, cursor=None
         ),
         'REPOSITORY_OK': recorder.graphql(queries.REPOSITORY, **hello),
+        'BRANCHES_OK': recorder.graphql(queries.BRANCHES, cursor=None, **hello),
+        'BRANCH_HISTORY_OK': branch,
+        'COMMIT_FILES_OK': commit_files,
         'COMMIT_HISTORY_OK': history,
         'COMPARE_AHEAD': compared,
+        'COMMIT_AUTHORS_OK': recorder.graphql(
+            queries.commit_authors(len(oids)), **counts_variables
+        ),
         'COMMIT_COUNTS_OK': recorder.graphql(queries.commit_counts(len(oids)), **counts_variables),
         'REPO': pick(repo, ('id', 'full_name', 'default_branch')),
         'REPO_ETAG': repo_headers['ETag'],

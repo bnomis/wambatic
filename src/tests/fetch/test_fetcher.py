@@ -13,14 +13,18 @@ import pytest
 import tests.conftest
 import tests.fixtures.constants
 import tests.fixtures.fetch.constants
+import tests.fixtures.fetch.gitrepo
 import tests.fixtures.fetch.recorded
 import tests.fixtures.fetch.responses
 import tests.fixtures.fetch.server
 import tests.fixtures.fetch.upstream
+import tests.fixtures.thaw
 import wambatic.fetch.base
 import wambatic.fetch.cache
 import wambatic.fetch.client
 import wambatic.fetch.errors
+import wambatic.fetch.git
+import wambatic.fetch.hosts
 import wambatic.settings
 
 HELLO = 'octocat/Hello-World'
@@ -574,7 +578,11 @@ def test_the_stored_state_records_the_listed_head_and_times(
 
 
 def store_synced(
-    cache: wambatic.fetch.cache.Cache, name: str, hours: int | None, owner: str = 'octocat'
+    cache: wambatic.fetch.cache.Cache,
+    name: str,
+    hours: int | None,
+    owner: str = 'octocat',
+    probe: str | None = None,
 ) -> None:
     """List `name`; unless `hours` is None, store a commits state `hours` after T0."""
     repo = wambatic.fetch.base.parse_repo(
@@ -591,6 +599,7 @@ def store_synced(
             updated_at=repo.updated_at,
             synced_at=T0 + datetime.timedelta(hours=hours),
             full_synced_at=T0,
+            probe=probe,
         )
         cache.write_commits(name, [], state, replace=False)
 
@@ -671,6 +680,65 @@ def test_provenance_has_no_override_key_for_a_matching_cache(
     finally:
         cache.close()
     assert 'version_override_at' not in result
+
+
+def test_provenance_lists_the_commit_methods_and_branches(
+    make_fetcher: tests.conftest.MakeFetcher, tmp_path: pathlib.Path
+) -> None:
+    cache = wambatic.fetch.cache.Cache.open(tmp_path / 'prov.sqlite3')
+    try:
+        store_synced(cache, HELLO, 5, probe=wambatic.fetch.base.commit_probe('api-files', None, ()))
+        store_synced(cache, SPOON, 2, probe=wambatic.fetch.base.commit_probe('clone', 'x', ()))
+        result, _ = provenance_of(make_fetcher, cache)
+    finally:
+        cache.close()
+    assert result['commit_methods'] == 'clone,api-files'
+    assert result['branches'] == '[]'
+
+
+def test_provenance_has_no_commit_keys_when_commits_are_not_read(
+    make_fetcher: tests.conftest.MakeFetcher, tmp_path: pathlib.Path
+) -> None:
+    cache = wambatic.fetch.cache.Cache.open(tmp_path / 'prov.sqlite3')
+    try:
+        store_synced(cache, HELLO, 5)
+        result, _ = provenance_of(make_fetcher, cache, tests.fixtures.fetch.constants.RELEASES)
+    finally:
+        cache.close()
+    assert not {'commit_methods', 'branches'} & result.keys()
+
+
+@pytest.mark.parametrize('method', tests.fixtures.stats.FILE_METHODS)
+def test_provenance_refuses_a_repo_synced_under_other_branches(
+    make_fetcher: tests.conftest.MakeFetcher, tmp_path: pathlib.Path, method: str
+) -> None:
+    cache = wambatic.fetch.cache.Cache.open(tmp_path / 'prov.sqlite3')
+    try:
+        probe = wambatic.fetch.base.commit_probe(
+            typing.cast('wambatic.fetch.base.CommitMethod', method),
+            'x',
+            tests.fixtures.stats.RELEASE_BRANCHES,
+        )
+        store_synced(cache, HELLO, 5, probe=probe)
+        with pytest.raises(wambatic.fetch.errors.BranchesMismatchError) as raised:
+            provenance_of(make_fetcher, cache)
+    finally:
+        cache.close()
+    assert HELLO in str(raised.value)
+    assert 'release/*' in str(raised.value)
+    assert '--no-fetch' in str(raised.value)
+
+
+def test_provenance_ignores_the_branches_of_an_api_repo(
+    make_fetcher: tests.conftest.MakeFetcher, tmp_path: pathlib.Path
+) -> None:
+    cache = wambatic.fetch.cache.Cache.open(tmp_path / 'prov.sqlite3')
+    try:
+        store_synced(cache, HELLO, 5, probe=wambatic.fetch.base.commit_probe('api'))
+        result, _ = provenance_of(make_fetcher, cache)
+    finally:
+        cache.close()
+    assert result['commit_methods'] == 'api'
 
 
 def test_provenance_rejects_an_unknown_resource(
@@ -986,6 +1054,65 @@ def test_a_commit_with_no_line_counts_stores_nothing_and_names_its_oid(
         sync_once(make_fetcher, upstream, cache=first.cache)
     assert stored(first.cache) == OIDS_H1_H2_H3
     assert first.cache.sync_state(HELLO, 'commits') == before
+
+
+def authors_of(
+    make_fetcher: tests.conftest.MakeFetcher,
+    upstream: tests.fixtures.fetch.upstream.Upstream,
+    oids: list[str],
+) -> tuple[dict[str, str | None], int]:
+    """The logins for `oids`, and how many CommitAuthors queries were sent."""
+
+    async def scenario() -> tuple[dict[str, str | None], int]:
+        async with tests.fixtures.fetch.server.ReplayServer({}, default=upstream.respond) as server:
+            async with make_fetcher(server) as fetcher:
+                repo = next(
+                    r for r in await fetcher.list_repos(OWNER) if r.name_with_owner == HELLO
+                )
+                logins = await fetcher.commit_authors(repo, oids)
+            sent = [
+                r
+                for r in server.received
+                if r.path == '/graphql' and 'CommitAuthors' in str(r.json)
+            ]
+            return logins, len(sent)
+
+    return asyncio.run(scenario())
+
+
+def test_commit_authors_maps_each_oid_to_a_login_or_none(
+    make_fetcher: tests.conftest.MakeFetcher,
+) -> None:
+    upstream = tests.fixtures.fetch.upstream.Upstream([hello(0)])
+    upstream.repos[HELLO].history = [
+        tests.fixtures.fetch.upstream.FakeCommit('h1', at(1), 'mona'),
+        tests.fixtures.fetch.upstream.FakeCommit('h2', at(2), None),
+    ]
+    logins, queries = authors_of(make_fetcher, upstream, list(OIDS_H1_H2))
+    assert logins == {'h1': 'mona', 'h2': None}
+    assert queries == 1
+
+
+def test_commit_authors_names_the_oid_of_a_missing_object(
+    make_fetcher: tests.conftest.MakeFetcher,
+) -> None:
+    upstream = tests.fixtures.fetch.upstream.Upstream([hello(1)])
+    with pytest.raises(wambatic.fetch.errors.GraphQLError, match='nosuch'):
+        authors_of(make_fetcher, upstream, ['nosuch'])
+
+
+def test_commit_authors_sends_the_oids_in_pages_of_one_hundred(
+    make_fetcher: tests.conftest.MakeFetcher,
+) -> None:
+    upstream = tests.fixtures.fetch.upstream.Upstream([hello(0)])
+    upstream.repos[HELLO].history = history('c', 250, 1)
+    oids = [c.oid for c in upstream.repos[HELLO].history]
+    logins, queries = authors_of(make_fetcher, upstream, oids[:101])
+    assert len(logins) == 101
+    assert queries == 2
+    logins, queries = authors_of(make_fetcher, upstream, oids)
+    assert (len(logins), queries) == (250, 3)
+    assert set(logins.values()) == {'octocat'}
 
 
 # Rewritten history and full refresh
@@ -2737,3 +2864,485 @@ def test_a_refused_server_gets_no_request_but_the_version_check(
             return [f'{r.method} {r.path}' for r in server.received]
 
     assert asyncio.run(scenario()) == [tests.fixtures.fetch.constants.ENTERPRISE_META_REQUEST]
+
+
+# The commit method and the clone sync
+
+
+def listed_repo(
+    visibility: wambatic.fetch.base.Visibility, name: str = HELLO
+) -> wambatic.fetch.base.Repo:
+    return wambatic.fetch.base.Repo(
+        name_with_owner=name,
+        default_branch='main',
+        head_oid='h1',
+        is_archived=False,
+        is_fork=False,
+        pushed_at=T0,
+        updated_at=T0,
+        visibility=visibility,
+    )
+
+
+@pytest.mark.parametrize(
+    ('visibility', 'patterns', 'api_history', 'expected'),
+    [
+        ('PUBLIC', (), 'totals', 'clone'),
+        ('PUBLIC', (), 'files', 'clone'),
+        ('PRIVATE', (), 'totals', 'api'),
+        ('INTERNAL', (), 'totals', 'api'),
+        ('PRIVATE', (), 'files', 'api-files'),
+        ('INTERNAL', (), 'files', 'api-files'),
+        ('PRIVATE', ('octocat/hello-*',), 'totals', 'clone'),
+        ('PRIVATE', ('OCTOCAT/Hello-*',), 'files', 'clone'),
+        ('INTERNAL', ('octocat/*',), 'totals', 'clone'),
+        ('PRIVATE', ('octocat/spoon-*',), 'totals', 'api'),
+        ('PRIVATE', ('hello-world',), 'files', 'api-files'),
+    ],
+)
+def test_commit_method_is_clone_only_for_public_or_allowed_repos(
+    visibility: wambatic.fetch.base.Visibility,
+    patterns: tuple[str, ...],
+    api_history: typing.Literal['totals', 'files'],
+    expected: str,
+    fetch_settings: wambatic.settings.FetchSettings,
+) -> None:
+    settings = dataclasses.replace(fetch_settings, clone_repos=patterns, api_history=api_history)
+    assert wambatic.fetch.base.commit_method(listed_repo(visibility), settings) == expected
+
+
+def test_a_commit_probe_round_trips_and_a_missing_one_reads_as_api() -> None:
+    branches = ('release/*', 'dev')
+    probe = wambatic.fetch.base.commit_probe('clone', 'abc123', branches)
+    assert probe == 'method=clone attrs=abc123 branches=["release/*", "dev"]'
+    assert wambatic.fetch.base.parse_commit_probe(probe) == wambatic.fetch.base.CommitProbe(
+        'clone', 'abc123', branches
+    )
+    api = wambatic.fetch.base.CommitProbe('api')
+    assert wambatic.fetch.base.parse_commit_probe('method=api') == api
+    assert wambatic.fetch.base.parse_commit_probe(None) == api
+    assert wambatic.fetch.base.parse_commit_probe('nonsense') == api
+
+
+@dataclasses.dataclass
+class CloneWorld:
+    """A local git remote and the fake GitHub listing that describes it."""
+
+    remote: tests.fixtures.fetch.gitrepo.LocalRemote
+    clones: pathlib.Path
+    visibility: str = 'PUBLIC'
+    stamp: int = 0
+
+    def git(self) -> wambatic.fetch.git.Git:
+        return wambatic.fetch.git.Git(
+            'test-token',
+            wambatic.fetch.hosts.GITHUB_COM,
+            self.clones,
+            url_for=self.remote.url_for,
+        )
+
+    def oids(self, *revisions: str) -> list[str]:
+        found = tests.fixtures.fetch.gitrepo.run_git(
+            self.remote.work, 'rev-list', '--reverse', *revisions
+        )
+        return found.split()
+
+    def upstream(self, bump: bool = True) -> tests.fixtures.fetch.upstream.Upstream:
+        """GitHub as it lists the remote now; `bump` moves `pushedAt` as a push does."""
+        if bump:
+            self.stamp += 1
+        main = self.oids('main')
+        others = [oid for oid in self.oids('--branches') if oid not in main]
+        history = [
+            tests.fixtures.fetch.upstream.FakeCommit(oid, at(n))
+            for n, oid in enumerate(others + main)
+        ]
+        repo = tests.fixtures.fetch.upstream.FakeRepo(
+            HELLO,
+            history,
+            pushed_at=at(100 + self.stamp),
+            updated_at=at(100 + self.stamp),
+            visibility=self.visibility,
+        )
+        return tests.fixtures.fetch.upstream.Upstream([repo])
+
+    def add(self, name: str, text: str, message: str) -> str:
+        self.remote.write(name, text)
+        return self.remote.commit(message)
+
+    def git_here(self, *args: str) -> str:
+        return tests.fixtures.fetch.gitrepo.run_git(self.remote.work, *args)
+
+
+@pytest.fixture
+def world(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> CloneWorld:
+    tests.fixtures.fetch.gitrepo.isolate(monkeypatch)
+    remote = tests.fixtures.fetch.gitrepo.LocalRemote(tmp_path / 'git', HELLO)
+    remote.create()
+    return CloneWorld(remote, tmp_path / 'clones')
+
+
+def clone_sync(
+    make_fetcher: tests.conftest.MakeFetcher,
+    world: CloneWorld,
+    *,
+    settings: wambatic.settings.FetchSettings | None = None,
+    after: Run | None = None,
+    full_refresh: bool = False,
+    bump: bool = True,
+) -> Run:
+    kwargs: dict[str, typing.Any] = {'git': world.git()}
+    if settings is not None:
+        kwargs['settings'] = settings
+    if after is not None:
+        kwargs['cache'] = after.cache
+    return sync_once(
+        make_fetcher,
+        world.upstream(bump),
+        resources=tests.fixtures.stats.RESOURCES_ACTIVITY,
+        full_refresh=full_refresh,
+        **kwargs,
+    )
+
+
+def rows_of(run: Run) -> dict[str, wambatic.fetch.base.Commit]:
+    return {commit.oid: commit for commit in run.cache.read_commits(HELLO, None, None)}
+
+
+def state_of(run: Run) -> wambatic.fetch.base.SyncState:
+    state = run.cache.sync_state(HELLO, 'commits')
+    assert state is not None
+    return state
+
+
+def probe_of(run: Run) -> str:
+    probe = state_of(run).probe
+    assert probe is not None
+    return probe
+
+
+def flags(commit: wambatic.fetch.base.Commit) -> list[tuple[str, bool]]:
+    return [(file.path, file.generated) for file in commit.files]
+
+
+def test_a_public_repo_is_read_by_clone_with_files_authors_and_branch_heads(
+    make_fetcher: tests.conftest.MakeFetcher, world: CloneWorld
+) -> None:
+    first = world.add('a.py', 'x\ny\n', 'first')
+    second = world.add('b.py', 'z\n', 'second')
+    world.remote.push()
+    run = clone_sync(make_fetcher, world)
+    commits = rows_of(run)
+    assert set(commits) == {first, second}
+    assert commits[first].files == (wambatic.fetch.base.CommitFile('a.py', 2, 0),)
+    assert (commits[first].additions, commits[first].deletions) == (2, 0)
+    assert commits[second].author_login == 'octocat'
+    assert not commits[second].is_merge
+    assert state_of(run).head_oid == second
+    assert probe_of(run).startswith('method=clone attrs=')
+    assert probe_of(run).endswith(' branches=[]')
+    assert run.cache.branch_heads(HELLO) == {'main': second}
+    assert run.kinds == ('listing', 'authors')
+    assert run.report.rows_written == {'commits': 2}
+    assert run.report.full_refetches == (HELLO,)
+    assert asyncio.run(run.fetcher.commit_method(listed_repo('PUBLIC'))) == 'clone'
+
+
+def test_an_unchanged_clone_repo_is_skipped_and_a_push_reads_only_the_new_commit(
+    make_fetcher: tests.conftest.MakeFetcher, world: CloneWorld
+) -> None:
+    first = world.add('a.py', 'x\n', 'first')
+    world.remote.push()
+    run = clone_sync(make_fetcher, world)
+    again = clone_sync(make_fetcher, world, after=run, bump=False)
+    assert again.report.repos_skipped == 1
+    second = world.add('b.py', 'y\n', 'second')
+    world.remote.push()
+    later = clone_sync(make_fetcher, world, after=run)
+    assert later.report.rows_written == {'commits': 1}
+    assert later.report.full_refetches == ()
+    assert set(rows_of(later)) == {first, second}
+    assert state_of(later).head_oid == second
+
+
+def test_a_force_push_leaves_exactly_the_reachable_commits(
+    make_fetcher: tests.conftest.MakeFetcher, world: CloneWorld
+) -> None:
+    first = world.add('a.py', 'x\n', 'first')
+    world.add('b.py', 'y\n', 'second')
+    world.add('c.py', 'z\n', 'third')
+    world.remote.push()
+    run = clone_sync(make_fetcher, world)
+    world.git_here('reset', '--hard', first)
+    rewritten = world.add('d.py', 'w\n', 'rewritten')
+    world.remote.push()
+    later = clone_sync(make_fetcher, world, after=run)
+    assert set(rows_of(later)) == {first, rewritten}
+    assert later.report.full_refetches == (HELLO,)
+    assert later.cache.branch_heads(HELLO) == {'main': rewritten}
+
+
+def test_a_followed_branch_that_is_deleted_takes_its_commits_with_it(
+    make_fetcher: tests.conftest.MakeFetcher,
+    world: CloneWorld,
+    fetch_settings: wambatic.settings.FetchSettings,
+) -> None:
+    settings = dataclasses.replace(fetch_settings, branches=('*',))
+    main = world.add('a.py', 'x\n', 'first')
+    world.git_here('checkout', '-b', 'feature')
+    topic = world.add('f.py', 'f\n', 'feature work')
+    world.git_here('checkout', 'main')
+    world.remote.push('main', 'feature')
+    run = clone_sync(make_fetcher, world, settings=settings)
+    assert set(rows_of(run)) == {main, topic}
+    assert run.cache.branch_heads(HELLO) == {'feature': topic, 'main': main}
+    world.git_here('branch', '-D', 'feature')
+    world.git_here('push', 'origin', '--delete', 'feature')
+    later = clone_sync(make_fetcher, world, settings=settings, after=run)
+    assert set(rows_of(later)) == {main}
+    assert later.report.full_refetches == (HELLO,)
+    assert later.cache.branch_heads(HELLO) == {'main': main}
+
+
+def test_a_pattern_added_to_fetch_branches_reads_the_repo_again(
+    make_fetcher: tests.conftest.MakeFetcher,
+    world: CloneWorld,
+    fetch_settings: wambatic.settings.FetchSettings,
+) -> None:
+    main = world.add('a.py', 'x\n', 'first')
+    world.git_here('checkout', '-b', 'feature')
+    topic = world.add('f.py', 'f\n', 'feature work')
+    world.git_here('checkout', 'main')
+    world.remote.push('main', 'feature')
+    run = clone_sync(make_fetcher, world)
+    assert set(rows_of(run)) == {main}
+    wider = dataclasses.replace(fetch_settings, branches=('feat*',))
+    later = clone_sync(make_fetcher, world, settings=wider, after=run, bump=False)
+    assert later.report.repos_skipped == 0
+    assert later.report.rows_written == {'commits': 1}
+    assert set(rows_of(later)) == {main, topic}
+    assert probe_of(later).endswith(' branches=["feat*"]')
+    same = clone_sync(make_fetcher, world, settings=wider, after=later, bump=False)
+    assert same.report.repos_skipped == 1
+
+
+def test_a_gitattributes_change_rewrites_every_generated_flag(
+    make_fetcher: tests.conftest.MakeFetcher, world: CloneWorld
+) -> None:
+    old = world.add('gen.txt', 'g\n', 'generated file')
+    world.remote.push()
+    run = clone_sync(make_fetcher, world)
+    assert flags(rows_of(run)[old]) == [('gen.txt', False)]
+    marked = world.add('.gitattributes', 'gen.txt linguist-generated\n', 'mark it')
+    world.remote.push()
+    later = clone_sync(make_fetcher, world, after=run)
+    assert flags(rows_of(later)[old]) == [('gen.txt', True)]
+    assert flags(rows_of(later)[marked]) == [('.gitattributes', False)]
+    unmarked = world.add('b.txt', 'b\n', 'plain')
+    world.remote.push()
+    last = clone_sync(make_fetcher, world, after=later)
+    assert flags(rows_of(last)[old]) == [('gen.txt', True)]
+    assert flags(rows_of(last)[unmarked]) == [('b.txt', False)]
+
+
+def test_a_repo_made_private_is_read_by_api_and_its_clone_removed(
+    make_fetcher: tests.conftest.MakeFetcher, world: CloneWorld
+) -> None:
+    world.add('a.py', 'x\n', 'first')
+    world.remote.push()
+    run = clone_sync(make_fetcher, world)
+    assert world.git().path(HELLO).exists()
+    world.visibility = 'PRIVATE'
+    later = clone_sync(make_fetcher, world, after=run, bump=False)
+    assert later.report.repos_skipped == 0
+    assert later.report.full_refetches == (HELLO,)
+    assert 'history' in later.kinds
+    assert probe_of(later) == 'method=api'
+    assert all(commit.files == () for commit in rows_of(later).values())
+    assert not world.git().path(HELLO).exists()
+    assert asyncio.run(later.fetcher.commit_method(listed_repo('PRIVATE'))) == 'api'
+
+
+def test_a_private_repo_is_cloned_only_when_a_pattern_allows_it(
+    make_fetcher: tests.conftest.MakeFetcher,
+    world: CloneWorld,
+    fetch_settings: wambatic.settings.FetchSettings,
+) -> None:
+    world.visibility = 'PRIVATE'
+    world.add('a.py', 'x\n', 'first')
+    world.remote.push()
+    refused = clone_sync(make_fetcher, world)
+    assert not world.git().path(HELLO).exists()
+    assert probe_of(refused) == 'method=api'
+    allowed = dataclasses.replace(fetch_settings, clone_repos=('octocat/hello-world',))
+    later = clone_sync(make_fetcher, world, settings=allowed, after=refused, bump=False)
+    assert world.git().path(HELLO).exists()
+    assert probe_of(later).startswith('method=clone ')
+    assert all(commit.files for commit in rows_of(later).values())
+
+
+def test_full_refresh_clones_a_clone_repo_again(
+    make_fetcher: tests.conftest.MakeFetcher, world: CloneWorld
+) -> None:
+    first = world.add('a.py', 'x\n', 'first')
+    world.remote.push()
+    run = clone_sync(make_fetcher, world)
+    marker = world.git().path(HELLO) / 'marker'
+    marker.write_text('old clone')
+    later = clone_sync(make_fetcher, world, after=run, full_refresh=True, bump=False)
+    assert not marker.exists()
+    assert later.report.full_refetches == (HELLO,)
+    assert set(rows_of(later)) == {first}
+
+
+def test_an_empty_clone_repo_has_no_commits_and_no_clone(
+    make_fetcher: tests.conftest.MakeFetcher, tmp_path: pathlib.Path
+) -> None:
+    upstream = tests.fixtures.fetch.upstream.Upstream([hello(0, visibility='PUBLIC')])
+    git = wambatic.fetch.git.Git(
+        'test-token', wambatic.fetch.hosts.GITHUB_COM, tmp_path / 'clones', url_for=str
+    )
+    run = sync_once(
+        make_fetcher, upstream, resources=tests.fixtures.stats.RESOURCES_ACTIVITY, git=git
+    )
+    assert run.report.rows_written == {'commits': 0}
+    assert state_of(run).head_oid is None
+    assert not git.path(HELLO).exists()
+
+
+def sync_files(
+    make_fetcher: tests.conftest.MakeFetcher,
+    upstream: tests.fixtures.fetch.upstream.Upstream,
+    settings: wambatic.settings.FetchSettings,
+    after: Run | None = None,
+) -> Run:
+    kwargs: dict[str, typing.Any] = {'settings': settings}
+    if after is not None:
+        kwargs['cache'] = after.cache
+    return sync_once(make_fetcher, upstream, **kwargs)
+
+
+def move_on(repo: tests.fixtures.fetch.upstream.FakeRepo) -> None:
+    repo.pushed_at += datetime.timedelta(hours=1)
+    repo.updated_at += datetime.timedelta(hours=1)
+
+
+def run_heads(run: Run) -> dict[str, str]:
+    return run.cache.branch_heads(HELLO)
+
+
+def test_an_api_files_first_sync_stores_every_commit_once_with_its_files(
+    make_fetcher: tests.conftest.MakeFetcher, fetch_settings: wambatic.settings.FetchSettings
+) -> None:
+    repo = hello()
+    repo.history[0].files = [('a.py', 1, 0), ('b.py', 2, 3)]
+    run = sync_files(
+        make_fetcher,
+        tests.fixtures.fetch.upstream.Upstream([repo]),
+        dataclasses.replace(fetch_settings, api_history='files'),
+    )
+    commits = rows_of(run)
+    assert set(commits) == {'h1', 'h2', 'h3'}
+    assert commits['h1'].files == (
+        wambatic.fetch.base.CommitFile('a.py', 1, 0),
+        wambatic.fetch.base.CommitFile('b.py', 2, 3),
+    )
+    assert probe_of(run) == 'method=api-files branches=[]'
+    assert run_heads(run) == {'main': 'h3'}
+    assert run.kinds == ('listing', 'branches', 'branch_history', 'commit', 'commit', 'commit')
+
+
+def test_an_api_files_sync_with_a_moved_head_reads_only_the_new_commits(
+    make_fetcher: tests.conftest.MakeFetcher, fetch_settings: wambatic.settings.FetchSettings
+) -> None:
+    settings = dataclasses.replace(fetch_settings, api_history='files')
+    upstream = tests.fixtures.fetch.upstream.Upstream([hello()])
+    first = sync_files(make_fetcher, upstream, settings)
+    upstream.repos[HELLO].push(*history('n', 1, 10))
+    second = sync_files(make_fetcher, upstream, settings, first)
+    assert second.kinds == ('listing', 'branches', 'compare', 'nodes', 'commit')
+    assert set(rows_of(second)) == {'h1', 'h2', 'h3', 'n10'}
+    assert rows_of(second)['n10'].files
+    assert state_of(second).head_oid == 'n10'
+
+
+def test_an_api_files_sync_reads_a_new_branch_in_full_but_fetches_files_of_new_commits_only(
+    make_fetcher: tests.conftest.MakeFetcher, fetch_settings: wambatic.settings.FetchSettings
+) -> None:
+    upstream = tests.fixtures.fetch.upstream.Upstream([hello()])
+    first = sync_files(
+        make_fetcher, upstream, dataclasses.replace(fetch_settings, api_history='files')
+    )
+    repo = upstream.repos[HELLO]
+    repo.branches['feature'] = [*repo.history[:2], *history('f', 1, 20)]
+    move_on(repo)
+    second = sync_files(
+        make_fetcher,
+        upstream,
+        dataclasses.replace(fetch_settings, api_history='files', branches=('feature',)),
+        first,
+    )
+    assert second.kinds == ('listing', 'branches', 'branch_history', 'commit')
+    assert set(rows_of(second)) == {'h1', 'h2', 'h3', 'f20'}
+    assert run_heads(second) == {'feature': 'f20', 'main': 'h3'}
+    assert probe_of(second) == 'method=api-files branches=["feature"]'
+
+
+def test_an_api_files_sync_after_a_force_push_reads_every_branch_and_drops_gone_commits(
+    make_fetcher: tests.conftest.MakeFetcher, fetch_settings: wambatic.settings.FetchSettings
+) -> None:
+    settings = dataclasses.replace(fetch_settings, api_history='files')
+    upstream = tests.fixtures.fetch.upstream.Upstream([hello()])
+    first = sync_files(make_fetcher, upstream, settings)
+    repo = upstream.repos[HELLO]
+    repo.history[:] = [*repo.history[:2], *history('x', 1, 30)]
+    move_on(repo)
+    second = sync_files(make_fetcher, upstream, settings, first)
+    assert set(rows_of(second)) == {'h1', 'h2', 'x30'}
+    assert second.report.full_refetches == (HELLO,)
+    assert second.kinds == ('listing', 'branches', 'compare', 'branch_history', 'commit')
+
+
+def test_an_api_files_commit_with_more_than_300_files_is_read_in_two_pages(
+    make_fetcher: tests.conftest.MakeFetcher, fetch_settings: wambatic.settings.FetchSettings
+) -> None:
+    repo = hello(1)
+    repo.history[0].files = [(f'f{n}.py', 1, 0) for n in range(301)]
+    run = sync_files(
+        make_fetcher,
+        tests.fixtures.fetch.upstream.Upstream([repo]),
+        dataclasses.replace(fetch_settings, api_history='files'),
+    )
+    assert len(rows_of(run)['h1'].files) == 301
+    assert run.kinds == ('listing', 'branches', 'branch_history', 'commit', 'commit')
+
+
+def test_an_api_files_commit_the_api_does_not_have_is_an_error_naming_it(
+    make_fetcher: tests.conftest.MakeFetcher, fetch_settings: wambatic.settings.FetchSettings
+) -> None:
+    upstream = tests.fixtures.fetch.upstream.Upstream([hello(1)])
+    upstream.missing_files = {'h1'}
+    with pytest.raises(wambatic.fetch.errors.FetchError, match='commit h1'):
+        sync_files(make_fetcher, upstream, dataclasses.replace(fetch_settings, api_history='files'))
+
+
+def test_the_recorded_api_files_responses_parse() -> None:
+    recorded = tests.fixtures.fetch.recorded
+    branches = wambatic.fetch.base.branch_heads_connection(
+        tests.fixtures.thaw.thaw(recorded.BRANCHES_OK['data'])
+    )
+    nodes = wambatic.fetch.base.sequence(branches.get('nodes'), 'nodes')
+    assert nodes
+    history = wambatic.fetch.base.history_connection('ref')(
+        tests.fixtures.thaw.thaw(recorded.BRANCH_HISTORY_OK['data'])
+    )
+    commit = wambatic.fetch.base.parse_history_node(
+        HELLO, wambatic.fetch.base.sequence(history.get('nodes'), 'nodes')[0]
+    )
+    assert commit.oid
+    files = [
+        wambatic.fetch.base.parse_commit_file(node)
+        for node in tests.fixtures.thaw.thaw(recorded.COMMIT_FILES_OK)['files']
+    ]
+    assert files
+    assert all(file.path for file in files)

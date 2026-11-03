@@ -62,6 +62,26 @@ class ServerVersionError(FetchError):
         )
 
 
+class GitError(FetchError):
+    """`git` is missing or too old, a command failed or timed out, or its output did not parse."""
+
+
+class BranchesMismatchError(FetchError):
+    """Repositories were last synced under other `fetch.branches` patterns than the current ones.
+
+    `repos` maps each repository to the patterns it was synced under.
+    """
+
+    def __init__(self, repos: dict[str, tuple[str, ...]], current: tuple[str, ...]) -> None:
+        self.repos = types.MappingProxyType(dict(repos))
+        self.current = current
+        named = '; '.join(f'{name}: {list(found)}' for name, found in sorted(repos.items()))
+        super().__init__(
+            f'fetch.branches is now {list(current)} but the commits were synced under other '
+            f'patterns ({named}). Run without `--no-fetch` or `--max-age` to sync again'
+        )
+
+
 class CacheError(FetchError):
     """The cache file cannot be opened, read or written (a locked or corrupt file, a full
     disc, a directory that cannot be created)."""

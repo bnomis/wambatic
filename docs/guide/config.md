@@ -55,6 +55,22 @@ token is not a setting: see [The GitHub token](../token.md).
   A list replaces the default, it does not add to it.
 - `report.format`: print JSON unless `--format` says otherwise.
 
+## Commit settings
+
+These settings decide how commits are read and what the line counts include; the others are in the
+[settings reference](../reference/settings.md).
+
+- `fetch.branches`: branch name patterns followed beside the default branch. Empty (the default) follows
+  the default branch only; `["*"]` follows every branch.
+- `fetch.clone_repos`: `owner/name` patterns of private or internal repositories you allow to be cloned.
+  Public repositories are cloned without it.
+- `fetch.api_history`: `totals` (the default) or `files`, for a repository that is not cloned.
+- `fetch.clone_dir`: where the bare clones are kept.
+- `stats.exclude_paths` and `stats.linguist`: which files the line counts leave out.
+
+[How commits are read](activity.md#how-commits-are-read) says what each combination does. A list replaces
+its default, it does not add to it.
+
 ## Values
 
 - A duration is a whole number and one unit, `s`, `m`, `h`, `d` or `w`, such as `"30d"`.

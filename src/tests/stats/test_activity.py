@@ -30,6 +30,7 @@ def run(
     *,
     by_author: bool = False,
     by_repo: bool = False,
+    methods: dict[str, str] | None = None,
 ) -> tuple[list[wambatic.stats.base.Series], dict[str, list[dict[str, object]]]]:
     buckets = wambatic.stats.buckets.bucket_range(since, until, granularity)
     return wambatic.stats.activity.aggregate(
@@ -41,6 +42,7 @@ def run(
         settings,
         by_author=by_author,
         by_repo=by_repo,
+        methods=methods,
     )
 
 
@@ -95,6 +97,102 @@ def test_series_come_in_the_specs_order_with_the_specs_units() -> None:
         ('lines_net', 'lines'),
     ]
     assert all(s.by is None and s.by_kind is None for s in series)
+
+
+def filtered_commit(
+    repo: str = 'octo-org/alpha',
+) -> wambatic.fetch.base.Commit:
+    return dataclasses.replace(
+        tests.fixtures.stats.commit(repo, 'f1', '2026-10-05T10:00:00', 'octocat', 1000, 20),
+        files=(
+            wambatic.fetch.base.CommitFile('src/app.py', 10, 2),
+            wambatic.fetch.base.CommitFile('uv.lock', 500, 10),
+            wambatic.fetch.base.CommitFile('web/vendor/lib.js', 400, 4),
+            wambatic.fetch.base.CommitFile('gen/api.py', 90, 4, generated=True),
+        ),
+    )
+
+
+@pytest.mark.parametrize('method', tests.fixtures.stats.FILE_METHODS)
+def test_lock_vendored_and_generated_files_are_left_out_of_lines_but_not_commits(
+    method: str,
+) -> None:
+    series, tables = run([filtered_commit()], methods={'octo-org/alpha': method})
+    assert pick(series, 'lines_added')['2026-10'] == 10
+    assert pick(series, 'lines_deleted')['2026-10'] == 2
+    assert pick(series, 'lines_net')['2026-10'] == 8
+    assert pick(series, 'commits')['2026-10'] == 1
+    assert pick(series, 'contributors')['2026-10'] == 1
+    assert pick(series, 'active_days')['2026-10'] == 1
+    (row,) = tables['top_contributors']
+    assert (row['lines_added'], row['lines_deleted'], row['lines_net']) == (10, 2, 8)
+
+
+def test_an_api_repository_uses_its_totals_whatever_its_files() -> None:
+    for methods in ({'octo-org/alpha': 'api'}, {}):
+        series, tables = run([filtered_commit()], methods=methods)
+        assert pick(series, 'lines_added')['2026-10'] == 1000
+        assert tables['top_contributors'][0]['lines_deleted'] == 20
+
+
+def test_linguist_off_keeps_generated_files_but_still_applies_the_patterns() -> None:
+    settings = dataclasses.replace(SETTINGS, linguist=False)
+    series, _ = run([filtered_commit()], settings=settings, methods={'octo-org/alpha': 'clone'})
+    assert pick(series, 'lines_added')['2026-10'] == 100
+
+
+def test_a_commit_whose_every_file_is_left_out_still_counts() -> None:
+    commit = dataclasses.replace(
+        filtered_commit(), files=(wambatic.fetch.base.CommitFile('uv.lock', 5, 1),)
+    )
+    series, tables = run([commit], methods={'octo-org/alpha': 'clone'})
+    assert pick(series, 'lines_added')['2026-10'] == 0
+    assert pick(series, 'commits')['2026-10'] == 1
+    assert tables['top_contributors'][0]['commits'] == 1
+
+
+def test_a_merge_commit_has_no_lines_whatever_its_method() -> None:
+    merge = dataclasses.replace(filtered_commit(), is_merge=True)
+    series, _ = run([merge], methods={'octo-org/alpha': 'clone'})
+    assert pick(series, 'lines_added')['2026-10'] == 0
+
+
+def repos_named(*names: str) -> list[wambatic.fetch.base.Repo]:
+    return [tests.fixtures.stats.repo(name, index) for index, name in enumerate(names, start=1)]
+
+
+def test_unavailable_rows_name_api_and_api_files_repositories_by_name() -> None:
+    rows = wambatic.stats.activity.unfiltered_gaps(
+        repos_named('o/zeta', 'o/clone', 'o/files', 'o/alpha'),
+        {'o/zeta': 'api', 'o/clone': 'clone', 'o/files': 'api-files', 'o/alpha': 'api'},
+        SETTINGS,
+        branches=False,
+    )
+    assert [row['metric'] for row in rows] == [
+        'lines_added, lines_deleted, lines_net: o/alpha',
+        'lines_added, lines_deleted, lines_net: o/files',
+        'lines_added, lines_deleted, lines_net: o/zeta',
+    ]
+    assert rows[0]['reason'].startswith('generated files are counted')
+    assert rows[1]['reason'].startswith('linguist attributes not read')
+
+
+def test_an_api_repository_gets_a_commits_row_when_branches_are_set() -> None:
+    rows = wambatic.stats.activity.unfiltered_gaps(
+        repos_named('o/a'), {'o/a': 'api'}, SETTINGS, branches=True
+    )
+    assert [row['metric'] for row in rows] == [
+        'lines_added, lines_deleted, lines_net: o/a',
+        'commits: o/a',
+    ]
+
+
+def test_an_api_files_repository_has_no_row_with_linguist_off() -> None:
+    settings = dataclasses.replace(SETTINGS, linguist=False)
+    rows = wambatic.stats.activity.unfiltered_gaps(
+        repos_named('o/a'), {'o/a': 'api-files'}, settings, branches=True
+    )
+    assert rows == []
 
 
 def test_an_empty_month_is_present_with_zeros() -> None:

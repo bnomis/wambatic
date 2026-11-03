@@ -20,6 +20,9 @@ import wambatic.fetch.queries
 TOKEN = 'test-token-value'
 QUERY_NAME = re.compile(r'query (\w+)')
 RECORDED_BY_QUERY = {
+    'BranchHistory': tests.fixtures.fetch.recorded.BRANCH_HISTORY_OK,
+    'Branches': tests.fixtures.fetch.recorded.BRANCHES_OK,
+    'CommitAuthors': tests.fixtures.fetch.recorded.COMMIT_AUTHORS_OK,
     'CommitCounts': tests.fixtures.fetch.recorded.COMMIT_COUNTS_OK,
     'CommitHistory': tests.fixtures.fetch.recorded.COMMIT_HISTORY_OK,
     'Issues': tests.fixtures.fetch.recorded.ISSUES_OK,
@@ -79,6 +82,8 @@ class FakeUpstream:
             name = QUERY_NAME.search(sent_json(request)['query'])
             assert name is not None
             return FakeResponse(RECORDED_BY_QUERY[name.group(1)], {})
+        if tests.fixtures.fetch.upstream.COMMIT_PATH.fullmatch(path):
+            return FakeResponse(tests.fixtures.fetch.recorded.COMMIT_FILES_OK, {})
         if tests.fixtures.fetch.upstream.COMPARE_PATH.fullmatch(path):
             return FakeResponse(tests.fixtures.fetch.recorded.COMPARE_AHEAD, {})
         run = tests.fixtures.fetch.upstream.RUNS_PATH.fullmatch(path)
@@ -276,7 +281,11 @@ def test_main_records_to_the_named_file(
     written = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(written)
     for name in (
+        'BRANCH_HISTORY_OK',
+        'BRANCHES_OK',
+        'COMMIT_AUTHORS_OK',
         'COMMIT_COUNTS_OK',
+        'COMMIT_FILES_OK',
         'COMMIT_HISTORY_OK',
         'COMPARE_AHEAD',
         'FORKS_OK',

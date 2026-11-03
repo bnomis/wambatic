@@ -11,7 +11,11 @@ import typing
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class FetchSettings:
+    api_history: typing.Literal['totals', 'files'] = 'totals'
+    branches: tuple[str, ...] = ()
     cache_path: pathlib.Path | None = None
+    clone_dir: pathlib.Path | None = None
+    clone_repos: tuple[str, ...] = ()
     full_refresh_after: datetime.timedelta = datetime.timedelta(days=30)
     github_host: str = 'github.com'
     include_archived: bool = False
@@ -29,8 +33,23 @@ class StatsSettings:
     bot_logins: tuple[str, ...] = dataclasses.field(default=('dependabot[bot]', 'renovate[bot]'))
     deploy_workflow: str | None = None
     exclude_merge_commits: bool = True
+    exclude_paths: tuple[str, ...] = dataclasses.field(
+        default=(
+            '**/*.lock',
+            '**/package-lock.json',
+            '**/pnpm-lock.yaml',
+            '**/go.sum',
+            '**/vendor/**',
+            '**/node_modules/**',
+            '**/dist/**',
+            '**/*.min.js',
+            '**/*.min.css',
+            '**/*.map',
+        )
+    )
     failure_window: datetime.timedelta = datetime.timedelta(days=7)
     hotfix_labels: tuple[str, ...] = dataclasses.field(default=('hotfix',))
+    linguist: bool = True
     timezone: str = 'UTC'
 
 
@@ -127,6 +146,14 @@ def cache_path_for(settings: FetchSettings) -> pathlib.Path:
     if settings.github_host == 'github.com':
         return directory / 'cache.sqlite3'
     return directory / f'cache-{settings.github_host.replace(":", "-")}.sqlite3'
+
+
+def clones_dir_for(settings: FetchSettings) -> pathlib.Path:
+    """The configured clone directory, else `clones/<cache file stem>` beside the cache file."""
+    if settings.clone_dir is not None:
+        return settings.clone_dir
+    cache_file = cache_path_for(settings)
+    return cache_file.parent / 'clones' / cache_file.stem
 
 
 def convert(key: str, annotation: object, value: object) -> object:

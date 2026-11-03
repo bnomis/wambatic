@@ -23,11 +23,19 @@ A host other than github.com has its own file, `cache-<host>.sqlite3` beside it;
 stops the report with a `CacheHostError`. `--ignore-cache-version` does not override it: set
 `fetch.cache_path` to another file, or clear that host's cache.
 
+## The clones
+
+A repository read by clone is kept as a bare clone in a `clones` directory beside the cache file, in a
+subdirectory named for the cache file. Set `fetch.clone_dir` in the [configuration](config.md) to keep
+them elsewhere. Clones can be large; `cache info` shows their size. They are derived data too: GitHub
+holds the same history. See [Activity](activity.md#how-commits-are-read) for which repositories are
+cloned.
+
 ## `cache info`
 
 `wambatic cache info` prints the path, the size, the identity the cache recorded (the schema version, the
 wambatic version and a hash of each query), every key that differs from the wambatic that is running
-(with both values), what the cache holds for each kind of record, and when it was last synced. It reads
+(with both values), the size of the clones, what the cache holds for each kind of record, and when it was last synced. It reads
 the file without changing it, so it works on a cache that `report` refuses.
 
 ## `cache clear`
@@ -36,7 +44,7 @@ the file without changing it, so it works on a cache that `report` refuses.
 wambatic cache clear
 ```
 
-This deletes the cache and its `-wal` and `-shm` files without asking. The next report fetches
+This deletes the cache, its `-wal` and `-shm` files and the clones without asking. The next report fetches
 everything again.
 
 ## The version check

@@ -1,7 +1,7 @@
 # Commit sync
 
 **Version:** 1.0
-**Status:** proposed
+**Status:** implemented
 **Date:** 2026-11-02
 
 How the `commits` resource is synced from 1.0 of this spec ([Fetch](../fetch/spec.md) 1.17). Each repository's commits are read by one of three methods, chosen per repository at each sync:
@@ -64,6 +64,7 @@ def commit_method(repo: Repo, settings: FetchSettings) -> CommitMethod:
     `fetch.clone_repos` pattern; else 'api-files' when `fetch.api_history == 'files'`; else 'api'."""
 
 # Fetcher, from the cache:
+    # auditme: accept[spec-api-signature-drift] Fetcher.commit_method; the checker matches the module function by name
     async def commit_method(self, repo: Repo) -> CommitMethod | None:
         """The method of the repo's last commit sync, from its state's probe; None when never synced."""
 

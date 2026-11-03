@@ -146,7 +146,7 @@ def test_a_whole_range_has_no_partial_mark_or_caption(
     org_result: wambatic.stats.base.StatsResult,
 ) -> None:
     output = render(org_result)
-    assert ' *' not in output
+    assert not re.search(r'\d{4}-\d{2} \*', output)
     assert 'partial period' not in output
 
 
@@ -207,6 +207,10 @@ def test_the_provenance_footer_lists_the_run_and_the_versions(
 ) -> None:
     lines = render(org_result).splitlines()
     footer = lines[lines.index('Provenance') + 1 :]
+    assert footer[:2] == ['Commits read by: local clone', 'Branches: default branch']
+    assert footer[2].startswith('Line counts leave out: **/*.lock, ')
+    assert footer[3].endswith('linguist-generated and linguist-vendored files')
+    footer = footer[4:]
     assert footer == [
         'computed_at: 2027-01-20T12:00:00+00:00',
         'fetched_at:commits: 2027-02-01T10:00:00+00:00',
@@ -228,7 +232,7 @@ def test_the_provenance_footer_names_an_enterprise_host_first(
     lines = render(dataclasses.replace(org_result, provenance=provenance)).splitlines()
     footer = lines[lines.index('Provenance') + 1 :]
     assert footer[0] == 'GitHub host: ghe.example.com (Enterprise Server 3.19.1)'
-    assert footer[1].startswith('computed_at: ')
+    assert footer[1].startswith('Commits read by: ')
     assert 'GitHub host' not in render(org_result)
     dotcom = {**org_result.provenance, 'github_host': 'github.com'}
     assert render(dataclasses.replace(org_result, provenance=dotcom)) == render(org_result)

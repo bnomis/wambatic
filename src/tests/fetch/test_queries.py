@@ -46,6 +46,16 @@ def test_commit_counts_looks_each_commit_up_by_oid_and_sends_no_node_id() -> Non
     assert wambatic.fetch.queries.COMMIT_COUNTS == wambatic.fetch.queries.commit_counts(100)
 
 
+def test_commit_authors_looks_each_commit_up_by_oid_and_sends_no_node_id() -> None:
+    query = wambatic.fetch.queries.commit_authors(2)
+    assert '$o0: GitObjectID!, $o1: GitObjectID!' in query
+    assert 'c1: object(oid: $o1)' in query
+    assert 'author { user { login } }' in query
+    assert 'rateLimit' in query
+    assert 'nodes(ids' not in query
+    assert wambatic.fetch.queries.COMMIT_AUTHORS == wambatic.fetch.queries.commit_authors(100)
+
+
 def test_the_listing_queries_probe_the_newest_pull_request_and_issue() -> None:
     for text in (
         wambatic.fetch.queries.OWNER_REPOSITORIES,

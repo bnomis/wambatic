@@ -507,6 +507,8 @@ def test_full_refresh_syncs_a_fresh_cache_and_reads_the_history_again(
 ) -> None:
     monkeypatch.setenv('GITHUB_TOKEN', 'test-token')
     upstream = tests.fixtures.reports.alpha_upstream()
+    for fake in upstream.repos.values():
+        fake.visibility = 'PRIVATE'  # read by the API history, not cloned
     ran = run_report(
         monkeypatch,
         make_client,
@@ -932,6 +934,30 @@ def test_cache_clear_removes_the_files_then_reports_nothing_to_remove(
     assert not stats_cache_path.exists()
     _, again = run_cache('clear', stats_cache_path)
     assert again == [f'no cache at {stats_cache_path}']
+
+
+def test_cache_clear_removes_the_clones_and_info_reports_their_size(
+    stats_cache: wambatic.fetch.cache.Cache, stats_cache_path: pathlib.Path
+) -> None:
+    clones = stats_cache_path.parent / 'clones' / stats_cache_path.stem
+    (clones / 'octocat').mkdir(parents=True)
+    (clones / 'octocat' / 'hello.git').write_bytes(b'x' * 1234)
+    output, _ = run_cache('info', stats_cache_path)
+    rows = {line.split()[0]: line.split()[1:] for line in output.splitlines() if line.strip()}
+    assert rows['clones'] == ['1,234', 'bytes']
+    assert 'commit' in rows
+    _, removed = run_cache('clear', stats_cache_path)
+    assert f'Removed {clones}' in removed
+    assert not stats_cache_path.exists()
+    assert not clones.exists()
+
+
+def test_cache_info_with_no_clones_directory_reports_zero_bytes(
+    stats_cache: wambatic.fetch.cache.Cache, stats_cache_path: pathlib.Path
+) -> None:
+    output, _ = run_cache('info', stats_cache_path)
+    rows = {line.split()[0]: line.split()[1:] for line in output.splitlines() if line.strip()}
+    assert rows['clones'] == ['0', 'bytes']
 
 
 @pytest.fixture

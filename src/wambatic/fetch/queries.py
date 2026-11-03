@@ -7,7 +7,7 @@ query OwnerRepositories($login: String!, $cursor: String) {
     ) {
       pageInfo { hasNextPage endCursor }
       nodes {
-        nameWithOwner isArchived isFork pushedAt updatedAt
+        nameWithOwner isArchived isFork pushedAt updatedAt visibility
         defaultBranchRef { name target { oid } }
         pullRequests(first: 1, orderBy: {field: UPDATED_AT, direction: DESC}) {
           nodes { updatedAt }
@@ -32,7 +32,7 @@ query OwnerRepositories($login: String!, $cursor: String) {
 REPOSITORY = """
 query Repository($owner: String!, $name: String!) {
   repository(owner: $owner, name: $name) {
-    nameWithOwner isArchived isFork pushedAt updatedAt
+    nameWithOwner isArchived isFork pushedAt updatedAt visibility
     defaultBranchRef { name target { oid } }
     pullRequests(first: 1, orderBy: {field: UPDATED_AT, direction: DESC}) {
       nodes { updatedAt }
@@ -56,6 +56,39 @@ COMMIT_HISTORY = """
 query CommitHistory($owner: String!, $name: String!, $cursor: String) {
   repository(owner: $owner, name: $name) {
     defaultBranchRef {
+      target {
+        ... on Commit {
+          history(first: 100, after: $cursor) {
+            pageInfo { hasNextPage endCursor }
+            nodes {
+              oid authoredDate author { user { login } } additions deletions
+              parents { totalCount }
+            }
+          }
+        }
+      }
+    }
+  }
+  rateLimit { cost remaining resetAt }
+}
+"""
+
+BRANCHES = """
+query Branches($owner: String!, $name: String!, $cursor: String) {
+  repository(owner: $owner, name: $name) {
+    refs(refPrefix: "refs/heads/", first: 100, after: $cursor) {
+      pageInfo { hasNextPage endCursor }
+      nodes { name target { oid } }
+    }
+  }
+  rateLimit { cost remaining resetAt }
+}
+"""
+
+BRANCH_HISTORY = """
+query BranchHistory($owner: String!, $name: String!, $branch: String!, $cursor: String) {
+  repository(owner: $owner, name: $name) {
+    ref(qualifiedName: $branch) {
       target {
         ... on Commit {
           history(first: 100, after: $cursor) {
@@ -97,6 +130,24 @@ def commit_counts(count: int) -> str:
 
 # The full-page form; its hash stands for the builder in the cache identity.
 COMMIT_COUNTS = commit_counts(COMMIT_COUNT_PAGE)
+
+
+def commit_authors(count: int) -> str:
+    """The query for the GitHub logins of the authors of `count` commits, looked up by object id."""
+    variables = ', '.join(f'$o{i}: GitObjectID!' for i in range(count))
+    fields = '\n'.join(
+        f'    c{i}: object(oid: $o{i}) {{ ... on Commit {{ oid author {{ user {{ login }} }} }} }}'
+        for i in range(count)
+    )
+    return (
+        f'\nquery CommitAuthors($owner: String!, $name: String!, {variables}) {{\n'
+        f'  repository(owner: $owner, name: $name) {{\n{fields}\n  }}\n'
+        '  rateLimit { cost remaining resetAt }\n}\n'
+    )
+
+
+# The full-page form; its hash stands for the builder in the cache identity.
+COMMIT_AUTHORS = commit_authors(COMMIT_COUNT_PAGE)
 
 PULL_REQUESTS = """
 query PullRequests($owner: String!, $name: String!, $cursor: String) {

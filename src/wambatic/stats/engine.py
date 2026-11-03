@@ -4,8 +4,10 @@ import datetime
 import json
 import types
 import typing
+import zoneinfo
 
 import wambatic.fetch.base
+import wambatic.settings
 import wambatic.stats.activity
 import wambatic.stats.base
 import wambatic.stats.buckets
@@ -40,6 +42,52 @@ def utc_midnight(day: datetime.date) -> datetime.datetime:
     return datetime.datetime.combine(day, datetime.time(), tzinfo=datetime.UTC)
 
 
+def commit_zone(
+    commit: wambatic.fetch.base.Commit,
+    tz: datetime.tzinfo,
+    settings: wambatic.settings.StatsSettings,
+    zones: collections.abc.Mapping[str, zoneinfo.ZoneInfo],
+) -> datetime.tzinfo:
+    """The zone that dates `commit`: `tz` in `report` mode; in `author` mode the zone set for its
+    author, else the offset recorded with the commit, else `tz`."""
+    if settings.commit_timezone == 'report':
+        return tz
+    zone = zones.get((commit.author_login or '').casefold())
+    if zone is not None:
+        return zone
+    if commit.authored_offset is not None:
+        return datetime.timezone(datetime.timedelta(minutes=commit.authored_offset))
+    return tz
+
+
+def commit_date_gaps(
+    commits: collections.abc.Iterable[wambatic.stats.activity.DatedCommit],
+    tz: datetime.tzinfo,
+    settings: wambatic.settings.StatsSettings,
+) -> list[dict[str, typing.Any]]:
+    """One `unavailable` row per repository with a commit dated in the report zone in `author`
+    mode for want of an offset and a setting entry, ordered by name."""
+    if settings.commit_timezone != 'author':
+        return []
+    zones = wambatic.settings.author_zones(settings)
+    names = sorted(
+        {
+            dated.commit.repo
+            for dated in commits
+            if dated.commit.authored_offset is None
+            and (dated.commit.author_login or '').casefold() not in zones
+        }
+    )
+    return [
+        {
+            'metric': f'commit dates: {name}',
+            'reason': f'dated in {tz}: GitHub gives no author offset for a repository that is '
+            "not cloned; stats.author_timezones sets an author's zone",
+        }
+        for name in names
+    ]
+
+
 async def read_commits(
     subject: wambatic.fetch.base.Subject,
     fetcher: wambatic.fetch.base.Fetcher,
@@ -60,10 +108,12 @@ async def read_commits(
         + wambatic.stats.buckets.ONE_DAY
     )
     login = subject.login.casefold()
+    zones = wambatic.settings.author_zones(request.settings)
     kept: list[wambatic.stats.activity.DatedCommit] = []
     for repo in repos:
         async for commit in fetcher.commits(repo, lo, hi):
-            day = commit.authored_at.astimezone(request.tz).date()
+            zone = commit_zone(commit, request.tz, request.settings, zones)
+            day = commit.authored_at.astimezone(zone).date()
             if request.since is not None and day < request.since:
                 continue
             if request.until is not None and day > request.until:
@@ -325,6 +375,7 @@ def aggregate(
             request.settings,
             branches=json.loads(records.provenance.get('branches', '[]')) != [],
         )
+        gaps.extend(commit_date_gaps(commits, tz, request.settings))
     if 'flow' in built:
         flow = wambatic.stats.flow.aggregate(pulls, issues, buckets, tz, since, until)
         series = [*series[:totals], *flow, *series[totals:]]
@@ -350,6 +401,9 @@ def aggregate(
     if 'commit_methods' in provenance:
         provenance['exclude_paths'] = json.dumps(list(request.settings.exclude_paths))
         provenance['linguist'] = 'true' if request.settings.linguist else 'false'
+        provenance['commit_timezone'] = request.settings.commit_timezone
+        if request.settings.commit_timezone == 'author':
+            provenance['author_timezones'] = json.dumps(dict(request.settings.author_timezones))
     provenance['partial_buckets'] = ','.join(
         bucket.label for bucket in wambatic.stats.buckets.partial_buckets(since, until, buckets)
     )

@@ -86,7 +86,7 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 ## Task 3: Date commits in their authors' zones in stats
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** medium
 **Spec Reference:** author timezones 1.0, API (`commit_zone`), Implementation (Dating a commit, Repositories without offsets, Provenance); stats 1.12, Bucketing and Provenance; metric groups 1.2, `active_days`
@@ -95,22 +95,22 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 **Subtasks:**
 
-- [ ] Add `commit_zone(commit, tz, settings, zones)` to `src/wambatic/stats/engine.py`: `tz` in `report` mode; in `author` mode the casefolded login's zone from `zones`, else `datetime.timezone(datetime.timedelta(minutes=commit.authored_offset))`, else `tz`
-- [ ] In `read_commits`, build `zones = wambatic.settings.author_zones(request.settings)` once, and compute each commit's day as `commit.authored_at.astimezone(commit_zone(...)).date()`; keep the one-day-widened UTC read window
-- [ ] In `author` mode, record which repositories had a commit in the range dated in the report zone for want of an offset and a setting entry, and add one `tables['unavailable']` row per such repository, ordered by name: `{'metric': 'commit dates: <owner/name>', 'reason': 'dated in <report zone>: GitHub gives no author offset for a repository that is not cloned; stats.author_timezones sets an author\'s zone'}`
-- [ ] Add the provenance key `commit_timezone` whenever `commits` is read, and `author_timezones` (the JSON object of the map) in `author` mode
-- [ ] Tests in `src/tests/stats/test_engine.py`: in `report` mode results are unchanged (an existing fixture's result equal before and after); in `author` mode a commit at `2026-11-02T01:00:00+09:00` (Monday) is in Monday's day bucket of a UTC report, and inside `--since 2026-11-02`; a setting entry overrides the offset; an unattributed commit uses its offset; a commit with no offset is dated in the report zone and its repository gets exactly one `unavailable` row; `active_days` and the `top_contributors` row follow the author's dates; both provenance keys
+- [x] Add `commit_zone(commit, tz, settings, zones)` to `src/wambatic/stats/engine.py`: `tz` in `report` mode; in `author` mode the casefolded login's zone from `zones`, else `datetime.timezone(datetime.timedelta(minutes=commit.authored_offset))`, else `tz`
+- [x] In `read_commits`, build `zones = wambatic.settings.author_zones(request.settings)` once, and compute each commit's day as `commit.authored_at.astimezone(commit_zone(...)).date()`; keep the one-day-widened UTC read window
+- [x] In `author` mode, record which repositories had a commit in the range dated in the report zone for want of an offset and a setting entry, and add one `tables['unavailable']` row per such repository, ordered by name: `{'metric': 'commit dates: <owner/name>', 'reason': 'dated in <report zone>: GitHub gives no author offset for a repository that is not cloned; stats.author_timezones sets an author\'s zone'}`
+- [x] Add the provenance key `commit_timezone` whenever `commits` is read, and `author_timezones` (the JSON object of the map) in `author` mode
+- [x] Tests in `src/tests/stats/test_engine.py`: in `report` mode results are unchanged (an existing fixture's result equal before and after); in `author` mode a commit at `2026-11-02T01:00:00+09:00` (Monday) is in Monday's day bucket of a UTC report, and inside `--since 2026-11-02`; a setting entry overrides the offset; an unattributed commit uses its offset; a commit with no offset is dated in the report zone and its repository gets exactly one `unavailable` row; `active_days` and the `top_contributors` row follow the author's dates; both provenance keys
 
 **Acceptance Criteria:**
 
-- [ ] `report` mode gives the same `StatsResult` as before this task for every existing stats test
-- [ ] In `author` mode bucket labels, partial-bucket marks and every non-commit series are unchanged
+- [x] `report` mode gives the same `StatsResult` as before this task for every existing stats test
+- [x] In `author` mode bucket labels, partial-bucket marks and every non-commit series are unchanged
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/stats/test_engine.py src/tests/stats/test_activity.py src/tests/stats/test_properties.py src/tests/stats/test_fixtures.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/stats/test_engine.py src/tests/stats/test_activity.py src/tests/stats/test_properties.py src/tests/stats/test_fixtures.py` passes
 
 **Notes:**
 

@@ -1030,3 +1030,142 @@ def test_a_flow_only_result_has_no_filter_provenance(
 ) -> None:
     result = compute(stats_fetcher, groups=FLOW)
     assert not {'exclude_paths', 'linguist', 'commit_methods'} & result.provenance.keys()
+
+
+# Author timezones
+
+TOKYO_COMMIT_AT = '2026-11-01T16:00'  # 2026-11-02T01:00+09:00
+
+
+def store_alpha_commits(
+    cache: wambatic.fetch.cache.Cache, commits: list[wambatic.fetch.base.Commit]
+) -> None:
+    alpha = tests.fixtures.stats.REPOS[0]
+    synced_at = tests.fixtures.stats.ALPHA_SYNCED_AT
+    state = wambatic.fetch.base.SyncState(
+        repo=alpha.name_with_owner,
+        resource='commits',
+        watermark=None,
+        head_oid=alpha.head_oid,
+        pushed_at=alpha.pushed_at,
+        updated_at=alpha.updated_at,
+        synced_at=synced_at,
+        full_synced_at=synced_at,
+        probe=wambatic.fetch.base.commit_probe('clone', None, ()),
+    )
+    cache.write_commits(alpha.name_with_owner, commits, state, replace=True)
+
+
+def author_request(
+    *,
+    since: datetime.date = datetime.date(2026, 11, 1),
+    zones: dict[str, str] | None = None,
+    mode: wambatic.settings.CommitTimezone = 'author',
+) -> Request:
+    settings = wambatic.settings.StatsSettings(
+        commit_timezone=mode,
+        author_timezones=tuple(sorted((zones or {}).items())),
+    )
+    return Request(
+        granularity=wambatic.stats.base.Granularity.DAY,
+        groups=ACTIVITY,
+        since=since,
+        until=datetime.date(2026, 11, 30),
+        settings=settings,
+    )
+
+
+def run_author(
+    fetcher: wambatic.fetch.base.Fetcher, req: Request
+) -> wambatic.stats.base.StatsResult:
+    return asyncio.run(wambatic.stats.engine.compute(ALPHA_SUBJECT, fetcher, req, clock=clock))
+
+
+def nonzero(result: wambatic.stats.base.StatsResult, metric: str) -> dict[str, float]:
+    return {label: value for label, value in pick(result, metric).items() if value}
+
+
+def commit_date_rows(result: wambatic.stats.base.StatsResult) -> list[str]:
+    return [
+        row['metric'] for row in result.tables['unavailable'] if 'commit dates' in row['metric']
+    ]
+
+
+def test_author_mode_dates_a_commit_by_its_recorded_offset(
+    stats_fetcher: wambatic.fetch.base.Fetcher, stats_cache: wambatic.fetch.cache.Cache
+) -> None:
+    alpha = tests.fixtures.stats.ALPHA
+    tokyo = dataclasses.replace(
+        tests.fixtures.stats.commit(alpha, 't1', TOKYO_COMMIT_AT, 'hubot', 1, 1),
+        authored_offset=540,
+    )
+    store_alpha_commits(stats_cache, [tokyo])
+    local = run_author(stats_fetcher, author_request(since=datetime.date(2026, 11, 2)))
+    assert nonzero(local, 'commits') == {'2026-11-02': 1}
+    assert nonzero(local, 'active_days') == {'2026-11-02': 1}
+    (row,) = local.tables['top_contributors']
+    assert row['active_days'] == 1
+    assert commit_date_rows(local) == []
+    utc = run_author(stats_fetcher, author_request(mode='report'))
+    assert nonzero(utc, 'commits') == {'2026-11-01': 1}
+    with pytest.raises(wambatic.stats.errors.EmptySubjectError):
+        run_author(stats_fetcher, author_request(since=datetime.date(2026, 11, 2), mode='report'))
+
+
+def test_an_author_timezones_entry_overrides_the_recorded_offset(
+    stats_fetcher: wambatic.fetch.base.Fetcher, stats_cache: wambatic.fetch.cache.Cache
+) -> None:
+    alpha = tests.fixtures.stats.ALPHA
+    tokyo = dataclasses.replace(
+        tests.fixtures.stats.commit(alpha, 't1', TOKYO_COMMIT_AT, 'Hubot', 1, 1),
+        authored_offset=540,
+    )
+    store_alpha_commits(stats_cache, [tokyo])
+    result = run_author(stats_fetcher, author_request(zones={'hubot': 'America/Los_Angeles'}))
+    assert nonzero(result, 'commits') == {'2026-11-01': 1}
+    assert result.provenance['author_timezones'] == '{"hubot": "America/Los_Angeles"}'
+    assert commit_date_rows(result) == []
+
+
+def test_an_unattributed_commit_uses_its_offset(
+    stats_fetcher: wambatic.fetch.base.Fetcher, stats_cache: wambatic.fetch.cache.Cache
+) -> None:
+    alpha = tests.fixtures.stats.ALPHA
+    tokyo = dataclasses.replace(
+        tests.fixtures.stats.commit(alpha, 't1', TOKYO_COMMIT_AT, None, 1, 1),
+        authored_offset=540,
+    )
+    store_alpha_commits(stats_cache, [tokyo])
+    result = run_author(stats_fetcher, author_request())
+    assert nonzero(result, 'commits') == {'2026-11-02': 1}
+
+
+def test_a_commit_with_no_offset_is_dated_in_the_report_zone_with_one_row_per_repository(
+    stats_fetcher: wambatic.fetch.base.Fetcher, stats_cache: wambatic.fetch.cache.Cache
+) -> None:
+    alpha = tests.fixtures.stats.ALPHA
+    commits = [
+        tests.fixtures.stats.commit(alpha, 'n1', TOKYO_COMMIT_AT, 'hubot', 1, 1),
+        tests.fixtures.stats.commit(alpha, 'n2', '2026-11-03T10:00', None, 1, 1),
+    ]
+    store_alpha_commits(stats_cache, commits)
+    result = run_author(stats_fetcher, author_request())
+    assert nonzero(result, 'commits') == {'2026-11-01': 1, '2026-11-03': 1}
+    (row,) = [r for r in result.tables['unavailable'] if 'commit dates' in r['metric']]
+    assert row == {
+        'metric': 'commit dates: octo-org/alpha',
+        'reason': 'dated in UTC: GitHub gives no author offset for a repository that is not '
+        "cloned; stats.author_timezones sets an author's zone",
+    }
+    covered = run_author(stats_fetcher, author_request(zones={'hubot': 'Asia/Tokyo'}))
+    assert nonzero(covered, 'commits') == {'2026-11-02': 1, '2026-11-03': 1}
+    assert commit_date_rows(covered) == ['commit dates: octo-org/alpha']
+
+
+def test_report_mode_has_no_commit_date_row_and_records_only_the_mode(
+    stats_fetcher: wambatic.fetch.base.Fetcher,
+) -> None:
+    result = compute(stats_fetcher)
+    assert commit_date_rows(result) == []
+    assert result.provenance['commit_timezone'] == 'report'
+    assert 'author_timezones' not in result.provenance

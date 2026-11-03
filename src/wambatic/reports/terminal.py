@@ -70,7 +70,7 @@ def title_line(result: wambatic.stats.base.StatsResult) -> rich.text.Text:
     by = 'total' if granularity is wambatic.stats.base.Granularity.TOTAL else f'by {granularity}'
     return rich.text.Text(
         f'{wambatic.reports.rows.subject_text(result)}, {result.since} to {result.until}, {by}, '
-        f'{result.request.tz}',
+        f'{wambatic.reports.rows.timezone_text(result)}',
         style='bold',
     )
 

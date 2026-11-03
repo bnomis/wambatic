@@ -543,7 +543,7 @@ def header_html(report: HtmlReport) -> str:
         '<header>'
         f'<h1>wambatic <span class="subject">{escape(subject)}</span></h1>'
         f'<p class="range">{escape(total.since)} to {escape(total.until)}, '
-        f'{escape(total.request.tz)}</p>'
+        f'{escape(wambatic.reports.rows.timezone_text(total))}</p>'
         f'<fieldset class="switch"><legend>Period</legend>{switch}</fieldset>'
         '</header>'
     )

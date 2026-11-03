@@ -157,7 +157,7 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 ## Task 5: Name both zones in the report titles
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** small
 **Spec Reference:** author timezones 1.0, Implementation (Reports); terminal report 1.3, item 1; HTML report 1.3, header
@@ -166,19 +166,19 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 **Subtasks:**
 
-- [ ] In `src/wambatic/reports/terminal.py`, when `provenance['commit_timezone']` is `'author'`, show `commits in authors' zones, other events in <timezone>` in place of the timezone in the title line; otherwise unchanged
-- [ ] Do the same in the HTML header in `src/wambatic/reports/html.py`
-- [ ] Tests in `src/tests/reports/test_terminal.py` and `src/tests/reports/test_html.py`: the two-zone text in `author` mode, the title unchanged in `report` mode and for a result without the key; the `unavailable` row from Task 3 appears in both reports' Unavailable sections
+- [x] In `src/wambatic/reports/terminal.py`, when `provenance['commit_timezone']` is `'author'`, show `commits in authors' zones, other events in <timezone>` in place of the timezone in the title line; otherwise unchanged
+- [x] Do the same in the HTML header in `src/wambatic/reports/html.py`
+- [x] Tests in `src/tests/reports/test_terminal.py` and `src/tests/reports/test_html.py`: the two-zone text in `author` mode, the title unchanged in `report` mode and for a result without the key; the `unavailable` row from Task 3 appears in both reports' Unavailable sections
 
 **Acceptance Criteria:**
 
-- [ ] A `report`-mode terminal and HTML report is byte-for-byte what it was before this task for the existing test results
+- [x] A `report`-mode terminal and HTML report is byte-for-byte what it was before this task for the existing test results
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/reports/test_terminal.py src/tests/reports/test_html.py src/tests/reports/test_rows.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/reports/test_terminal.py src/tests/reports/test_html.py src/tests/reports/test_rows.py` passes
 
 **Notes:**
 

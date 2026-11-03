@@ -214,6 +214,13 @@ def contributor_count(result: wambatic.stats.base.StatsResult) -> int:
     )
 
 
+def timezone_text(result: wambatic.stats.base.StatsResult) -> str:
+    """The zone shown in a title: both zones when commits are dated in their authors' zones."""
+    if result.provenance.get('commit_timezone') == 'author':
+        return f"commits in authors' zones, other events in {result.request.tz}"
+    return str(result.request.tz)
+
+
 def subject_text(result: wambatic.stats.base.StatsResult) -> str:
     subject = result.subject
     name = subject.full_name if subject.kind == 'repo' else subject.login

@@ -461,6 +461,43 @@ def test_the_report_names_the_range_the_timezone_and_the_provenance(
     )
 
 
+def test_the_header_names_both_zones_in_author_mode_only(
+    org_report: wambatic.reports.html.HtmlReport,
+) -> None:
+    def document(mode: str) -> str:
+        total = dataclasses.replace(
+            org_report.total, provenance={**org_report.total.provenance, 'commit_timezone': mode}
+        )
+        return wambatic.reports.html.html_document(
+            dataclasses.replace(org_report, total=total), 'auto'
+        )
+
+    assert '2026-10-01 to 2027-01-31, commits in authors&#x27; zones, other events in UTC' in (
+        document('author')
+    )
+    assert '2026-10-01 to 2027-01-31, UTC' in document('report')
+    keyless = dataclasses.replace(
+        org_report.total,
+        provenance={k: v for k, v in org_report.total.provenance.items() if k != 'commit_timezone'},
+    )
+    assert '2026-10-01 to 2027-01-31, UTC' in wambatic.reports.html.html_document(
+        dataclasses.replace(org_report, total=keyless), 'auto'
+    )
+
+
+def test_the_commit_dates_unavailable_row_appears_in_the_html_report(
+    org_report: wambatic.reports.html.HtmlReport,
+) -> None:
+    rows = [{'metric': 'commit dates: octo-org/alpha', 'reason': 'dated in UTC: no author offset'}]
+    total = dataclasses.replace(
+        org_report.total, tables={**org_report.total.tables, 'unavailable': rows}
+    )
+    document = wambatic.reports.html.html_document(
+        dataclasses.replace(org_report, total=total), 'auto'
+    )
+    assert 'commit dates: octo-org/alpha' in document
+
+
 def test_the_footer_names_an_enterprise_host_and_github_com_is_unchanged(
     org_report: wambatic.reports.html.HtmlReport,
 ) -> None:

@@ -1,8 +1,8 @@
 # Implementation order
 
-**Version:** 1.12
+**Version:** 1.13
 **Status:** proposed
-**Date:** 2026-11-02
+**Date:** 2026-11-03
 
 The order in which wambatic is built, with what each step delivers, what it depends on and how to tell it is done. It sequences the components in the [system spec](system/spec.md) into steps that [taskdev](../../.agents/claude/skills/taskdev/SKILL.md) can break into tasks. Component detail stays in the component specs; this document only sequences them.
 
@@ -107,6 +107,7 @@ Done when: replayed Enterprise fixtures show every request going to `/api/v3` or
 Deliver: `git.py` (`Git`, `GitCommit`, `clone_url`), `GitError` and `BranchesMismatchError`, `CommitFile`, `Commit.files` and `Repo.visibility`, `commit_method` and the `clone`, `api` (the 1.16 sync, kept) and `api-files` methods in `Fetcher`, with `COMMIT_AUTHORS`, `BRANCHES` and `BRANCH_HISTORY`, `fetch.branches`, `fetch.clone_repos`, `fetch.api_history`, `fetch.clone_dir` and `clones_dir_for`, the `commit_files` and `branch_heads` tables and `SCHEMA_VERSION` 5, `clear_cache` and `inspect_cache` with the clones, `stats.exclude_paths` and `stats.linguist` applied to the `activity` line counts, the `unavailable` rows for repositories that could not be filtered, the `commit_methods`, `branches`, `exclude_paths` and `linguist` provenance keys and their footer lines, and the user guide's pages and settings. Commit sync spec 1.0, fetch spec 1.17, cache spec 1.2, stats spec 1.11, metric groups spec 1.1, system spec 1.11, CLI spec 1.2, terminal report and HTML report specs 1.2; the choices are in the [commit sync review 1](commit-sync/review-1.md).
 Done when: a private repository is cloned only when `fetch.clone_repos` matches it, and otherwise is read by the 1.16 sync or, with `fetch.api_history = 'files'`, by per-commit REST reads; a change of method re-reads the repository and removes a clone it no longer may keep; a sync of local test repositories stores every followed branch's commits once with their per-file counts, and a force-push or a deleted branch removes the commits no longer reachable; no git argument holds the token; a lock file and a `linguist-generated` path are left out of `lines_added` and counted in `commits`; a `--no-fetch` report after `fetch.branches` changed raises `BranchesMismatchError`; the live sync of `octocat/Hello-World` matches `stats/code_frequency`; and `mkdocs build --strict` and `pytest src/tests/test_docs.py` pass.
 
-## Not in scope for this order
+### 15. Author timezones
 
-Multi-timezone reports are listed as an accepted limit in the system spec and have no step here; it is an item in `TODO.md`.
+Deliver: `GitCommit.authored_offset` and `Commit.authored_offset` from a clone's `%aI`, the `commits` column `authored_offset` and `SCHEMA_VERSION` 6, `stats.commit_timezone` and `stats.author_timezones` with `author_zones` and the new `convert` branch, `commit_zone` and the author-local day in `read_commits`, the `unavailable` rows for repositories whose commits have no offset, the `commit_timezone` and `author_timezones` provenance keys, `--commit-tz`, the web app's `commit_tz` field and parameter, the two-zone title in the terminal and HTML reports, and the user guide's settings and report pages. Author timezones spec 1.0, system spec 1.12, stats spec 1.12, metric groups spec 1.2, cache spec 1.3, fetch spec 1.18, commit sync spec 1.1, CLI spec 1.3, reports spec 1.15, web app spec 1.1, terminal report and HTML report specs 1.3; the choices are in the [author timezones review 1](author-timezones/review-1.md).
+Done when: in `report` mode every result is unchanged; in `author` mode a clone-read commit made at 01:00 +09:00 on a Monday is counted on that Monday in a UTC report, `stats.author_timezones` overrides its offset, an API-read repository's commits are dated in the report zone with a row in `tables['unavailable']`, `--commit-tz author` overrides the setting, the title names both zones, a cache of schema 5 is refused, and `mkdocs build --strict` and `pytest src/tests/test_docs.py` pass.

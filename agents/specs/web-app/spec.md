@@ -1,12 +1,14 @@
 # Web app
 
-**Version:** 1.0
-**Status:** implemented
-**Date:** 2026-11-02
+**Version:** 1.1
+**Status:** proposed
+**Date:** 2026-11-03
 
 The local web app `wambatic serve` runs: its routes, sync jobs and progress page, security checks, logging, binding and shutdown. Part of [Reports](../reports/spec.md).
 
 Version 1.0 is the reports spec 1.12 text moved here, with only its cross-references updated, when that spec was split on 2026-11-02, as [audit review 2](../../audit-reviews/review-2.md) Decision 2 (answer A, 2026-10-31) asked. `review-N.md` in the text below means the [reports reviews](../reports/review-1.md) in `agents/specs/reports/`.
+
+Version 1.1 adds the form's commit dates select and the `commit_tz` parameter ([Author timezones](../author-timezones/spec.md)); the choices are in the [author timezones review 1](../author-timezones/review-1.md), decided 2026-11-03.
 
 ## Module location
 
@@ -60,13 +62,13 @@ def serve(settings: Settings, *, default_target: str | None, ignore_cache_versio
 
 **Web app.** A [FastAPI](https://fastapi.tiangolo.com/) application (review-3.md decision 1, answered 2026-10-30), built by `make_app` and run by `serve` on [uvicorn](https://www.uvicorn.org/). Its routes, all `GET`:
 
-- `/`: `form.html`, a plain HTML form submitting to `/report` with fields target (filled with `serve`'s target when given), by (year, month, week, day; month checked), since, until, groups, by-author and tz. It works without script.
-- `/report?target=&by=&since=&until=&groups=&by_author=&tz=&job=`: the page `report --format html` writes, `html_document(html_report(...), report.html_theme)`, with status 200; or, when a sync is needed, 202 with `progress.html` for the job.
+- `/`: `form.html`, a plain HTML form submitting to `/report` with fields target (filled with `serve`'s target when given), by (year, month, week, day; month checked), since, until, groups, by-author, tz and, since 1.1, commit dates (a select, report zone or authors' zones, preset from `stats.commit_timezone`, sent as `commit_tz`). It works without script.
+- `/report?target=&by=&since=&until=&groups=&by_author=&tz=&commit_tz=&job=`: the page `report --format html` writes, `html_document(html_report(...), report.html_theme)`, with status 200; or, when a sync is needed, 202 with `progress.html` for the job.
 - `/api/stats?` the same parameters: `result_to_dict` of the one result at `by` (`total` allowed) with status 200; or 202 with `{"job": ID, "progress": "/api/progress?job=ID"}`.
 - `/api/progress?job=ID`: `{"job", "state", "repos_listed", "repos_pending", "repos_done", "rows_written", "error", "status"}` (counts `null` until known); 404 for an unknown job.
 - FastAPI's own `/openapi.json` and `/docs`, which describe `/api/stats` and `/api/progress`; `/` and `/report` are left out of the schema. `/docs` is FastAPI's Swagger UI page, which loads its script and stylesheet from jsDelivr, so it needs a network connection where the app's own pages do not; `/redoc` is turned off (review-3.md choice 18).
 
-*Parameters* are declared to FastAPI as optional strings (`Annotated[str | None, Query(description=...)]`), so they appear in the OpenAPI schema and FastAPI's own validation rejects nothing, and are parsed by `service.parse_target` and `service.make_request`, the CLI's code, so a value the CLI rejects is a 400 with the same message. `by_author` is `1`, `true` or `on` (the form's checkbox), else absent; `tz` overrides `stats.timezone`; `by=total` is a 400 for `/report` as `--by total` is for HTML. Parameters not listed are ignored (review-3.md choice 7).
+*Parameters* are declared to FastAPI as optional strings (`Annotated[str | None, Query(description=...)]`), so they appear in the OpenAPI schema and FastAPI's own validation rejects nothing, and are parsed by `service.parse_target` and `service.make_request`, the CLI's code, so a value the CLI rejects is a 400 with the same message. `by_author` is `1`, `true` or `on` (the form's checkbox), else absent; `tz` overrides `stats.timezone`; `commit_tz` (`report` or `author`, 1.1) overrides `stats.commit_timezone`, and another value is a 400; `by=total` is a 400 for `/report` as `--by total` is for HTML. Parameters not listed are ignored (review-3.md choice 7).
 
 *Sync jobs* (review-3.md choices 5 and 6). `/report` and `/api/stats` compute at once when the request carries the id of the finished job for its own target and resources, or when the target is a `Subject` and `needs_sync` (with `fetch.max_age`, the fetching flags off) is false. Otherwise they start a job with `Jobs.start`, or join the one running or queued for the same key, and answer 202. A job resolves the token (`fetch_token`) and a bare NAME, then runs `Fetcher.sync` with a `SyncProgress` (fetch spec) as an asyncio task on the server's loop (uvicorn with `loop='asyncio'`; FastAPI's `BackgroundTasks` are not used, since they belong to one response), holding the one lock that lets one job sync at a time; `state` is `queued` until it holds the lock, `listing` until `repos_listed` is set, `syncing`, then `done` or `failed` with the redacted message and the status it maps to (see Error handling). Each key keeps its latest job; a failed job is forgotten after the request that reports its error, so the next request retries. The progress page shows the state and counts, polls `/api/progress` once a second with `progress.js` and, when the job is done, loads the same URL with `&job=ID` added; on failure it shows the message. The cache is one `Cache` opened by `serve` before it listens, shared by every job and computation.
 

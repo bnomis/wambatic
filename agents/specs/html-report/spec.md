@@ -1,8 +1,8 @@
 # HTML report
 
-**Version:** 1.2
-**Status:** implemented
-**Date:** 2026-11-02
+**Version:** 1.3
+**Status:** proposed
+**Date:** 2026-11-03
 
 The self-contained static HTML report of `--format html`, also served by the web app: its figures, page layout, granularity switch, palette and themes, and the headless-browser test. Part of [Reports](../reports/spec.md).
 
@@ -11,6 +11,8 @@ Version 1.0 is the reports spec 1.12 text moved here, with only its cross-refere
 Version 1.1 shows the GitHub host in the provenance footer as the terminal does ([Fetch](../fetch/spec.md) 1.16, [fetch review 1](../fetch/review-1.md)).
 
 Version 1.2 shows the branch and excluded-files lines in the provenance footer as the terminal does ([Commit sync](../commit-sync/spec.md); [commit sync review 1](../commit-sync/review-1.md)).
+
+Version 1.3 names both zones in the header as the terminal does ([Author timezones](../author-timezones/spec.md); [author timezones review 1](../author-timezones/review-1.md)).
 
 ## Module location
 
@@ -82,7 +84,7 @@ def html_report(results: list[StatsResult], initial: Granularity) -> HtmlReport:
 - *Self-contained and offline.* plotly.js is inlined once, in one `<script>`, from `plotly.offline.get_plotlyjs()` (several MB); MathJax is not included. The page's CSS and script come from `templates/report.css` and `templates/report.js`, inlined; no attribute (`src`, `href`, `url(...)`) refers to anything outside the file, and no web font is used (system sans: `system-ui, -apple-system, "Segoe UI", sans-serif`). The file opens from disk with no network, and can be hosted on GitHub Pages or attached to an issue. The templates are read with `importlib.resources` and filled with stdlib `string.Template`; no templating library is added.
 - *Escaping.* Every text from the data (logins, repository names, labels) reaches the page through `html.escape`. The figures and the client script's data are one JSON object in `<script type="application/json" id="wambatic-data">`, written with `json.dumps(..., ensure_ascii=False)` and then `<`, `>` and `&` replaced by `\u003c`, `\u003e` and `\u0026`, so no data can close the script element.
 - *Layout*, in this order; a section appears only when the result has its group's series, as in the terminal:
-  1. A header: `wambatic` and the subject (`repo octocat/Hello-World`), the range of the `TOTAL` result, the timezone, and the granularity switch: a radio group Year, Month, Week, Day with `initial` checked.
+  1. A header: `wambatic` and the subject (`repo octocat/Hello-World`), the range of the `TOTAL` result, the timezone (since 1.3 the terminal's `commits in authors' zones, other events in <timezone>` when `provenance['commit_timezone']` is `'author'`), and the granularity switch: a radio group Year, Month, Week, Day with `initial` checked.
   2. Summary tiles from the `TOTAL` result: Commits, Contributors (top-contributors rows other than `unattributed`), Lines added, Lines deleted and Net lines (signed) for `activity`; PRs opened, PRs merged, Issues opened, Issues closed and Median time to merge (hours, one decimal place; `-` with no value) for `flow`; Workflow runs, Success rate, Releases, and Deployments and Median lead time when those proxies are emitted, for `delivery`; Stars, Forks and Watchers (the sums of `tables['popularity']`) and Top language (the first row of `tables['languages']` other than `Other`, `-` when there is none) for `popularity`. Numbers are formatted as in the terminal.
   3. Activity: the per-period charts of `build_figures` for `activity`, the Commits by day calendar from the `DAY` result (not switched), the whole-range charts of `build_range_figures`, then the tables: Activity by period (one per granularity, all but the shown one `hidden`), By repository, By author and Top contributors (every row; the chart shows the first `TOP_CONTRIBUTORS_SHOWN`).
   4. Flow: the per-period charts of `build_figures` for `flow`, then Flow by period and Flow times by period, one table per granularity as above.

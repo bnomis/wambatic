@@ -1,8 +1,8 @@
 # Terminal report
 
-**Version:** 1.2
-**Status:** implemented
-**Date:** 2026-11-02
+**Version:** 1.3
+**Status:** proposed
+**Date:** 2026-11-03
 
 The `rich` report `wambatic report` prints by default, and the table rows it shares with the HTML page. Part of [Reports](../reports/spec.md).
 
@@ -11,6 +11,8 @@ Version 1.0 is the reports spec 1.12 text moved here, with only its cross-refere
 Version 1.1 names the GitHub host, and the server version, in the provenance footer when the host is not github.com ([Fetch](../fetch/spec.md) 1.16, [fetch review 1](../fetch/review-1.md)).
 
 Version 1.2 says in the provenance footer which branches were counted and which files were left out of line counts ([Commit sync](../commit-sync/spec.md), [Stats](../stats/spec.md) 1.11; [commit sync review 1](../commit-sync/review-1.md)).
+
+Version 1.3 names both zones in the title when commits are dated in their authors' zones ([Author timezones](../author-timezones/spec.md); [author timezones review 1](../author-timezones/review-1.md)).
 
 ## Module location
 
@@ -31,7 +33,7 @@ def sparkline(values: list[float]) -> str:
 
 **Terminal.** [Rich](https://rich.readthedocs.io/) output, in this order; every table is a `rich.table.Table` and numbers are right-aligned with thousands separators (`1,234`), `lines_net` with an explicit sign (`+1,234`, `-56`, `0`), so nothing depends on colour. Items 2, 4 and 5 appear when the result has `activity` series, items 6 and 7 when it has `flow` series, item 8 when it has `delivery` series, item 9 when it has a DORA proxy series, items 10 to 12 when it has `popularity` series, and item 3 when it has any series with a trend line, so `--groups flow` prints no activity tables but does print the flow trend lines:
 
-1. A title line: the subject (`repo octocat/Hello-World`, `user octocat`, `org octo-org`), the resolved range (`2026-01-01 to 2026-10-29`), the granularity (`by month`, or `total`) and the timezone.
+1. A title line: the subject (`repo octocat/Hello-World`, `user octocat`, `org octo-org`), the resolved range (`2026-01-01 to 2026-10-29`), the granularity (`by month`, or `total`) and the timezone; since 1.3, when `provenance['commit_timezone']` is `'author'`, `commits in authors' zones, other events in <timezone>` in its place.
 2. **Activity by period**: one row per bucket, columns Period, Commits, Contributors, Active days, Added, Deleted, Net, from the total series. A partial bucket's label (from `provenance['partial_buckets']`) ends in ` *` and the table's caption says `* partial period`. With more than one bucket a footer row `Total` sums commits, active days, added, deleted and net (all additive over disjoint buckets), and gives as contributors the number of `top_contributors` rows other than `unattributed` (contributors are not additive over buckets).
 3. **Trends**: with more than one bucket, one line per total series that has a value in every bucket (the activity metrics, then the flow counts `prs_opened`, `prs_merged`, `issues_opened` and `issues_closed`, then the delivery counts `workflow_runs`, `release_count` and `deployments`, then the popularity counts `stars_added`, `stars_total`, `forks_added` and `forks_total`), `<metric>  <sparkline>  <min> to <max>`; the duration and size medians (`*_p50`, `*_p90`) and the ratios have no trend line, because their empty buckets have no value; when there are more buckets than fit in `console.width` less the label and range columns, the line shows the latest buckets that fit and says `last N periods`.
 4. **By repository** and **By author**: one table per `by_kind` present, columns Name, Commits, Added, Deleted, Net, each the sum of that breakdown series' points over the range; rows ordered by commits descending then name; rows whose four values are all zero are left out.

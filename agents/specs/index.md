@@ -5,6 +5,7 @@
 | [System](system/spec.md) | `src/wambatic/` | Architecture, data flow, stack, build order and settings across components |
 | [Fetch](fetch/spec.md) | `src/wambatic/fetch/` | GitHub GraphQL/REST clients, auth, rate limits, incremental sync |
 | [Commit sync](commit-sync/spec.md) | `src/wambatic/fetch/git.py` | Commits from local bare clones: per-file line counts, followed branches, rewrite detection |
+| [Author timezones](author-timezones/spec.md) | `src/wambatic/stats/engine.py`, `src/wambatic/fetch/git.py` | Dating commits in their authors' zones: recorded offsets, per-author settings, the report's two zones |
 | [Cache](cache/spec.md) | `src/wambatic/fetch/cache.py` | SQLite cache: schema, sync state, ETags, identity checks |
 | [Stats](stats/spec.md) | `src/wambatic/stats/` | Metric computation, time bucketing, subjects (user, repo, org) |
 | [Metric groups](metric-groups/spec.md) | `src/wambatic/stats/activity.py`, `flow.py`, `delivery.py`, `popularity.py` | What each metric group counts: series, units, order and tables |

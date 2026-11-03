@@ -1,8 +1,8 @@
 # Cache
 
-**Version:** 1.2
-**Status:** implemented
-**Date:** 2026-11-02
+**Version:** 1.3
+**Status:** proposed
+**Date:** 2026-11-03
 
 The local SQLite store behind [Fetch](../fetch/spec.md): repositories, commits, pull requests, issues, releases, workflow runs, stars and forks, the per-repository sync state that makes a later sync incremental, REST ETags, and the identity (schema, wambatic and query versions) that refuses a cache written by different code. It knows nothing about GitHub requests or metrics; `Fetcher` writes it and reads it back for [Stats](../stats/spec.md).
 
@@ -11,6 +11,8 @@ The local SQLite store behind [Fetch](../fetch/spec.md): repositories, commits, 
 Version 1.1 records the GitHub host in the identity, refuses a cache made for another host with `CacheHostError`, records the Enterprise server's version, and gives each host its own default file, for GitHub Enterprise Server ([Fetch](../fetch/spec.md) 1.16); the choices are in the [fetch review 1](../fetch/review-1.md), decided 2026-11-02.
 
 Version 1.2 stores each commit's per-file line counts (`commit_files`) and each repository's followed branch heads (`branch_heads`), deletes the commits a sync finds gone, and clears the bare clones with the file, for the clone-based commit sync ([Commit sync](../commit-sync/spec.md), [Fetch](../fetch/spec.md) 1.17); `SCHEMA_VERSION` becomes 5. The choices are in the [commit sync review 1](../commit-sync/review-1.md), decided 2026-11-02.
+
+Version 1.3 stores each commit's recorded UTC offset (`commits.authored_offset`) for dating commits in their authors' zones ([Author timezones](../author-timezones/spec.md)); `SCHEMA_VERSION` becomes 6. The choices are in the [author timezones review 1](../author-timezones/review-1.md), decided 2026-11-03.
 
 ## Module location
 
@@ -29,7 +31,7 @@ The cache, used only inside `wambatic.fetch` and by the CLI's `cache` command. I
 ```python
 import pathlib
 
-SCHEMA_VERSION: int = 5   # 2 from step 6: the pull_requests and issues tables; 3 from step 8, 4 from step 10, 5 from step 14: see Cache
+SCHEMA_VERSION: int = 6   # 2 from step 6: the pull_requests and issues tables; 3 from step 8, 4 from step 10, 5 from step 14, 6 from step 15: see Cache
 
 # Repo, Commit, PullRequest, Issue, Release, WorkflowRun, StarEvent, Fork and SyncState
 # are the records of the Fetch spec (base.py); cache.py imports them
@@ -142,7 +144,7 @@ def clear_cache(path: pathlib.Path, clones_dir: pathlib.Path) -> list[pathlib.Pa
 
 ## Implementation
 
-**Cache.** One SQLite file (`fetch.cache_path`, default `~/.cache/wambatic/cache.sqlite3`) in WAL mode. Tables: `meta(key, value)`, `repos`, `commits`, `pull_requests`, `issues`, `releases`, `workflow_runs`, `star_events`, `forks`, `etags(url, etag, body)`, and `sync_state(repo, resource, watermark, head_oid, pushed_at, updated_at, synced_at, full_synced_at, probe)`. Each step creates only the tables its resources use; step 3 creates `meta`, `repos`, `commits`, `etags` and `sync_state`, and a later table is a `SCHEMA_VERSION` increase. Step 6 adds `pull_requests` and `issues` (primary key `(repo, number)`, indexed on `(repo, updated_at)`) and the `repos` columns `pull_requests_updated_at` and `issues_updated_at`, and sets `SCHEMA_VERSION` to 2, so a cache written before step 6 is refused once with the `CacheVersionError` message and is cleared and refetched; there is no migration. Step 8 adds `releases` (primary key `(repo, tag_name)`) and `workflow_runs` (primary key `(repo, id)`, indexed on `(repo, created_at)` and `(repo, status)`), the `pull_requests` columns `labels` (a JSON array of names) and `first_commit_at`, the `repos` columns `releases_count` and `releases_updated_at`, and the `sync_state` column `probe`, and sets `SCHEMA_VERSION` to 3, with the same refusal. Step 10 adds `star_events` (primary key `(repo, user_id)`, indexed on `(repo, starred_at)`) and `forks` (primary key `(repo, id)`, indexed on `(repo, created_at)`), the `repos` columns `stargazer_count`, `fork_count`, `watcher_count`, `languages` (a JSON array of `[name, bytes]` pairs, largest first) and `languages_size`, and sets `SCHEMA_VERSION` to 4, with the same refusal. Step 14 adds `commit_files(repo, oid, path, additions, deletions, binary, generated)` (primary key `(repo, oid, path)`, rows deleted with their commit) `branch_heads(repo, branch, head_oid)` (primary key `(repo, branch)`) and the `repos` column `visibility`, and sets `SCHEMA_VERSION` to 5, with the same refusal: a cache of 4 holds totals only, and its commits are refetched through a clone. Timestamps are stored as ISO 8601 UTC text. REST responses also store their `ETag` and are revalidated with `If-None-Match`, which does not count against the limit when answered 304; a 304 returns the stored body.
+**Cache.** One SQLite file (`fetch.cache_path`, default `~/.cache/wambatic/cache.sqlite3`) in WAL mode. Tables: `meta(key, value)`, `repos`, `commits`, `pull_requests`, `issues`, `releases`, `workflow_runs`, `star_events`, `forks`, `etags(url, etag, body)`, and `sync_state(repo, resource, watermark, head_oid, pushed_at, updated_at, synced_at, full_synced_at, probe)`. Each step creates only the tables its resources use; step 3 creates `meta`, `repos`, `commits`, `etags` and `sync_state`, and a later table is a `SCHEMA_VERSION` increase. Step 6 adds `pull_requests` and `issues` (primary key `(repo, number)`, indexed on `(repo, updated_at)`) and the `repos` columns `pull_requests_updated_at` and `issues_updated_at`, and sets `SCHEMA_VERSION` to 2, so a cache written before step 6 is refused once with the `CacheVersionError` message and is cleared and refetched; there is no migration. Step 8 adds `releases` (primary key `(repo, tag_name)`) and `workflow_runs` (primary key `(repo, id)`, indexed on `(repo, created_at)` and `(repo, status)`), the `pull_requests` columns `labels` (a JSON array of names) and `first_commit_at`, the `repos` columns `releases_count` and `releases_updated_at`, and the `sync_state` column `probe`, and sets `SCHEMA_VERSION` to 3, with the same refusal. Step 10 adds `star_events` (primary key `(repo, user_id)`, indexed on `(repo, starred_at)`) and `forks` (primary key `(repo, id)`, indexed on `(repo, created_at)`), the `repos` columns `stargazer_count`, `fork_count`, `watcher_count`, `languages` (a JSON array of `[name, bytes]` pairs, largest first) and `languages_size`, and sets `SCHEMA_VERSION` to 4, with the same refusal. Step 14 adds `commit_files(repo, oid, path, additions, deletions, binary, generated)` (primary key `(repo, oid, path)`, rows deleted with their commit) `branch_heads(repo, branch, head_oid)` (primary key `(repo, branch)`) and the `repos` column `visibility`, and sets `SCHEMA_VERSION` to 5, with the same refusal: a cache of 4 holds totals only, and its commits are refetched through a clone. Step 15 adds the `commits` column `authored_offset` (minutes east of UTC, null when unknown) and sets `SCHEMA_VERSION` to 6, with the same refusal. Timestamps are stored as ISO 8601 UTC text. REST responses also store their `ETag` and are revalidated with `If-None-Match`, which does not count against the limit when answered 304; a 304 returns the stored body.
 
 **Cache identity.** `meta` records `schema_version` (`SCHEMA_VERSION` in `cache.py`), the wambatic version (`wambatic.version.VERSION`), and `query:<NAME>` = the SHA-256 hex digest of each query text constant in `queries.py`. A new file has its identity written; opening a file whose recorded identity differs in any key from the running code raises `CacheVersionError` naming each differing key with both values, unless `ignore_version` is passed. Provenance reads the same values from `Cache.identity()`.
 

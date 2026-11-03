@@ -1,8 +1,8 @@
 # Fetch
 
-**Version:** 1.17
-**Status:** implemented
-**Date:** 2026-11-02
+**Version:** 1.18
+**Status:** proposed
+**Date:** 2026-11-03
 
 Fetches raw data about a GitHub user, repository or organisation and hands it to the [Cache](../cache/spec.md), the local SQLite store that keeps repeated and incremental runs inside the API rate limits. It uses the [GraphQL API](https://docs.github.com/en/graphql) for almost everything and the [REST API](https://docs.github.com/en/rest) only where GraphQL has no equivalent (workflow runs, the `stats/*` endpoints and the list of a repository's forks). Since 1.17 a public repository's commits, and those of a repository the user allows, are read from a local bare clone with `git` ([Commit sync](../commit-sync/spec.md)). It knows nothing about metrics; [Stats](../stats/spec.md) consumes its output.
 
@@ -57,6 +57,8 @@ Version 1.16 adds GitHub Enterprise Server, lifting the limit the [system spec](
 
 Version 1.17 reads each repository's commits by one of three methods: from a local bare clone (`clone`) for a public repository or one allowed by `fetch.clone_repos`, so that each commit carries its per-file line counts (`CommitFile`, `Commit.files`) and branches other than the default can be followed (`fetch.branches`), with GraphQL only mapping new commits to logins (`COMMIT_AUTHORS`); by the 1.16 sync below (`api`, the default otherwise); or, with `fetch.api_history = 'files'`, by per-branch GraphQL histories and per-commit REST file lists (`api-files`). The listing selects each repository's `visibility` (`Repo.visibility`). It lifts two limits the [system spec](../system/spec.md) accepted for the first release. The whole of the commit sync is in the [Commit sync spec](../commit-sync/spec.md), decided 2026-11-02 ([review](../commit-sync/review-1.md)); step 14 of the [implementation order](../implementation-order.md) builds it.
 
+Version 1.18 keeps the UTC offset git recorded on each commit read from a clone, as `Commit.authored_offset`, for dating commits in their authors' zones ([Author timezones](../author-timezones/spec.md)); GitHub's API gives no offset, so the `api` and `api-files` methods leave it `None`. Step 15 of the [implementation order](../implementation-order.md) builds it.
+
 ## API
 
 ```python
@@ -106,6 +108,7 @@ class Commit:
     deletions: int
     is_merge: bool                   # more than one parent; Stats excludes these by default
     files: tuple[CommitFile, ...] = ()   # per-file counts, by path (1.17, see Commit sync)
+    authored_offset: int | None = None   # minutes east of UTC git recorded; None from the API (1.18)
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class SyncReport:

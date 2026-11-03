@@ -1,8 +1,8 @@
 # Stats
 
-**Version:** 1.11
-**Status:** implemented
-**Date:** 2026-11-02
+**Version:** 1.12
+**Status:** proposed
+**Date:** 2026-11-03
 
 Turns the raw records from [Fetch](../fetch/spec.md) and [Cache](../cache/spec.md) into statistics for a user, repository or organisation, optionally bucketed by year, month, week or day. It does no network or rendering of its own: `compute` reads the cache through the fetcher, and the aggregation functions it calls are pure. [Reports](../reports/spec.md) consumes its output.
 
@@ -19,6 +19,8 @@ Version 1.9 corrects the text to the code after [audit review 2](../../audit-rev
 Version 1.10 moves the metric groups to a [Metric groups](../metric-groups/spec.md) spec of their own, with only their cross-references updated, as [audit review 2](../../audit-reviews/review-2.md) Decision 2 (answer A, 2026-10-31) asked, on 2026-11-02; the references to them here now link to it.
 
 Version 1.11 adds the settings that leave generated files out of line counts, `stats.exclude_paths` and `stats.linguist`, and their provenance keys, with the `branches` key the fetcher adds, for the clone-based commit sync ([Commit sync](../commit-sync/spec.md), [Fetch](../fetch/spec.md) 1.17); the choices are in the [commit sync review 1](../commit-sync/review-1.md), decided 2026-11-02.
+
+Version 1.12 dates each commit in its author's zone when `stats.commit_timezone` is `'author'`, with the settings `stats.commit_timezone` and `stats.author_timezones`, the `unavailable` rows for repositories whose commits have no recorded offset, and the `commit_timezone` and `author_timezones` provenance keys ([Author timezones](../author-timezones/spec.md)); the choices are in the [author timezones review 1](../author-timezones/review-1.md), decided 2026-11-03.
 
 ## Module location
 
@@ -178,7 +180,7 @@ Validation happens before any cache read, in this order: unknown groups, `by_aut
 
 ## Implementation
 
-All timestamps are stored UTC and converted once to `request.tz` before bucketing; a record belongs to the local date of `authored_at.astimezone(tz)`. Weeks follow [ISO 8601](https://en.wikipedia.org/wiki/ISO_week_date), so a week can straddle a year boundary and carries the ISO year in its label (`2026-12-31` is in `2026-W53`, and so is `2027-01-01`). Labels are `YYYY`, `YYYY-MM`, `YYYY-Www` with a two-digit week, `YYYY-MM-DD`, and `total`. Bucket boundaries are half-open on local dates: a bucket runs from its `start` up to the next bucket's `start`.
+All timestamps are stored UTC and converted once to `request.tz` before bucketing; a record belongs to the local date of `authored_at.astimezone(tz)`. Since 1.12, with `stats.commit_timezone` `'author'`, a commit belongs to its local date in its author's zone instead (`commit_zone`, [Author timezones](../author-timezones/spec.md)), for its bucket and for the `since`/`until` check; bucket labels and boundaries stay in `request.tz`. Weeks follow [ISO 8601](https://en.wikipedia.org/wiki/ISO_week_date), so a week can straddle a year boundary and carries the ISO year in its label (`2026-12-31` is in `2026-W53`, and so is `2027-01-01`). Labels are `YYYY`, `YYYY-MM`, `YYYY-Www` with a two-digit week, `YYYY-MM-DD`, and `total`. Bucket boundaries are half-open on local dates: a bucket runs from its `start` up to the next bucket's `start`.
 
 **Range.** `since` and `until` are local dates in `tz`, both inclusive (`--until 2026-10-31` includes the 31st). A `None` `since` resolves to the start of the bucket holding the earliest record of any requested built group (a commit's `authored_at`, a pull request's or issue's `created_at`, a release's `published_at`, a workflow run's `created_at`, a star's `starred_at`, a fork's `created_at`; for `delivery` the pull requests it reads for the proxies do not count, since they are inputs to release events, not events of their own), so the first bucket is never partial for lack of a bound; for `TOTAL` it resolves to the earliest record's local date. When no requested group has a dated record (possible only with `popularity`, whose tables need none), `since` resolves to the start of the bucket holding `until`, or to `until` itself for `TOTAL`. A `None` `until` resolves to today in `tz` from `clock`, so the current bucket is partial. The resolved bounds are in `StatsResult.since` and `until`.
 
@@ -211,7 +213,7 @@ Every result records what produced it, so a saved report can be traced and a mis
 
 - from `Fetcher.provenance(subject, resources)` (fetch spec): the cache identity (`schema_version`, `wambatic_version` as recorded, `query:<NAME>` hashes), `version_override_at` when the cache was opened with the version override, and `fetched_at:<resource>` for each resource read, the earliest `synced_at` over the subject's repos (the oldest data in the result), or `never` when a repo has no sync state for it;
 - from `Fetcher.provenance`, when `commits` is read (1.11): `commit_methods`, the methods the subject's repositories were read by, comma-separated in the order `clone`, `api-files`, `api` (`read_records` also keeps each repository's `Fetcher.commit_method` for the `activity` group); `branches`, the JSON list of `fetch.branches` the commits were synced under (`[]`: the default branch only);
-- from stats: `computed_at` (ISO UTC, from `clock`), `timezone` (`str(tz)`), and `partial_buckets`; when `commits` is read, `exclude_paths` (the JSON list of `stats.exclude_paths`) and `linguist` (`'true'` or `'false'`) (1.11), so two results computed with different patterns say so.
+- from stats: `computed_at` (ISO UTC, from `clock`), `timezone` (`str(tz)`), and `partial_buckets`; when `commits` is read, `exclude_paths` (the JSON list of `stats.exclude_paths`) and `linguist` (`'true'` or `'false'`) (1.11), so two results computed with different patterns say so; when `commits` is read, `commit_timezone` (`'report'` or `'author'`), and in `author` mode `author_timezones`, the JSON object of `stats.author_timezones` (1.12).
 
 ## Settings
 
@@ -224,6 +226,8 @@ Every result records what produced it, so a saved report can be traced and a mis
 | `stats.exclude_merge_commits` | `bool` | `True` | Skip merge commits in line counts |
 | `stats.failure_window` | `timedelta` | `7 days` | How long after a deployment a hotfix pull request marks it as failed |
 | `stats.hotfix_labels` | `tuple[str, ...]` | `('hotfix',)` | Pull request labels marking a failure fix, compared case-insensitively |
+| `stats.commit_timezone` | `'report' \| 'author'` | `'report'` | Which zone dates a commit: the report zone, or its author's ([Author timezones](../author-timezones/spec.md), 1.12) |
+| `stats.author_timezones` | `tuple[tuple[str, str], ...]` | `()` | Login to IANA zone, a JSON object in the config file; in `author` mode it overrides a commit's recorded offset (1.12) |
 | `stats.timezone` | `str` | `'UTC'` | IANA zone the CLI uses for `StatsRequest.tz` when `--tz` is absent |
 
 `compute` takes the settings from `StatsRequest.settings`, so a result records the settings it was computed with.

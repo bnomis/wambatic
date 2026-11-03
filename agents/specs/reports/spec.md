@@ -1,8 +1,8 @@
 # Reports
 
-**Version:** 1.14
-**Status:** implemented
-**Date:** 2026-11-02
+**Version:** 1.15
+**Status:** proposed
+**Date:** 2026-11-03
 
 The three ways a user sees a `StatsResult`: a terminal report, a self-contained static HTML report, and a local web app. All three render the same result object, so they never disagree. It also defines the `wambatic` command line.
 
@@ -19,6 +19,8 @@ Version 1.12 corrects the text to the code after [audit review 2](../../audit-re
 Version 1.13 splits this spec, as [audit review 2](../../audit-reviews/review-2.md) Decision 2 (answer A, 2026-10-31) asked, on 2026-11-02. Each front end has its own spec, with its text moved there and only its cross-references updated: the [CLI](../cli/spec.md) (the command line, its flags and exit statuses), the [Terminal report](../terminal-report/spec.md), the [HTML report](../html-report/spec.md) (figures, the page, palette and browser test) and the [Web app](../web-app/spec.md). This spec keeps what they share: the module layout and its import rules, the errors, the JSON output, `service.py`, the settings and the dependencies.
 
 Version 1.14 adds the Enterprise host to the `AuthError` message rule, for GitHub Enterprise Server ([Fetch](../fetch/spec.md) 1.16, [fetch review 1](../fetch/review-1.md)).
+
+Version 1.15 applies the `--commit-tz` and `commit_tz` override to the settings before `make_request` ([Author timezones](../author-timezones/spec.md)); the choices are in the [author timezones review 1](../author-timezones/review-1.md), decided 2026-11-03.
 
 ## Module location
 
@@ -58,7 +60,7 @@ def make_request(
     settings: Settings, today: datetime.datetime,
 ) -> StatsRequest:
     """The `StatsRequest` of the computing flags or query parameters; the zone is
-    `settings.stats.timezone` (a `--tz` or `tz` override is applied to `settings` first);
+    `settings.stats.timezone` (a `--tz` or `tz` override, and since 1.15 a `--commit-tz` or `commit_tz` override of `stats.commit_timezone`, is applied to `settings` first);
     UsageError on a bad value."""
 def resolve_tz(settings: Settings) -> zoneinfo.ZoneInfo: ...
 def check_by_author(subject: Subject) -> None: ...

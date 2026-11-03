@@ -1,8 +1,8 @@
 # CLI
 
-**Version:** 1.2
-**Status:** implemented
-**Date:** 2026-11-02
+**Version:** 1.3
+**Status:** proposed
+**Date:** 2026-11-03
 
 The `wambatic` command line: its commands and flags, the order `report` runs in, the `cache` commands, and the one place every error becomes an exit status. Part of [Reports](../reports/spec.md), which holds what the front ends share.
 
@@ -11,6 +11,8 @@ Version 1.0 is the reports spec 1.12 text moved here, with only its cross-refere
 Version 1.1 adds `--github-host` to `report`, `serve` and `cache`, for GitHub Enterprise Server ([Fetch](../fetch/spec.md) 1.16); the choices are in the [fetch review 1](../fetch/review-1.md), decided 2026-11-02.
 
 Version 1.2 has `cache clear` remove the bare clones with the file, and `cache info` report the commit file rows and the clones' size, for the clone-based commit sync ([Commit sync](../commit-sync/spec.md)); the choices are in the [commit sync review 1](../commit-sync/review-1.md), decided 2026-11-02.
+
+Version 1.3 adds `--commit-tz` to `report` ([Author timezones](../author-timezones/spec.md)); the choices are in the [author timezones review 1](../author-timezones/review-1.md), decided 2026-11-03.
 
 **Prerequisites:** [Reports](../reports/spec.md), [Terminal report](../terminal-report/spec.md), [HTML report](../html-report/spec.md) and [Web app](../web-app/spec.md), whose renderers it dispatches to.
 
@@ -52,6 +54,7 @@ The CLI is defined with [cappa](https://cappa.readthedocs.io/) dataclasses, as t
 - `--groups` is a comma-separated list of `activity`, `flow`, `delivery` and `popularity`; default `activity,flow`, as `StatsRequest`. An empty list is a `UsageError`. Its help text, the web app's `groups` parameter description and the form's hint name every group. An unknown name is passed through to `compute`, which raises `UnknownGroupError`.
 - `--by-author` sets `StatsRequest.by_author`; with a user target, after any bare-`NAME` resolution, it is a `UsageError`.
 - `--tz` overrides `stats.timezone`; the zone is resolved with `zoneinfo.ZoneInfo`, and an unknown zone from either source is a `SettingsError` naming `stats.timezone`.
+- `--commit-tz report|author` (1.3) overrides `stats.commit_timezone` for one run, as `--tz` overrides `stats.timezone`: `author` dates each commit in its author's zone ([Author timezones](../author-timezones/spec.md)); another value is a `UsageError`.
 - `--out PATH` is where `--format html` writes: a file path, or an existing directory to write `report_filename(subject)` into. Without it the file is `report.out_dir / report_filename(subject)`. Missing parent directories are created and an existing file is replaced. `--out` with a format other than `html` (after the config file) is a `UsageError`.
 - `--format` overrides `report.format`; `--max-age` overrides `fetch.max_age` in the settings duration syntax (`30m`, `1d`), so a malformed value is a `SettingsError`. Flags reach `Settings` only through `load_settings(None, overrides)`.
 - `--full-refresh` passes `full_refresh=True` to `Fetcher.sync` and ignores `--max-age`. `--no-fetch` skips the network entirely. The two together are a `UsageError`.

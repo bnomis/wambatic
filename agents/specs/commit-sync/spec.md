@@ -1,8 +1,8 @@
 # Commit sync
 
-**Version:** 1.0
-**Status:** implemented
-**Date:** 2026-11-02
+**Version:** 1.1
+**Status:** proposed
+**Date:** 2026-11-03
 
 How the `commits` resource is synced from 1.0 of this spec ([Fetch](../fetch/spec.md) 1.17). Each repository's commits are read by one of three methods, chosen per repository at each sync:
 
@@ -80,6 +80,7 @@ class GitCommit:
     oid: str
     parents: tuple[str, ...]
     authored_at: datetime.datetime        # UTC
+    authored_offset: int                  # minutes east of UTC, from %aI (1.1)
     files: tuple[CommitFile, ...]         # `generated` is False here; the fetcher sets it
 
 class Git:
@@ -137,7 +138,7 @@ class Git:
 1. `Git.update`; an empty repository (no default branch) has no clone, no commits and no `head_oid`, as before.
 2. The followed branches are the default branch and every branch whose name matches a `fetch.branches` pattern (`fnmatch.fnmatchcase`). Their heads are the repository's branch heads (`Cache.write_commits`, below); `SyncState.head_oid` stays the default branch's head.
 3. `reachable` from the followed heads is the set of commits the repository should hold. New commits are those reachable and not cached; gone commits are those cached and not reachable, which a force-push, a rewritten history, a deleted branch or a pattern removed from `fetch.branches` leaves. This set difference is the whole of the rewrite detection, per branch and for the repository at once: no compare is made, and nothing is re-read that has not changed.
-4. The new commits are read with `Git.commits`, and their authors with `COMMIT_AUTHORS`: up to 100 aliased `object(oid: $oN) { ... on Commit { author { user { login } } } }` fields per query, variables `$o0` to `$o99` of type `GitObjectID!`, as `commit_counts` reads line counts. That is one GraphQL point per 100 new commits, the same as the `api` method's history paging; the commit's author email is never stored. `authored_at` is the `%aI` author date in UTC, and `is_merge` is more than one parent.
+4. The new commits are read with `Git.commits`, and their authors with `COMMIT_AUTHORS`: up to 100 aliased `object(oid: $oN) { ... on Commit { author { user { login } } } }` fields per query, variables `$o0` to `$o99` of type `GitObjectID!`, as `commit_counts` reads line counts. That is one GraphQL point per 100 new commits, the same as the `api` method's history paging; the commit's author email is never stored. `authored_at` is the `%aI` author date in UTC, `authored_offset` its offset in minutes (1.1, [Author timezones](../author-timezones/spec.md)), and `is_merge` is more than one parent.
 5. Generated paths: when the `attributes_probe` of the default branch's head differs from the one recorded in the state's `probe`, `generated_paths` is asked for every path of the repository's cached and new files, and every file row's `generated` flag is rewritten; otherwise only the new files' paths are asked. A repository's attributes are therefore read at its default branch's current head and applied to every commit, an accepted limit, as GitHub's own language bar does.
 6. One `Cache.write_commits` transaction inserts the new commits and their files, deletes the gone ones, writes the generated flags and branch heads, and writes the state, whose `probe` is `method=clone attrs=<probe> branches=<JSON list of fetch.branches>`. A repository with gone commits is named in `SyncReport.full_refetches`.
 

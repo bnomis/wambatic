@@ -17,3 +17,4 @@
 | [User guide](../specs/user-guide/spec.md) | [tasks-1.md](user-guide/tasks-1.md) | 1 | 2026-11-01 |
 | [Fetch](../specs/fetch/spec.md) | [tasks-1.md](fetch/tasks-1.md) | 1 | 2026-11-02 |
 | [Commit sync](../specs/commit-sync/spec.md) | [tasks-1.md](commit-sync/tasks-1.md) | 1 | 2026-11-02 |
+| [Author timezones](../specs/author-timezones/spec.md) | [tasks-1.md](author-timezones/tasks-1.md) | 1 | 2026-11-03 |

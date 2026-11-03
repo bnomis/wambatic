@@ -85,6 +85,19 @@ def check_by_author(subject: wambatic.fetch.base.Subject) -> None:
         )
 
 
+def parse_commit_tz(text: str) -> wambatic.settings.CommitTimezone:
+    """`report` or `author`, the values of `stats.commit_timezone`.
+
+    Raises:
+        UsageError: `text` is neither.
+    """
+    if text == 'report':
+        return 'report'
+    if text == 'author':
+        return 'author'
+    raise wambatic.reports.errors.UsageError('--commit-tz must be report or author')
+
+
 def resolve_tz(settings: wambatic.settings.Settings) -> zoneinfo.ZoneInfo:
     try:
         return zoneinfo.ZoneInfo(settings.stats.timezone)

@@ -284,6 +284,7 @@ def test_api_stats_of_a_fresh_cache_is_the_json_report(
         ('target=org:octo-org&since=2026-1-1', '--since must be a date written YYYY-MM-DD'),
         ('target=org:octo-org&groups=nope', 'unknown groups: nope'),
         ('target=org:octo-org&tz=Mars/Base', 'stats.timezone is not a known time zone'),
+        ('target=org:octo-org&commit_tz=local', '--commit-tz must be report or author'),
         ('target=user:octocat&by_author=1', '--by-author is for an organisation'),
         ('target=org:octo-org&since=2027-01-31&until=2026-10-01', ''),
         ('target=org:octo-org&since=0001-01-01', '--since may not be before 2008-01-01'),
@@ -517,7 +518,17 @@ def test_openapi_lists_the_data_routes_with_every_parameter(
     schema, redoc, docs = asyncio.run(scenario())
     assert sorted(schema['paths']) == ['/api/progress', '/api/stats']
     parameters = {item['name'] for item in schema['paths']['/api/stats']['get']['parameters']}
-    assert parameters == {'target', 'by', 'since', 'until', 'groups', 'by_author', 'tz', 'job'}
+    assert parameters == {
+        'target',
+        'by',
+        'since',
+        'until',
+        'groups',
+        'by_author',
+        'tz',
+        'commit_tz',
+        'job',
+    }
     assert (redoc, docs) == (404, 200)
 
 
@@ -546,9 +557,59 @@ def test_the_form_posts_to_report_and_escapes_the_default_target(
     assert 'value="org:&lt;b&gt;&quot;x&quot;"' in plain
     assert '<b>' not in plain
     assert 'name="target" value=""' in empty
-    for field in ('target', 'by', 'since', 'until', 'groups', 'by_author', 'tz'):
+    for field in ('target', 'by', 'since', 'until', 'groups', 'by_author', 'tz', 'commit_tz'):
         assert f'name="{field}"' in plain
     assert 'Comma-separated: activity, flow, delivery, popularity' in plain
+
+
+@pytest.mark.parametrize(
+    ('setting', 'selected', 'other'),
+    [
+        ('report', 'value="report" selected', 'value="author" selected'),
+        ('author', 'value="author" selected', 'value="report" selected'),
+    ],
+)
+def test_the_form_presets_the_commit_dates_select_from_the_setting(
+    stats_cache: wambatic.fetch.cache.Cache, setting: str, selected: str, other: str
+) -> None:
+    settings = wambatic.settings.load_settings(None, {'stats': {'commit_timezone': setting}})
+
+    async def scenario() -> str:
+        async with serving(settings, stats_cache) as client:
+            return (await client.get('/')).text
+
+    text = asyncio.run(scenario())
+    assert '<select name="commit_tz">' in text
+    assert selected in text
+    assert other not in text
+
+
+@pytest.mark.parametrize(
+    ('setting', 'param', 'expected'),
+    [
+        ('report', 'author', 'author'),
+        ('author', 'report', 'report'),
+        ('author', '', 'author'),
+        ('report', None, 'report'),
+    ],
+)
+def test_the_commit_tz_parameter_overrides_the_setting(
+    setting: str, param: str | None, expected: str
+) -> None:
+    settings = wambatic.settings.load_settings(None, {'stats': {'commit_timezone': setting}})
+    raw = wambatic.reports.web.RawQuery(
+        target='org:octo-org',
+        by=None,
+        since=None,
+        until=None,
+        groups=None,
+        by_author=None,
+        tz=None,
+        commit_tz=param,
+        job=None,
+    )
+    query = wambatic.reports.web.parse_query(settings, raw, tests.fixtures.stats.NOW, page=False)
+    assert query.request.settings.commit_timezone == expected
 
 
 @pytest.mark.parametrize('theme', ['auto', 'dark'])

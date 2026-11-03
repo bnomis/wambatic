@@ -297,7 +297,7 @@ def test_parse_query_returns_a_query_or_raises_a_usage_error(
     job: str | None,
     page: bool,
 ) -> None:
-    raw = wambatic.reports.web.RawQuery(target, by, since, until, groups, by_author, tz, job)
+    raw = wambatic.reports.web.RawQuery(target, by, since, until, groups, by_author, tz, None, job)
     today = datetime.datetime(2027, 1, 20, 12, 0, tzinfo=datetime.UTC)
     try:
         query = wambatic.reports.web.parse_query(

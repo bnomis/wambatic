@@ -122,7 +122,7 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 ## Task 4: Add `--commit-tz` and the web app's `commit_tz`
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** small
 **Spec Reference:** author timezones 1.0, Implementation (CLI and web app), Error handling; CLI 1.3; reports 1.15; web app 1.1
@@ -131,22 +131,22 @@ The project has no affected-tests tool: each task names its test files. Every `p
 
 **Subtasks:**
 
-- [ ] Add `--commit-tz` (`report` or `author`) to `report` in `src/wambatic/cli.py`; it replaces `stats.commit_timezone` in the settings before `make_request`, as `--tz` replaces `stats.timezone`; another value is a `UsageError`
-- [ ] Apply the same override for the web app's `commit_tz` query parameter in `src/wambatic/reports/web.py` and `service.py`; another value is a 400 with the CLI's message
-- [ ] Add the select (Commit dates: report zone or authors' zones, preset from `stats.commit_timezone`) to `src/wambatic/reports/templates/form.html`, sent as `commit_tz`
-- [ ] Add `--commit-tz` to `docs/reference/cli.md`
-- [ ] Tests in `src/tests/test_cli.py`: the flag overrides the setting both ways, a bad value is a `UsageError`; in `src/tests/reports/test_service.py` and `src/tests/reports/test_web.py`: the parameter overrides the setting, a bad value is a 400, the form shows the select with the setting's value preset
+- [x] Add `--commit-tz` (`report` or `author`) to `report` in `src/wambatic/cli.py`; it replaces `stats.commit_timezone` in the settings before `make_request`, as `--tz` replaces `stats.timezone`; another value is a `UsageError`
+- [x] Apply the same override for the web app's `commit_tz` query parameter in `src/wambatic/reports/web.py` and `service.py`; another value is a 400 with the CLI's message
+- [x] Add the select (Commit dates: report zone or authors' zones, preset from `stats.commit_timezone`) to `src/wambatic/reports/templates/form.html`, sent as `commit_tz`
+- [x] Add `--commit-tz` to `docs/reference/cli.md`
+- [x] Tests in `src/tests/test_cli.py`: the flag overrides the setting both ways, a bad value is a `UsageError`; in `src/tests/reports/test_service.py` and `src/tests/reports/test_web.py`: the parameter overrides the setting, a bad value is a 400, the form shows the select with the setting's value preset
 
 **Acceptance Criteria:**
 
-- [ ] `wambatic report ... --commit-tz author` gives `provenance['commit_timezone'] == 'author'` with the setting at `report`
-- [ ] The form works without script and submits `commit_tz`
+- [x] `wambatic report ... --commit-tz author` gives `provenance['commit_timezone'] == 'author'` with the setting at `report`
+- [x] The form works without script and submits `commit_tz`
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/test_cli.py src/tests/reports/test_service.py src/tests/reports/test_web.py src/tests/test_docs.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/test_cli.py src/tests/reports/test_service.py src/tests/reports/test_web.py src/tests/test_docs.py` passes
 
 **Notes:**
 

@@ -19,3 +19,9 @@ nothing reminds anyone when a release closes.
 Fix direction: after 2026-12-09, re-read GitHub's "All releases" page, raise
 `MIN_SERVER_VERSION` to the oldest release still supported, and update the
 fetch spec's API block and the user guide where they name the version.
+
+Note 2026-11-04: a one-off routine, "wambatic: check GHES 3.19 closed"
+(https://claude.ai/code/routines/trig_015ehYoX9t2H8Bm3uWpNE8xS), runs at
+2026-12-10 09:00 UTC. It re-reads GitHub's "All releases" page and reports,
+changing no file, whether `/todo-do` can raise `MIN_SERVER_VERSION`. Nothing
+reminds anyone of the releases after 3.19.

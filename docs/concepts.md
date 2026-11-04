@@ -65,7 +65,9 @@ When the limit is reached, `fetch.on_rate_limit` decides what happens:
 - `fail` stops with an error that gives the reset time.
 
 `fetch.workers` sets how many repositories are fetched at once. More is faster and closer to GitHub's
-secondary limits, which wambatic answers by retrying up to `fetch.max_retries` times.
+secondary limits, which wambatic answers by retrying up to `fetch.max_retries` times. GitHub's own failures
+(HTTP 500 to 504, a dropped connection, or a GraphQL reply that carries no data) are retried the same
+way, waiting a little longer each time.
 
 ## Next
 

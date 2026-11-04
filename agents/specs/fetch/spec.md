@@ -1,6 +1,6 @@
 # Fetch
 
-**Version:** 1.19
+**Version:** 1.20
 **Status:** implemented
 **Date:** 2026-11-03
 
@@ -60,6 +60,8 @@ Version 1.17 reads each repository's commits by one of three methods: from a loc
 Version 1.18 keeps the UTC offset git recorded on each commit read from a clone, as `Commit.authored_offset`, for dating commits in their authors' zones ([Author timezones](../author-timezones/spec.md)); GitHub's API gives no offset, so the `api` and `api-files` methods leave it `None`. Step 15 of the [implementation order](../implementation-order.md) builds it.
 
 Version 1.19 logs a GraphQL reply that `graphql` refuses as `MALFORMED` (no `data`, or no `rateLimit` from github.com) at `warning`, with its HTTP status and the first 500 characters of its parsed body, before raising, so the reply that stopped a sync can be seen afterwards (found 2026-11-03, when a sync of a large repository's pull requests stopped twice on such a reply that was not logged). Nothing else changes.
+
+Version 1.20 retries a GraphQL reply refused as `MALFORMED` (no `data` and no `errors`, or no `rateLimit` from github.com) like a transient status, up to `fetch.max_retries` with the same backoff, and raises `GraphQLError` (`MALFORMED`) only when the retries run out. Such a reply breaks the GraphQL contract, which promises `data`, `errors` or both, so a retry cannot make a sync worse; on 2026-11-03 one such reply stopped a sync of a large repository's pull requests twice. Nothing else changes.
 
 ## API
 
@@ -382,7 +384,7 @@ class GitHubClient:
 - `GraphQLError`: a GraphQL response whose `errors` contain a type other than `NOT_FOUND` and `RATE_LIMITED`. It carries each error's `type` and `message`; partial `data` is discarded. On an Enterprise host its message also names the host and the server version, so a field the server's schema lacks is reported with the version that lacks it (1.16).
 - `NotFoundError`: user, org or repo does not exist or is not visible to the token: REST 404, or a GraphQL error of type `NOT_FOUND`.
 - REST `stats/*` returning 202 (still computing) is retried with backoff up to `fetch.stats_retries`, then raised as `StatsPendingError`.
-- Transient failures (HTTP 500, 502, 503 and 504, `aiohttp.ClientConnectionError` and `TimeoutError`) are retried up to `fetch.max_retries` with the same backoff; when the retries run out `FetchError` is raised, with the last exception chained as its cause.
+- Transient failures (HTTP 500, 502, 503 and 504, `aiohttp.ClientConnectionError` and `TimeoutError`, and since 1.20 a GraphQL reply refused as `MALFORMED`, which raises `GraphQLError` rather than `FetchError` when the retries run out) are retried up to `fetch.max_retries` with the same backoff; when the retries run out `FetchError` is raised, with the last exception chained as its cause.
 - Any other non-2xx status raises `FetchError` naming the status. Any other `aiohttp.ClientError` becomes a `FetchError` too.
 - A 2xx response whose body is not JSON raises `FetchError` naming the endpoint, chained from the `ValueError`.
 - Unexpected exceptions propagate; only the above are caught.

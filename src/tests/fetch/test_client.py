@@ -422,18 +422,18 @@ def test_graphql_other_error_discards_data(make_client: tests.conftest.MakeClien
     assert info.value.errors == (('INTERNAL', 'Something went wrong'),)
 
 
-def test_graphql_requires_rate_limit(make_client: tests.conftest.MakeClient) -> None:
-    with pytest.raises(wambatic.fetch.errors.GraphQLError):
-        run_graphql(
-            {
-                GRAPHQL: [
-                    tests.fixtures.fetch.server.Canned(
-                        200, tests.fixtures.fetch.responses.GRAPHQL_NO_RATE_LIMIT
-                    )
-                ]
-            },
-            make_client,
+def test_graphql_requires_rate_limit(
+    make_client: tests.conftest.MakeClient,
+    sleeps: tests.conftest.Sleeps,
+    fetch_settings: wambatic.settings.FetchSettings,
+) -> None:
+    canned = [
+        tests.fixtures.fetch.server.Canned(
+            200, tests.fixtures.fetch.responses.GRAPHQL_NO_RATE_LIMIT
         )
+    ] * (fetch_settings.max_retries + 1)
+    with pytest.raises(wambatic.fetch.errors.GraphQLError):
+        run_graphql({GRAPHQL: canned}, make_client)
 
 
 NO_LIMIT_BODIES = (
@@ -508,9 +508,41 @@ def test_a_malformed_graphql_reply_is_logged_before_it_raises(
             run_unlimited(body, enterprise=False, sleeps=sleeps)
     finally:
         loguru.logger.remove(sink)
-    [record] = [record for record in records if 'malformed' in record]
-    assert 'HTTP 200' in record
-    assert ("'data'" if body is not None else ': None') in record
+    logged = [record for record in records if 'malformed' in record]
+    assert logged
+    for record in logged:
+        assert 'HTTP 200' in record
+        assert ("'data'" if body is not None else ': None') in record
+
+
+@pytest.mark.parametrize('body', [*NO_LIMIT_BODIES, {'data': None}, None])
+def test_a_malformed_graphql_reply_is_retried_then_succeeds(
+    body: object, make_client: tests.conftest.MakeClient, sleeps: tests.conftest.Sleeps
+) -> None:
+    data = run_graphql(
+        {GRAPHQL: [tests.fixtures.fetch.server.Canned(200, body), graphql_ok()]}, make_client
+    )
+    assert data == tests.fixtures.thaw.thaw(
+        tests.fixtures.fetch.recorded.OWNER_REPOSITORIES_OK['data']
+    )
+    assert len(sleeps) == 1
+    assert 0 <= sleeps[0] <= wambatic.fetch.ratelimit.BACKOFF_BASE
+
+
+def test_a_malformed_graphql_reply_exhausts_retries(
+    make_client: tests.conftest.MakeClient,
+    sleeps: tests.conftest.Sleeps,
+    fetch_settings: wambatic.settings.FetchSettings,
+) -> None:
+    canned = [tests.fixtures.fetch.server.Canned(200, {'data': None})] * (
+        fetch_settings.max_retries + 1
+    )
+    with pytest.raises(wambatic.fetch.errors.GraphQLError) as info:
+        run_graphql({GRAPHQL: canned}, make_client)
+    assert info.value.errors[0][0] == 'MALFORMED'
+    assert len(sleeps) == fetch_settings.max_retries
+    for attempt, wait in enumerate(sleeps):
+        assert 0 <= wait <= 2**attempt
 
 
 def test_a_headerless_response_leaves_the_stored_limit_unchanged(

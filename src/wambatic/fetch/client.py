@@ -233,26 +233,34 @@ class GitHubClient:
             RateLimitError: the rate limit is exhausted.
             FetchError: another failure, or retries run out.
         """
-        response = await self.request(
-            'graphql', 'POST', '/graphql', json={'query': query, 'variables': dict(variables)}
-        )
-        pairs = error_types(response.data)
-        if any(kind == 'NOT_FOUND' for kind, _ in pairs):
-            raise wambatic.fetch.errors.NotFoundError('; '.join(message for _, message in pairs))
-        if pairs:
-            raise self.graphql_error(pairs)
-        data = response.data.get('data') if isinstance(response.data, dict) else None
-        if not isinstance(data, dict) or (
-            self.host.is_dotcom and not isinstance(data.get('rateLimit'), dict)
-        ):
-            # An Enterprise server with rate limits switched off may omit rateLimit or send null.
-            # The reply is logged because its shape is the only evidence of what GitHub sent.
+        retries = 0
+        while True:
+            response = await self.request(
+                'graphql', 'POST', '/graphql', json={'query': query, 'variables': dict(variables)}
+            )
+            pairs = error_types(response.data)
+            if any(kind == 'NOT_FOUND' for kind, _ in pairs):
+                raise wambatic.fetch.errors.NotFoundError(
+                    '; '.join(message for _, message in pairs)
+                )
+            if pairs:
+                raise self.graphql_error(pairs)
+            data = response.data.get('data') if isinstance(response.data, dict) else None
+            if isinstance(data, dict) and (
+                not self.host.is_dotcom or isinstance(data.get('rateLimit'), dict)
+            ):
+                # An Enterprise server with rate limits switched off may omit rateLimit.
+                return data, response_date(response)
+            # A reply with no usable data and no errors breaks the GraphQL contract, so it is
+            # retried like a transient status; it is logged as the only evidence of its shape.
             self.logger.warning(
                 f'GitHub sent a malformed GraphQL reply (HTTP {response.status}): '
                 f'{repr(response.data)[:MALFORMED_EXCERPT]}'
             )
-            raise self.graphql_error([('MALFORMED', 'response has no data or lacks rateLimit')])
-        return data, response_date(response)
+            if retries >= self.settings.max_retries:
+                raise self.graphql_error([('MALFORMED', 'response has no data or lacks rateLimit')])
+            await self.sleep(wambatic.fetch.ratelimit.backoff_delay(retries, self.rng))
+            retries += 1
 
     async def rest_get(
         self,

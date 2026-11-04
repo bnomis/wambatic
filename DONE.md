@@ -171,3 +171,28 @@ Fix direction: read the alerts (on the page above, or with a token granted
 explicit instruction), run the tests, and check the alerts close.
 
 Done: 2026-11-03 - dismissed by the user, not fixed: the alerts (certifi via httpx, virtualenv via pre-commit, both development-only) are to be ignored; uv.lock is unchanged.
+
+## The screenshot cache and the cache info image are still at schema 5
+
+Found on 2026-11-03 by `/todo-review`, from the author timezones task list
+(`agents/tasks/author-timezones/tasks-1.md`, Task 6 notes): "The screenshot
+cache (`~/.cache/wambatic/docs.sqlite3`) is at schema 5 and will be refused
+by the next `bin/screenshots.sh` run; this list does not re-run it". On
+2026-11-03 the cache's `meta` table recorded `schema_version` 5 while
+`SCHEMA_VERSION` in `src/wambatic/fetch/cache.py` is 6, and the published
+`docs/images/terminal/cache-info.svg` shows `schema_version 5`, though the
+guide now describes schema 6.
+
+Cause: cache schema 6 (author timezones spec 1.0, cache spec 1.3) refuses an
+older cache with no migration, and `bin/screenshots.py` opens the docs cache
+without clearing it, so its run exits with `CacheVersionError`.
+
+Fix direction: clear the docs cache, re-run `bin/screenshots.sh` (it needs a
+GitHub token and the network), and commit the regenerated images, the
+`cache info` one included.
+
+Note 2026-11-03: blocked by the item above; the re-run stops while syncing
+pallets/flask's pull requests. The old schema 5 cache is kept outside the
+repository until then.
+
+Done: 2026-11-04 - docs cache rebuilt at schema 6 and every screenshot re-captured by `bin/screenshots.sh`, committed with the logging of malformed GraphQL replies (fetch spec 1.19).

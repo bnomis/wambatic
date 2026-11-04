@@ -18,6 +18,8 @@ import wambatic.settings
 import wambatic.version
 
 REQUEST_TIMEOUT = 60.0
+# Characters of a malformed GraphQL reply logged before the error is raised.
+MALFORMED_EXCERPT = 500
 TRANSIENT_STATUSES = frozenset({500, 502, 503, 504})
 NEXT_LINK = re.compile(r'<([^>]*)>\s*;\s*rel="next"')
 
@@ -244,6 +246,11 @@ class GitHubClient:
             self.host.is_dotcom and not isinstance(data.get('rateLimit'), dict)
         ):
             # An Enterprise server with rate limits switched off may omit rateLimit or send null.
+            # The reply is logged because its shape is the only evidence of what GitHub sent.
+            self.logger.warning(
+                f'GitHub sent a malformed GraphQL reply (HTTP {response.status}): '
+                f'{repr(response.data)[:MALFORMED_EXCERPT]}'
+            )
             raise self.graphql_error([('MALFORMED', 'response has no data or lacks rateLimit')])
         return data, response_date(response)
 

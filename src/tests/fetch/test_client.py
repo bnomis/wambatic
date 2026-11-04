@@ -497,6 +497,22 @@ def test_github_com_still_requires_a_rate_limit(
     assert info.value.errors[0][0] == 'MALFORMED'
 
 
+@pytest.mark.parametrize('body', [*NO_LIMIT_BODIES, {'data': None}, None])
+def test_a_malformed_graphql_reply_is_logged_before_it_raises(
+    body: object, sleeps: tests.conftest.Sleeps
+) -> None:
+    records: list[str] = []
+    sink = loguru.logger.add(lambda message: records.append(str(message)), level='WARNING')
+    try:
+        with pytest.raises(wambatic.fetch.errors.GraphQLError):
+            run_unlimited(body, enterprise=False, sleeps=sleeps)
+    finally:
+        loguru.logger.remove(sink)
+    [record] = [record for record in records if 'malformed' in record]
+    assert 'HTTP 200' in record
+    assert ("'data'" if body is not None else ': None') in record
+
+
 def test_a_headerless_response_leaves_the_stored_limit_unchanged(
     make_client: tests.conftest.MakeClient,
 ) -> None:

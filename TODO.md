@@ -34,6 +34,12 @@ backoff like a 502), and whether the pull request page should shrink when
 GitHub times out. If either changes the fetch spec's retry or paging rules,
 it goes through the fetch spec first.
 
+Note 2026-11-04: wambatic now logs such a reply at `warning`, with its HTTP status and
+the start of its body, before it stops (fetch spec 1.19). A probe of every page of
+flask's pull requests (2026-11-04, 06:01-06:08 UTC) saw 502s after about 10.7 seconds
+and secondary rate limits, all retried, and no such reply; the screenshot run that
+followed synced flask in full. The decision waits for the next logged reply.
+
 ## The screenshot cache and the cache info image are still at schema 5
 
 Found on 2026-11-03 by `/todo-review`, from the author timezones task list

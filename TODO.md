@@ -25,6 +25,11 @@ that test fails), re-read GitHub's "All releases" page, raise
 release's dates, and update the fetch spec's API block and the user guide
 where they name the version.
 
+Note 2026-11-04: the first step is done: `CLOSING_DOWN_DATES` in
+`src/wambatic/fetch/hosts.py`, and `test_the_minimum_server_version_is_still_supported`
+in `src/tests/fetch/test_hosts.py`, which fails from 2026-12-10 with the release to
+raise the minimum to (fetch spec 1.21). Raising it waits for that failure.
+
 Note 2026-11-04: a one-off routine, "wambatic: check GHES 3.19 closed"
 (https://claude.ai/code/routines/trig_015ehYoX9t2H8Bm3uWpNE8xS), runs at
 2026-12-10 09:00 UTC. It re-reads GitHub's "All releases" page and reports,

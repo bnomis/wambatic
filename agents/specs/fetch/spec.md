@@ -1,6 +1,6 @@
 # Fetch
 
-**Version:** 1.20
+**Version:** 1.21
 **Status:** implemented
 **Date:** 2026-11-03
 
@@ -62,6 +62,8 @@ Version 1.18 keeps the UTC offset git recorded on each commit read from a clone,
 Version 1.19 logs a GraphQL reply that `graphql` refuses as `MALFORMED` (no `data`, or no `rateLimit` from github.com) at `warning`, with its HTTP status and the first 500 characters of its parsed body, before raising, so the reply that stopped a sync can be seen afterwards (found 2026-11-03, when a sync of a large repository's pull requests stopped twice on such a reply that was not logged). Nothing else changes.
 
 Version 1.20 retries a GraphQL reply refused as `MALFORMED` (no `data` and no `errors`, or no `rateLimit` from github.com) like a transient status, up to `fetch.max_retries` with the same backoff, and raises `GraphQLError` (`MALFORMED`) only when the retries run out. Such a reply breaks the GraphQL contract, which promises `data`, `errors` or both, so a retry cannot make a sync worse; on 2026-11-03 one such reply stopped a sync of a large repository's pull requests twice. Nothing else changes.
+
+Version 1.21 keeps the closing down date of each supported Enterprise Server release, as GitHub's All releases page gives it, in `CLOSING_DOWN_DATES` beside `MIN_SERVER_VERSION`, and a test fails once the minimum release has passed its date, naming the release to raise it to. Raising the minimum was remembered only by a reminder outside the repository before. Nothing else changes.
 
 ## API
 
@@ -271,6 +273,7 @@ class GitHubHost:
 
 GITHUB_COM: GitHubHost   # parse_host('github.com')
 MIN_SERVER_VERSION: tuple[int, int] = (3, 19)   # the oldest Enterprise Server release GitHub supported on 2026-11-02
+CLOSING_DOWN_DATES: types.MappingProxyType[tuple[int, int], datetime.date]   # each supported release's closing down date (1.21)
 
 def parse_host(name: str) -> GitHubHost:
     """The addresses of a host name already checked by the settings (see GitHub hosts);
@@ -436,7 +439,7 @@ Since 1.16 wambatic reads either github.com or one GitHub Enterprise Server, cho
 - *Addresses.* github.com keeps `https://api.github.com` for REST and `https://api.github.com/graphql` for GraphQL. An Enterprise host uses `https://<name>/api/v3` for REST and `https://<name>/api/graphql` for GraphQL, as GitHub's Enterprise Server documentation gives them (checked 2026-11-02): GraphQL is not under `/api/v3`. Only HTTPS is used. Every request carries the same headers as on github.com; Enterprise Server 3.19 to 3.22 support the REST API version `2022-11-28`, the only one (checked 2026-11-02).
 - *Token.* `fetch_token(host)` follows the `gh` CLI: for github.com `GITHUB_TOKEN`, else `gh auth token`; for an Enterprise host `GH_ENTERPRISE_TOKEN`, else `GITHUB_ENTERPRISE_TOKEN`, else `gh auth token --hostname <name>`. A github.com token in the environment is therefore never sent to another server.
 - *Rate limits.* GitHub documents that rate limits are disabled by default on Enterprise Server, and does not document what the GraphQL `rateLimit` object returns then (checked 2026-11-02). A response with no `x-ratelimit-*` headers leaves the state unchanged on any host, and on an Enterprise host a `rateLimit` that is absent or `null` is accepted. When the administrator has switched limits on, the headers and the object are present and are handled exactly as on github.com. On github.com a missing `rateLimit` is still a `GraphQLError`, so a query that forgot to select it still fails its first test.
-- *Server version.* `Fetcher.sync` and `Fetcher.owner_kind` call `GitHubClient.server_version()` before their first other request. On an Enterprise host that is one `GET /meta`, whose `installed_version` must parse and be at least `MIN_SERVER_VERSION`, else `ServerVersionError`. `MIN_SERVER_VERSION` is the oldest release GitHub supported when the wambatic release was made, and is raised by a release, not at run time. A sync writes the version it read to the cache's `server_version` row ([Cache](../cache/spec.md)), so a report made from the cache later names it.
+- *Server version.* `Fetcher.sync` and `Fetcher.owner_kind` call `GitHubClient.server_version()` before their first other request. On an Enterprise host that is one `GET /meta`, whose `installed_version` must parse and be at least `MIN_SERVER_VERSION`, else `ServerVersionError`. `MIN_SERVER_VERSION` is the oldest release GitHub supported when the wambatic release was made, and is raised by a release, not at run time. `CLOSING_DOWN_DATES` holds the "Closing down date" of each release on GitHub's [All releases](https://docs.github.com/en/enterprise-server@latest/admin/all-releases) page; `src/tests/fetch/test_hosts.py` fails once the date of `MIN_SERVER_VERSION` has passed, naming the oldest release whose date has not, so a closed minimum is raised in the next release (since 1.21). The dates are read only by that test, never at run time. A sync writes the version it read to the cache's `server_version` row ([Cache](../cache/spec.md)), so a report made from the cache later names it.
 - *Provenance.* `Fetcher.provenance` carries the cache's `github_host` identity row (every result names its host) and, for an Enterprise host, `server_version`.
 - *What does not change.* Every query, every REST path and every record is the same. GitHub Actions may be switched off on an Enterprise server; a 404 on the workflow-run list is already read as no runs. Stargazer visibility and the `stats/*` endpoints behave as on github.com as far as GitHub documents them. Since 1.17 an Enterprise host's repositories are cloned from `https://<name>/<owner>/<name>.git` with the Enterprise token ([Commit sync](../commit-sync/spec.md)).
 - *Testing.* No Enterprise server is available to record from, so the Enterprise fixtures are written from the shapes in GitHub's Enterprise Server documentation, each with the page it came from: a `GET /meta` body with `installed_version` (3.19.0, 3.18.4 to be refused, and none), a GraphQL response with `rateLimit: null` and one without it, and REST responses without `x-ratelimit-*` headers. The replay server serves them under `/api/v3` and `/api/graphql`, and the tests check every request's path, that the Enterprise token is sent and `GITHUB_TOKEN` is not, that a github.com response without `rateLimit` still raises, and that `server_version` is requested once per client. The live tests stay on github.com.

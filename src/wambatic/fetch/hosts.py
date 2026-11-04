@@ -1,10 +1,24 @@
 import dataclasses
+import datetime
 import re
+import types
 
 import wambatic.fetch.errors
 
 # The oldest Enterprise Server release GitHub supported on 2026-11-02; a wambatic release raises it.
 MIN_SERVER_VERSION = (3, 19)
+
+# The "Closing down date" of each supported release on GitHub's All releases page
+# (https://docs.github.com/en/enterprise-server@latest/admin/all-releases), read on 2026-11-04.
+# A test fails once MIN_SERVER_VERSION's date has passed, as the reminder to raise it.
+CLOSING_DOWN_DATES = types.MappingProxyType(
+    {
+        (3, 19): datetime.date(2026, 12, 9),
+        (3, 20): datetime.date(2027, 3, 17),
+        (3, 21): datetime.date(2027, 6, 11),
+        (3, 22): datetime.date(2027, 9, 8),
+    }
+)
 
 HOST_NAME = re.compile(r'[a-z0-9.-]+')
 VERSION = re.compile(r'(\d+)\.(\d+)(?:\.|$)')

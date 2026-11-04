@@ -1,3 +1,5 @@
+import datetime
+
 import pytest
 
 import tests.fixtures.constants
@@ -46,3 +48,34 @@ def test_parse_server_version(text: str, expected: tuple[int, int]) -> None:
 def test_unparsable_versions(text: str) -> None:
     with pytest.raises(wambatic.fetch.errors.ServerVersionError):
         wambatic.fetch.hosts.parse_server_version(text)
+
+
+def test_the_minimum_server_version_has_a_closing_down_date() -> None:
+    assert wambatic.fetch.hosts.MIN_SERVER_VERSION in wambatic.fetch.hosts.CLOSING_DOWN_DATES
+
+
+def test_the_minimum_server_version_is_still_supported() -> None:
+    """Fails once GitHub has closed the release MIN_SERVER_VERSION names: raise it then."""
+    today = datetime.date.today()
+    minimum = wambatic.fetch.hosts.MIN_SERVER_VERSION
+    closing = wambatic.fetch.hosts.CLOSING_DOWN_DATES[minimum]
+    open_releases = sorted(
+        release
+        for release, date in wambatic.fetch.hosts.CLOSING_DOWN_DATES.items()
+        if date >= today
+    )
+    advice = (
+        f'raise MIN_SERVER_VERSION to {open_releases[0]}'
+        if open_releases
+        else 'add the supported releases to CLOSING_DOWN_DATES'
+    )
+    assert today <= closing, (
+        f'Enterprise Server {minimum[0]}.{minimum[1]} closed on {closing}; {advice}, after '
+        're-reading https://docs.github.com/en/enterprise-server@latest/admin/all-releases'
+    )
+
+
+def test_closing_down_dates_rise_with_the_release() -> None:
+    releases = sorted(wambatic.fetch.hosts.CLOSING_DOWN_DATES)
+    dates = [wambatic.fetch.hosts.CLOSING_DOWN_DATES[release] for release in releases]
+    assert dates == sorted(dates)

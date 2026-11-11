@@ -1,8 +1,8 @@
 # Implementation order
 
-**Version:** 1.13
-**Status:** implemented
-**Date:** 2026-11-03
+**Version:** 1.14
+**Status:** proposed
+**Date:** 2026-11-11
 
 The order in which wambatic is built, with what each step delivers, what it depends on and how to tell it is done. It sequences the components in the [system spec](system/spec.md) into steps that [taskdev](../../.agents/claude/skills/taskdev/SKILL.md) can break into tasks. Component detail stays in the component specs; this document only sequences them.
 
@@ -33,6 +33,7 @@ The order in which wambatic is built, with what each step delivers, what it depe
 | 13 | GitHub Enterprise Server: host setting, addresses, token, rate limits off, version check, cache per host | [fetch](fetch/spec.md), [cache](cache/spec.md), [system](system/spec.md), [CLI](cli/spec.md), [reports](reports/spec.md), [terminal report](terminal-report/spec.md), [HTML report](html-report/spec.md) | 12 | done: [tasks-1](../tasks/fetch/tasks-1.md) |
 | 14 | Commit sync: bare clones for public and allowed repositories, an opt-in per-file API read for the rest, generated files left out, followed branches | [commit sync](commit-sync/spec.md), [fetch](fetch/spec.md), [cache](cache/spec.md), [stats](stats/spec.md), [metric groups](metric-groups/spec.md), [system](system/spec.md), [CLI](cli/spec.md), [terminal report](terminal-report/spec.md), [HTML report](html-report/spec.md) | 13 | done: [tasks-1](../tasks/commit-sync/tasks-1.md) |
 | 15 | Author timezones: commits dated in their authors' zones, from settings or the offset git recorded | [author timezones](author-timezones/spec.md), [system](system/spec.md), [stats](stats/spec.md), [metric groups](metric-groups/spec.md), [cache](cache/spec.md), [fetch](fetch/spec.md), [commit sync](commit-sync/spec.md), [CLI](cli/spec.md), [reports](reports/spec.md), [web app](web-app/spec.md), [terminal report](terminal-report/spec.md), [HTML report](html-report/spec.md) | 14 | done: [tasks-1](../tasks/author-timezones/tasks-1.md) |
+| 16 | Tabbed HTML report with collapsible, sortable, filterable and exportable tables, an assets folder beside the page, and a GraphQL API replacing the REST routes | [HTML report](html-report/spec.md), [GraphQL API](graphql-api/spec.md), [web app](web-app/spec.md), [reports](reports/spec.md) | 15 | proposed |
 
 Steps 6 and 7 are independent and may be built in either order or in parallel once 5 is done. Step 10 was split from step 8 on 2026-10-30 (stats review 3), because its fetch resources were not specified and the two together were more than one task list; it was specified on 2026-10-30 (stats review 4). Steps 9 and 10 are independent of each other. Step 11 is the audit work after step 10; it changes no feature. Step 12 is the user guide; it changes no source module.
 
@@ -112,3 +113,8 @@ Done when: a private repository is cloned only when `fetch.clone_repos` matches 
 
 Deliver: `GitCommit.authored_offset` and `Commit.authored_offset` from a clone's `%aI`, the `commits` column `authored_offset` and `SCHEMA_VERSION` 6, `stats.commit_timezone` and `stats.author_timezones` with `author_zones` and the new `convert` branch, `commit_zone` and the author-local day in `read_commits`, the `unavailable` rows for repositories whose commits have no offset, the `commit_timezone` and `author_timezones` provenance keys, `--commit-tz`, the web app's `commit_tz` field and parameter, the two-zone title in the terminal and HTML reports, and the user guide's settings and report pages. Author timezones spec 1.0, system spec 1.12, stats spec 1.12, metric groups spec 1.2, cache spec 1.3, fetch spec 1.18, commit sync spec 1.1, CLI spec 1.3, reports spec 1.15, web app spec 1.1, terminal report and HTML report specs 1.3; the choices are in the [author timezones review 1](author-timezones/review-1.md).
 Done when: in `report` mode every result is unchanged; in `author` mode a clone-read commit made at 01:00 +09:00 on a Monday is counted on that Monday in a UTC report, `stats.author_timezones` overrides its offset, an API-read repository's commits are dated in the report zone with a row in `tables['unavailable']`, `--commit-tz author` overrides the setting, the title names both zones, a cache of schema 5 is refused, and `mkdocs build --strict` and `pytest src/tests/test_docs.py` pass.
+
+### 16. Tabbed report and GraphQL API
+
+Deliver: `assets.py` and the assets folder written beside the page, the vendored `write-excel-file` 4.1.1, the tab bar and panels, `tables.js` (collapsible blocks, sorting, filtering, CSV and Excel export), `jobs.py` moved out of `web.py`, `api.py` with the Strawberry schema at `/graphql`, `/assets/HASH/` in the web app, the progress page polling GraphQL, the removal of `/api/stats`, `/api/progress`, `/openapi.json` and `/docs`, and the user guide's HTML report and web app pages with new screenshots. Build the GraphQL half after checking that strawberry-graphql 0.341.2 installs and runs under Python 3.14.
+Done when: `report --format html` writes a page and its `wambatic-assets-HASH` folder that open offline, the browser test passes for tabs, sorting, filtering and both exports, the exported schema equals the GraphQL API spec's SDL, the API tests pass, and the four removed routes answer 404.

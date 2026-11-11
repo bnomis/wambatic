@@ -1,10 +1,10 @@
 # Reports
 
-**Version:** 1.15
-**Status:** implemented
-**Date:** 2026-11-03
+**Version:** 1.16
+**Status:** proposed
+**Date:** 2026-11-11
 
-The three ways a user sees a `StatsResult`: a terminal report, a self-contained static HTML report, and a local web app. All three render the same result object, so they never disagree. It also defines the `wambatic` command line.
+The three ways a user sees a `StatsResult`: a terminal report, a static HTML report (a page and its assets folder), and a local web app with a GraphQL API. All three render the same result object, so they never disagree. It also defines the `wambatic` command line.
 
 **Prerequisites:** [Fetch](../fetch/spec.md), [Cache](../cache/spec.md) and [Stats](../stats/spec.md) are implemented (check: `python -c 'import wambatic.stats'`).
 
@@ -21,6 +21,8 @@ Version 1.13 splits this spec, as [audit review 2](../../audit-reviews/review-2.
 Version 1.14 adds the Enterprise host to the `AuthError` message rule, for GitHub Enterprise Server ([Fetch](../fetch/spec.md) 1.16, [fetch review 1](../fetch/review-1.md)).
 
 Version 1.15 applies the `--commit-tz` and `commit_tz` override to the settings before `make_request` ([Author timezones](../author-timezones/spec.md)); the choices are in the [author timezones review 1](../author-timezones/review-1.md), decided 2026-11-03.
+
+Version 1.16 follows the [HTML report](../html-report/spec.md) 2.0 (an assets folder beside the page, tabs, table export) and the [GraphQL API](../graphql-api/spec.md) 1.0, which replaces `/api/stats` and `/api/progress`; both decided by the user on 2026-11-11.
 
 ## Module location
 
@@ -47,7 +49,7 @@ The parts every front end uses; each front end's own API is in its spec.
 import typing
 
 def result_to_dict(result: StatsResult) -> dict[str, object]:
-    """The result as JSON-ready data (see JSON output); shared by --format json and /api/stats."""
+    """The result as JSON-ready data (see JSON output); shared by --format json and the GraphQL API's `stats`."""
 def render_json(result: StatsResult, stream: typing.TextIO) -> None:
     """`json.dumps(result_to_dict(result), indent=2, ensure_ascii=False)` and a newline."""
 
@@ -130,7 +132,7 @@ Settings load from a JSON file (`~/.config/wambatic/config.json`) and are overri
 
 ## External dependencies
 
-- [Plotly](https://plotly.com/python/), [Rich](https://rich.readthedocs.io/), [cappa](https://cappa.readthedocs.io/) (the shared Python rules name cappa for CLI definitions), `loguru`, and [FastAPI](https://fastapi.tiangolo.com/) with [uvicorn](https://www.uvicorn.org/) for the web app (review-3.md decision 1), without their `standard` extras. FastAPI, Starlette and uvicorn ship `py.typed` (checked on 2026-10-30), so no mypy override is added.
+- [Plotly](https://plotly.com/python/), [Rich](https://rich.readthedocs.io/), [cappa](https://cappa.readthedocs.io/) (the shared Python rules name cappa for CLI definitions), `loguru`, and [FastAPI](https://fastapi.tiangolo.com/) with [uvicorn](https://www.uvicorn.org/) for the web app (review-3.md decision 1), without their `standard` extras; since 1.16 [strawberry-graphql](https://strawberry.rocks/) for its API, pinned exactly ([GraphQL API](../graphql-api/spec.md)). FastAPI, Starlette and uvicorn ship `py.typed` (checked on 2026-10-30), so no mypy override is added.
 - Plotly ships no type information (no `py.typed`, checked on 7.1.0 on 2026-10-30), so `pyproject.toml` gains a mypy override with `ignore_missing_imports` for `plotly` and `plotly.*` only, and the one call `html.py` makes is wrapped in `str(...)` (review-2.md decision 1).
 - Development only: [Playwright for Python](https://playwright.dev/python/) for the headless-browser test (step 7), and [HTTPX](https://www.python-httpx.org/) for the web tests' ASGI client (step 9).
 - Maintenance status of each is to be checked before `uv add`, per the shared tools-and-libraries rule; alternatives noted if a check fails: Altair for Plotly, Typer for cappa.

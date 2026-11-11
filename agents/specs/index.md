@@ -12,8 +12,9 @@
 | [Reports](reports/spec.md) | `src/wambatic/reports/` | What the front ends share: layout, errors, JSON output, `service.py`, settings |
 | [CLI](cli/spec.md) | `src/wambatic/cli.py`, `src/wambatic/__main__.py` | The `wambatic` command line, its flags and exit statuses |
 | [Terminal report](terminal-report/spec.md) | `src/wambatic/reports/terminal.py`, `rows.py` | The `rich` terminal report and the shared table rows |
-| [HTML report](html-report/spec.md) | `src/wambatic/reports/figures.py`, `html.py` | The self-contained static HTML report, its figures and themes |
-| [Web app](web-app/spec.md) | `src/wambatic/reports/web.py` | The local web app: routes, sync jobs, security |
+| [HTML report](html-report/spec.md) | `src/wambatic/reports/figures.py`, `html.py` | The static HTML report and its assets folder: figures, themes, tabs, tables and export |
+| [Web app](web-app/spec.md) | `src/wambatic/reports/web.py`, `jobs.py` | The local web app: routes, sync jobs, assets, security |
+| [GraphQL API](graphql-api/spec.md) | `src/wambatic/reports/api.py` | The `/graphql` endpoint: stats, the sync mutation and job progress |
 | [User guide](user-guide/spec.md) | `docs/`, `mkdocs.yml`, `bin/screenshots.py` | MkDocs Material user guide on GitHub Pages, with diagrams, screenshots and a drift test |
 
 Read the system spec first. Each component spec lists its prerequisites.

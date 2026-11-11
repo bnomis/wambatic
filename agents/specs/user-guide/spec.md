@@ -1,8 +1,8 @@
 # User guide
 
-**Version:** 1.0
-**Status:** implemented
-**Date:** 2026-11-01
+**Version:** 1.1
+**Status:** proposed
+**Date:** 2026-11-11
 
 A user guide for wambatic: an [MkDocs](https://www.mkdocs.org/) site in the
 [Material](https://squidfunk.github.io/mkdocs-material/) theme, built from `docs/` and published to
@@ -21,6 +21,8 @@ The README shrinks to the pitch, the install steps, a first report and a link to
 contributor sections (Updating the shared rules). The reference tables move to the guide, which
 becomes their only copy (decided 2026-11-01).
 
+
+Version 1.1 follows the [HTML report](../html-report/spec.md) 2.0 and the [GraphQL API](../graphql-api/spec.md) 1.0 (2026-11-11): the HTML page covers the assets folder, tabs and table export, and the web app page the GraphQL API in place of the JSON routes and `/docs`.
 ## Module location
 
 - `mkdocs.yml`: the site configuration.
@@ -44,8 +46,8 @@ The nav, in order. Each entry lists the page's diagrams (D) and screenshots (S).
 | `guide/targets.md` Targets | `user:`, `org:`, `repo:` and bare names; what a user target counts; forks and archived repositories. D: flowchart from a target to the repositories that are read |
 | `guide/periods.md` Periods and ranges | `--by`, `--since`, `--until`, `--tz`; partial periods and the `*`; [ISO weeks](https://en.wikipedia.org/wiki/ISO_week_date) starting on Monday. D: timeline (Mermaid `gantt`) showing a range cut into months, with the partial first and last months |
 | `guide/terminal.md` The terminal report | Every section in output order, each with its own screenshot (S: every section of `repo:pallets/click` and `org:pallets --by-author`); sparklines; no meaning carried by colour alone |
-| `guide/html.md` The HTML report | Where the file goes and how it is named; the period switch; themes; offline and shareable. S: full page light, full page dark, the period switch, the commit calendar, one chart with a partial period |
-| `guide/web.md` The web app | Starting, the form, the progress page, freshness, the JSON routes, `/docs`, security, stopping. S: form, progress page, report page, `/docs`. D: state diagram of a sync job (waiting, listing, syncing, done, failed); D: sequence diagram of `/api/stats` answering 202, `/api/progress`, then `/api/stats?job=`; D: flowchart of the `Host` check and why loopback ([DNS rebinding](https://en.wikipedia.org/wiki/DNS_rebinding)) |
+| `guide/html.md` The HTML report | Where the page and its assets folder go and how they are named; the tabs; the period switch; collapsible tables, sorting, filtering (with the number forms) and CSV and Excel export; themes; offline, and sharing the page with its folder. S: full page light, full page dark, the tab bar, the period switch, the commit calendar, one chart with a partial period, an open table with a filter applied and its export buttons |
+| `guide/web.md` The web app | Starting, the form, the progress page, freshness, the GraphQL API (a `stats` query, the `sync` mutation and `job` polling, with `curl` examples), GraphiQL, security (the loopback and `Host` checks, and the JSON content type a POST needs), stopping. S: form, progress page, report page, GraphiQL. D: state diagram of a sync job (waiting, listing, syncing, done, failed); D: sequence diagram of `stats` answering `SyncNeeded`, the `sync` mutation, `job` polling, then `stats` with `job`; D: flowchart of the `Host` check and why loopback ([DNS rebinding](https://en.wikipedia.org/wiki/DNS_rebinding)) |
 | `guide/json.md` JSON output | The shape (`format_version`, `subject`, `request`, `series`, the tables, provenance) as an annotated example; `jq` recipes ([jq manual](https://jqlang.org/manual/)). D: class diagram of the document's objects |
 | `guide/activity.md` Activity | Commits, contributors, active days, lines; merge commits; bots |
 | `guide/flow.md` Flow | Pull requests and issues; review, merge and close times; [percentiles](https://en.wikipedia.org/wiki/Percentile). D: timeline of one pull request (opened, first review, merged) and the periods its events land in |
@@ -87,7 +89,7 @@ Chromium.
   elements by CSS selector (tiles, the switch, the calendar, named charts). The selectors live in one
   table at the top of the script.
 - **Web app.** It starts `wambatic serve` on a free loopback port with `--max-age 30d` and captures
-  the form, the report page and `/docs`. The progress page comes from `org:pallets` against a
+  the form, the report page and GraphiQL (which needs the network for its CDN script). The progress page comes from `org:pallets` against a
   second, empty throwaway cache, captured once the state reads "Syncing repositories". Then the
   server is stopped.
 - **Format.** Terminal output as SVG, browser pages as PNG. Each PNG goes through Playwright's

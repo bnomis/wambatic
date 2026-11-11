@@ -344,7 +344,7 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 ## Task 10: Update the user guide and its screenshots
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** medium
 **Spec Reference:** user guide 1.1 (`guide/html.md`, `guide/web.md`, the screenshot script); reports 1.16
@@ -353,25 +353,25 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 **Subtasks:**
 
-- [ ] `docs/guide/html.md`: the page and its assets folder (names, sharing them together, the missing-files notice), the tabs and links to a tab, collapsible tables, sorting, filtering with every number form, CSV and Excel export
-- [ ] `docs/guide/web.md`: replace the JSON routes and `/docs` with the GraphQL API (a `stats` query, the `sync` mutation and `job` polling, each with a `curl` example), GraphiQL and its network need, the JSON content type a POST needs and why; replace the sequence diagram with `stats` answering `SyncNeeded`, `sync`, `job` polling, then `stats` with `job`
-- [ ] `docs/guide/json.md` and every other page: replace each mention of `/api/stats` or `/api/progress` (`grep -rn 'api/stats\|api/progress\|/docs' docs README.md`)
-- [ ] `bin/screenshots.py`: capture GraphiQL in place of `/docs`, the tab bar, and an open table with a filter applied and its export buttons; update `WANTED` and the selectors
-- [ ] Run `bin/screenshots.sh` and commit the new images; it needs a GitHub token because it syncs `pallets/click` and `org:pallets` from GitHub, and GraphiQL needs the network for its CDN script. If `[ -n "${GITHUB_TOKEN:-}" ]` is false and `gh auth token` fails, stop the task as `blocked` saying so
+- [x] `docs/guide/html.md`: the page and its assets folder (names, sharing them together, the missing-files notice), the tabs and links to a tab, collapsible tables, sorting, filtering with every number form, CSV and Excel export
+- [x] `docs/guide/web.md`: replace the JSON routes and `/docs` with the GraphQL API (a `stats` query, the `sync` mutation and `job` polling, each with a `curl` example), GraphiQL and its network need, the JSON content type a POST needs and why; replace the sequence diagram with `stats` answering `SyncNeeded`, `sync`, `job` polling, then `stats` with `job`
+- [x] `docs/guide/json.md` and every other page: replace each mention of `/api/stats` or `/api/progress` (`grep -rn 'api/stats\|api/progress\|/docs' docs README.md`)
+- [x] `bin/screenshots.py`: capture GraphiQL in place of `/docs`, the tab bar, and an open table with a filter applied and its export buttons; update `WANTED` and the selectors
+- [x] Run `bin/screenshots.sh` and commit the new images; it needs a GitHub token because it syncs `pallets/click` and `org:pallets` from GitHub, and GraphiQL needs the network for its CDN script. If `[ -n "${GITHUB_TOKEN:-}" ]` is false and `gh auth token` fails, stop the task as `blocked` saying so
 
 **Acceptance Criteria:**
 
-- [ ] No page of the guide or the README mentions `/api/stats`, `/api/progress` or `/docs`
-- [ ] Every image the guide includes exists and shows the 2.0 page
+- [x] No page of the guide or the README mentions `/api/stats`, `/api/progress` or `/docs`
+- [x] Every image the guide includes exists and shows the 2.0 page
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] `uv sync --group docs` succeeds
-- [ ] `mkdocs build --strict` exits 0
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/test_docs.py src/tests/test_screenshots.py` passes
-- [ ] `bin/audit-check.sh` exits 0
+- [x] `source bin/activate.sh` succeeds
+- [x] `uv sync --group docs` succeeds
+- [x] `mkdocs build --strict` exits 0
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/test_docs.py src/tests/test_screenshots.py` passes
+- [x] `bin/audit-check.sh` exits 0
 
 **Notes:**
 

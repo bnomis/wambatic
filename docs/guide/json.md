@@ -7,7 +7,7 @@ wambatic report repo:pallets/click --format json --since 2026-08-01 --until 2026
 ```
 
 The document goes to stdout and the logs to stderr, so a pipe sees only JSON. The web app's
-`/api/stats` route returns the same document; see [The web app](web.md).
+`stats` GraphQL query returns the same document; see [The web app](web.md#the-graphql-api).
 
 ## An annotated example
 

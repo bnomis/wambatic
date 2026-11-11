@@ -75,6 +75,7 @@ SERVER_TIMEOUT = 30.0
 PROGRESS_TIMEOUT = 60.0
 STOP_TIMEOUT = 10.0
 PAGE_TIMEOUT_MS = 30_000
+FILTER_SETTLE_MS = 400  # the filter applies 150 ms after the last keystroke
 
 TOKEN_FIX = 'set GITHUB_TOKEN, or sign in with `gh auth login`'
 CHROMIUM_FIX = 'run `playwright install chromium`'
@@ -82,28 +83,42 @@ CHROMIUM_FIX = 'run `playwright install chromium`'
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class Crop:
-    """One element of the HTML report, photographed alone. `before` is a selector clicked first,
-    to show a state other than the one the page opens in."""
+    """One element of the HTML report, photographed alone. `before` are selectors
+    clicked first, in order, to show a state other than the one the page opens in. `filter_text` is
+    typed into the filter box of column `filter_column` of the element, and the block is opened
+    first."""
 
     name: str
     selector: str
-    before: str | None = None
+    before: tuple[str, ...] = ()
+    filter_text: str | None = None
+    filter_column: int = 0
 
+
+POPULARITY_TAB = ('#tab-button-popularity',)
 
 # The crops of the HTML report. The selectors are those of reports/templates/report.html and
 # of the markup reports/html.py writes.
 SELECTORS: tuple[Crop, ...] = (
     Crop('tiles', 'dl.tiles'),
     Crop('switch', 'fieldset.switch'),
+    Crop('tabs', '[role="tablist"]'),
+    Crop(
+        'table',
+        '#tab-contributors details.table-block',
+        before=('#tab-button-contributors',),
+        filter_text='>=10',
+        filter_column=1,
+    ),
     Crop('calendar', 'figure:has(#activity-calendar)'),
     Crop(
         'partial-period',
         'figure:has(#activity-commits)',
-        before='input[name="granularity"][value="year"]',
+        before=('input[name="granularity"][value="year"]',),
     ),
-    Crop('delivery-charts', '#delivery .charts'),
-    Crop('popularity-charts', '#popularity .charts'),
-    Crop('languages', 'figure:has(#popularity-languages)'),
+    Crop('delivery-charts', '#tab-delivery .charts', before=('#tab-button-delivery',)),
+    Crop('popularity-charts', '#tab-popularity .charts', before=POPULARITY_TAB),
+    Crop('languages', 'figure:has(#popularity-languages)', before=POPULARITY_TAB),
 )
 
 # The images the guide pages use, relative to the image directory. The script writes these and no
@@ -117,6 +132,8 @@ WANTED: frozenset[str] = frozenset(
         'html/org-pallets-light.png',
         'html/org-pallets-popularity-charts.png',
         'html/org-pallets-switch.png',
+        'html/org-pallets-table.png',
+        'html/org-pallets-tabs.png',
         'html/org-pallets-tiles.png',
         'html/repo-pallets-click-delivery-charts.png',
         'html/repo-pallets-click-light.png',
@@ -126,15 +143,15 @@ WANTED: frozenset[str] = frozenset(
         'terminal/repo-pallets-click-overview.svg',
         'terminal/repo-pallets-click-provenance.svg',
         'terminal/repo-pallets-click-trends.svg',
-        'web/api-docs.png',
         'web/form.png',
+        'web/graphiql.png',
         'web/progress.png',
         'web/report.png',
     }
 )
 
 EVERY_CHART_DRAWN = """() => {
-  const plots = [...document.querySelectorAll('.plot')];
+  const plots = [...document.querySelectorAll('.plot')].filter((plot) => plot.offsetParent);
   return plots.length > 0 && plots.every((plot) => plot.querySelector('.main-svg'));
 }"""
 SYNCING = 'Syncing repositories'
@@ -371,12 +388,16 @@ def crop_report(
     """
     context, page = open_report(browser, report_path, 'light')
     try:
-        if crop.before is not None:
-            page.locator(crop.before).first.click()
+        for selector in crop.before:
+            page.locator(selector).first.click()
             page.wait_for_function(EVERY_CHART_DRAWN)
         found = page.locator(crop.selector)
         if found.count() == 0:
             raise ScreenshotError(f'the selector {crop.selector} matches nothing in {report_path}')
+        if crop.filter_text is not None:
+            found.first.evaluate('(block) => { block.open = true; }')
+            found.first.locator('tr.filters input').nth(crop.filter_column).fill(crop.filter_text)
+            page.wait_for_timeout(FILTER_SETTLE_MS)
         return save_png(found.first, out)
     finally:
         context.close()
@@ -477,9 +498,9 @@ def capture_web(config_path: pathlib.Path, out_dir: pathlib.Path) -> list[pathli
         try:
             page.goto(f'{base}/')
             written.append(save_png(page, folder / 'form.png'))
-            page.goto(f'{base}/docs')
-            page.wait_for_selector('.opblock')
-            written.append(save_png(page, folder / 'api-docs.png'))
+            page.goto(f'{base}/graphql')
+            page.wait_for_selector('.graphiql-container')
+            written.append(save_png(page, folder / 'graphiql.png'))
         finally:
             context.close()
         context, page = web_page(browser, FULL_PAGE_SCALE)

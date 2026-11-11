@@ -1414,10 +1414,10 @@ def test_html_of_the_delivery_group_alone_has_the_delivery_section_and_no_other(
     assert wambatic.cli.main([*argv, *tests.fixtures.constants.ALPHA_FLAGS]) == 0
     capsys.readouterr()
     text = (out_dir / 'org-octo-org.html').read_text(encoding='utf-8')
-    assert 'id="delivery"' in text
+    assert 'id="tab-delivery"' in text
     assert 'id="delivery-runs"' in text
-    assert 'id="activity"' not in text
-    assert 'id="flow"' not in text
+    assert 'id="tab-commits"' not in text
+    assert 'id="tab-flow"' not in text
 
 
 @pytest.mark.usefixtures('clock_after_fixtures')

@@ -147,6 +147,14 @@
     document.querySelectorAll('table.period').forEach(function (table) {
       table.hidden = table.getAttribute('data-granularity') !== granularity;
     });
+    document.querySelectorAll('details.table-block').forEach(function (block) {
+      var table = block.querySelector('table.period:not([hidden])');
+      var count = block.querySelector('.row-count');
+      if (table && count) {
+        var rows = table.tBodies[0].rows.length;
+        count.textContent = rows.toLocaleString('en-US') + (rows === 1 ? ' row' : ' rows');
+      }
+    });
   }
 
   function buttonFor(panel) {

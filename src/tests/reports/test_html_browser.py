@@ -314,3 +314,186 @@ def test_with_script_disabled_every_panel_shows(
         assert not page.locator('[role=tablist]').is_visible()
     finally:
         context.close()
+
+
+PLANTED = (
+    ('alpha', 5, 100),
+    ('Beta', 12, 40),
+    ('gamma10', 1, 2500),
+    ('gamma2', 7, 0),
+)
+
+
+@pytest.fixture
+def contributors(
+    open_report: collections.abc.Callable[..., Opened], org_report: wambatic.reports.html.HtmlReport
+) -> tuple[Opened, playwright.sync_api.Locator]:
+    rows = [
+        {
+            'login': login,
+            'commits': commits,
+            'lines_added': added,
+            'lines_deleted': 0,
+            'lines_net': added,
+            'active_days': 1,
+        }
+        for login, commits, added in PLANTED
+    ]
+    total = dataclasses.replace(
+        org_report.total, tables={**org_report.total.tables, 'top_contributors': rows}
+    )
+    opened = open_report(report=dataclasses.replace(org_report, total=total))
+    opened.page.click('[role=tab][aria-controls=tab-contributors]')
+    table = table_titled(opened.page, 'Top contributors')
+    return opened, table
+
+
+def table_titled(page: playwright.sync_api.Page, title: str) -> playwright.sync_api.Locator:
+    """The visible table whose caption starts with `title`, with its block opened."""
+    table = page.locator('table:not([hidden])', has=page.locator('caption', has_text=title)).first
+    table.evaluate('table => { table.closest("details").open = true }')
+    return table
+
+
+def column(table: playwright.sync_api.Locator, index: int) -> list[str]:
+    visible = 'tbody tr:not([hidden])'
+    cells: list[str] = table.locator(
+        f'{visible} td:nth-child({index}), {visible} th:nth-child({index})'
+    ).all_inner_texts()
+    return cells
+
+
+def number_of(text: str) -> int:
+    return int(text.replace(',', ''))
+
+
+def sort_by(table: playwright.sync_api.Locator, name: str) -> None:
+    table.locator('thead tr:first-child th', has_text=name).locator('button.sort').click()
+
+
+def test_sorting_orders_numbers_by_value_with_empty_values_last_both_ways(
+    contributors: tuple[Opened, playwright.sync_api.Locator],
+) -> None:
+    opened, table = contributors
+    table.locator('tbody tr:nth-child(2) td:nth-child(3)').evaluate(
+        'cell => { cell.setAttribute("data-value", ""); cell.textContent = "-" }'
+    )
+    original = column(table, 1)
+    header = table.locator('thead tr:first-child th', has_text='Added')
+    sort_by(table, 'Added')
+    ascending = column(table, 3)
+    assert ascending[-1] == '-'
+    values = [number_of(v) for v in ascending[:-1]]
+    assert values == sorted(values)
+    assert header.get_attribute('aria-sort') == 'ascending'
+    sort_by(table, 'Added')
+    descending = column(table, 3)
+    assert descending[-1] == '-'
+    values = [number_of(v) for v in descending[:-1]]
+    assert values == sorted(values, reverse=True)
+    assert header.get_attribute('aria-sort') == 'descending'
+    sort_by(table, 'Added')
+    assert column(table, 1) == original
+    assert header.get_attribute('aria-sort') == 'none'
+    assert opened.problems == []
+
+
+def test_sorting_text_compares_numbers_inside_the_text_by_value(
+    contributors: tuple[Opened, playwright.sync_api.Locator],
+) -> None:
+    _, table = contributors
+    sort_by(table, 'Login')
+    assert column(table, 1) == ['alpha', 'Beta', 'gamma2', 'gamma10']
+
+
+def status_line(table: playwright.sync_api.Locator) -> playwright.sync_api.Locator:
+    return table.locator('xpath=following-sibling::p[@role="status"]')
+
+
+def wait_for_rows(table: playwright.sync_api.Locator, logins: list[str]) -> None:
+    expected = f'Showing {len(logins)} of {len(PLANTED)} rows'
+    for _ in range(40):
+        if status_line(table).inner_text() == expected and sorted(column(table, 1)) == sorted(
+            logins
+        ):
+            break
+        table.page.wait_for_timeout(50)
+    assert status_line(table).inner_text() == expected
+    assert sorted(column(table, 1)) == sorted(logins)
+
+
+def test_a_text_filter_ignores_case_and_a_number_filter_takes_each_form(
+    contributors: tuple[Opened, playwright.sync_api.Locator],
+) -> None:
+    _, table = contributors
+    boxes = table.locator('tr.filters input')
+    boxes.nth(0).fill('GAMMA')
+    wait_for_rows(table, ['gamma10', 'gamma2'])
+    boxes.nth(0).fill('')
+    cases: dict[str, collections.abc.Callable[[int], bool]] = {
+        '5': lambda commits: commits == 5,
+        '=5': lambda commits: commits == 5,
+        '>5': lambda commits: commits > 5,
+        '>=5': lambda commits: commits >= 5,
+        '<5': lambda commits: commits < 5,
+        '<=5': lambda commits: commits <= 5,
+        '5..7': lambda commits: 5 <= commits <= 7,
+    }
+    for text, keep in cases.items():
+        boxes.nth(1).fill(text)
+        wait_for_rows(table, [login for login, commits, _ in PLANTED if keep(commits)])
+    boxes.nth(1).fill('')
+    boxes.nth(2).fill('>=1,000')
+    wait_for_rows(table, [login for login, _, added in PLANTED if added >= 1000])
+    boxes.nth(1).fill('>5')
+    wait_for_rows(table, [])
+
+
+def test_an_unreadable_filter_is_marked_and_filters_nothing(
+    contributors: tuple[Opened, playwright.sync_api.Locator],
+) -> None:
+    _, table = contributors
+    boxes = table.locator('tr.filters input')
+    boxes.nth(1).fill('lots')
+    table.locator('tr.filters input[aria-invalid="true"]').wait_for()
+    wait_for_rows(table, [login for login, _, _ in PLANTED])
+    boxes.nth(1).fill('>5')
+    wait_for_rows(table, [login for login, commits, _ in PLANTED if commits > 5])
+    assert boxes.nth(1).get_attribute('aria-invalid') is None
+
+
+def test_the_total_row_keeps_its_place_and_is_relabelled_while_a_filter_is_on(
+    open_report: collections.abc.Callable[..., Opened],
+) -> None:
+    page = open_report().page
+    table = table_titled(page, 'Activity by period')
+    label = table.locator('tfoot td').first
+    assert label.inner_text() == 'Total'
+    sort_by(table, 'Commits')
+    sort_by(table, 'Commits')
+    assert table.locator('tbody + tfoot').count() == 1
+    table.locator('tr.filters input').first.fill('zzz-no-such-period')
+    page.wait_for_function(
+        'text => document.querySelector("table:not([hidden]) tfoot td").textContent === text',
+        arg='Total (all rows)',
+    )
+    assert column(table, 1) == []
+    table.locator('tr.filters input').first.fill('')
+    page.wait_for_function(
+        'text => document.querySelector("table:not([hidden]) tfoot td").textContent === text',
+        arg='Total',
+    )
+
+
+def test_the_summary_count_follows_a_granularity_switch(
+    open_report: collections.abc.Callable[..., Opened],
+) -> None:
+    page = open_report().page
+    block = page.locator('details.table-block', has=page.locator('table.period')).first
+    for granularity in ('day', 'year'):
+        page.check(f'input[name=granularity][value={granularity}]')
+        expected = block.locator(f'table.period[data-granularity={granularity}] tbody tr').count()
+        assert expected > 0
+        assert block.locator('.row-count').inner_text() == (
+            f'{expected} row' if expected == 1 else f'{expected} rows'
+        )

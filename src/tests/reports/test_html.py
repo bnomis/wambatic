@@ -990,3 +990,45 @@ def test_unavailable_sits_outside_the_panels(
     before = document.split('<section id="unavailable">')[0]
     assert before.count('<section') == before.count('</section>')
     assert document.rindex('role="tabpanel"') < document.index('id="unavailable"')
+
+
+def contributors_summary(report: wambatic.reports.html.HtmlReport, count: int) -> str:
+    base = tests.fixtures.stats.ORG_TOP_CONTRIBUTORS[0]
+    rows = [{**base, 'login': f'person{index}'} for index in range(count)]
+    total = dataclasses.replace(
+        report.total, tables={**report.total.tables, 'top_contributors': rows}
+    )
+    document = html_document(dataclasses.replace(report, total=total), 'auto')
+    match = re.search(
+        r'<details class="table-block"[^>]*><summary>Top contributors .*?</summary>', document
+    )
+    assert match is not None
+    return match.group(0)
+
+
+@pytest.mark.parametrize(('count', 'is_open'), [(10, True), (11, False)])
+def test_a_table_block_is_open_only_when_it_has_at_most_ten_rows(
+    org_report: wambatic.reports.html.HtmlReport, count: int, is_open: bool
+) -> None:
+    summary = contributors_summary(org_report, count)
+    assert summary.startswith('<details class="table-block" open>') is is_open
+    assert f'<span class="row-count">{count} rows</span>' in summary
+
+
+def test_the_period_tables_of_one_kind_share_one_block_and_unavailable_has_none(
+    org_report: wambatic.reports.html.HtmlReport,
+) -> None:
+    document = html_document(org_report, 'auto')
+    blocks = re.findall(r'<details class="table-block".*?</details>', document, re.DOTALL)
+    periods = [block for block in blocks if 'class="period"' in block]
+    assert periods
+    for block in periods:
+        assert block.count('class="period"') == len(PERIOD_NAMES)
+    unavailable = [{'metric': 'stars', 'reason': 'not fetched'}]
+    total = dataclasses.replace(
+        org_report.total, tables={**org_report.total.tables, 'unavailable': unavailable}
+    )
+    planted = html_document(dataclasses.replace(org_report, total=total), 'auto')
+    section = planted.split('<section id="unavailable">')[1]
+    assert '<details' not in section
+    assert '<table>' in section

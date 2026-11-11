@@ -32,6 +32,7 @@ PERIODS = (
 )
 SAFE_FILENAME = re.compile(r'[^A-Za-z0-9._-]')
 FILE_MODE = 0o644
+TABLE_OPEN_ROWS = 10
 PROXIES_LINE = 'The DORA figures are proxies; how each is measured is described in the README.'
 OTHER_LANGUAGE = wambatic.stats.popularity.OTHER
 POPULARITY_LINE = 'Counts are as of the last sync; totals count the stars and forks that exist now.'
@@ -187,6 +188,19 @@ def cell(content: str | Number, numeric: bool) -> str:
     return f'<td{" class=num" if numeric else ""}>{escape(content)}</td>'
 
 
+def rows_text(count: int) -> str:
+    return f'{count:,} row' if count == 1 else f'{count:,} rows'
+
+
+def block_html(title: str, count: int, content: str) -> str:
+    """A collapsible block: closed when the shown table has more than `TABLE_OPEN_ROWS` rows."""
+    opened = ' open' if count <= TABLE_OPEN_ROWS else ''
+    return (
+        f'<details class="table-block"{opened}><summary>{escape(title)} '
+        f'(<span class="row-count">{rows_text(count)}</span>)</summary>{content}</details>'
+    )
+
+
 def table_html(
     title: str,
     headers: collections.abc.Sequence[str],
@@ -196,9 +210,11 @@ def table_html(
     note: str = '',
     attributes: str = '',
     numeric: collections.abc.Sequence[bool] | None = None,
+    block: bool = True,
 ) -> str:
     """A data table whose first column is text and the others numbers, unless `numeric` says
-    which columns are numbers. A numeric column holds `Number` cells carrying their raw value."""
+    which columns are numbers. A numeric column holds `Number` cells carrying their raw value.
+    It is wrapped in a collapsible block unless `block` is false."""
     kinds = [i > 0 for i in range(len(headers))] if numeric is None else list(numeric)
     head = ''.join(head_cell(h, kinds[i]) for i, h in enumerate(headers))
     body = ''.join(
@@ -213,10 +229,11 @@ def table_html(
             + '</tr></tfoot>'
         )
     caption = escape(title) + (f'<span class="note">{escape(note)}</span>' if note else '')
-    return (
+    scroll = (
         f'<div class="table-scroll"><table{attributes}><caption>{caption}</caption>'
         f'<thead><tr>{head}</tr></thead><tbody>{body}</tbody>{foot}</table></div>'
     )
+    return block_html(title, len(rows), scroll) if block else scroll
 
 
 def period_numbers(
@@ -263,6 +280,7 @@ def period_table_html(
         footer=footer,
         note=note,
         attributes=attributes,
+        block=False,
     )
 
 
@@ -273,15 +291,21 @@ def period_tables_html(
     ],
     note: collections.abc.Callable[[wambatic.reports.rows.PeriodTable], str],
 ) -> str:
-    """One table for each granularity, all but the initial one hidden."""
+    """One table for each granularity, all but the initial one hidden, in one collapsible block
+    that is open when the initial granularity's table is short."""
     pieces = []
+    shown: wambatic.reports.rows.PeriodTable | None = None
     for granularity in PERIODS:
         table = build(report.periods[granularity])
         if table is not None:
+            if shown is None or granularity == report.initial:
+                shown = table
             pieces.append(
                 period_table_html(table, granularity, granularity != report.initial, note(table))
             )
-    return ''.join(pieces)
+    if shown is None:
+        return ''
+    return block_html(shown.title, len(shown.rows), ''.join(pieces))
 
 
 def partial_note(table: wambatic.reports.rows.PeriodTable) -> str:
@@ -391,6 +415,7 @@ def unavailable_html(result: wambatic.stats.base.StatsResult) -> str:
             wambatic.reports.rows.UNAVAILABLE_HEADERS,
             rows,
             numeric=(False, False),
+            block=False,
         )
         + '</section>'
     )

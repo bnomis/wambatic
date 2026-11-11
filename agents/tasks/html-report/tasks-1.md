@@ -167,7 +167,7 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 ## Task 5: Collapse, sort and filter the tables
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** medium
 **Spec Reference:** HTML report 2.0, Tables (Collapsible, Sortable, Filterable)
@@ -176,23 +176,23 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 **Subtasks:**
 
-- [ ] In `html.py`, wrap each data table, or the four tables of one period kind, in `<details class="table-block">` whose `<summary>` gives the title and the shown table's row count; it is `open` when that table (the `initial` granularity's, for a period group) has at most `TABLE_OPEN_ROWS = 10` body rows. Unavailable stays a plain table
-- [ ] In `templates/tables.js`: a sort button in each header cell (ascending, descending, original order; `aria-sort` and an arrow; numbers by `data-value` with empty values last both ways; text with `Intl.Collator(undefined, {numeric: true, sensitivity: 'base'})`; stable; the total row stays last; each table keeps its own sort)
-- [ ] A filter row of inputs inserted under each header: text contains, ignoring case; numbers `N`, `=N`, `>N`, `>=N`, `<N`, `<=N`, `A..B` with `,` and `%` allowed; an unreadable input gets `aria-invalid="true"` and filters nothing; AND across columns; 150 ms after the last keystroke; a `role="status"` line `Showing X of Y rows`; the total row reads `Total (all rows)` while a filter is on
-- [ ] Update the summary's count when the granularity switch shows another period table
-- [ ] Tests in `src/tests/reports/test_html.py`: which blocks are open for tables of 10 and 11 rows. In `src/tests/reports/test_html_browser.py`: sorting a numeric column orders by value with `-` last both ways and the third click restores the order; a text filter and each number form narrow the rows and update the count; an unreadable filter is marked and filters nothing; the total row keeps its place and its new label
+- [x] In `html.py`, wrap each data table, or the four tables of one period kind, in `<details class="table-block">` whose `<summary>` gives the title and the shown table's row count; it is `open` when that table (the `initial` granularity's, for a period group) has at most `TABLE_OPEN_ROWS = 10` body rows. Unavailable stays a plain table
+- [x] In `templates/tables.js`: a sort button in each header cell (ascending, descending, original order; `aria-sort` and an arrow; numbers by `data-value` with empty values last both ways; text with `Intl.Collator(undefined, {numeric: true, sensitivity: 'base'})`; stable; the total row stays last; each table keeps its own sort)
+- [x] A filter row of inputs inserted under each header: text contains, ignoring case; numbers `N`, `=N`, `>N`, `>=N`, `<N`, `<=N`, `A..B` with `,` and `%` allowed; an unreadable input gets `aria-invalid="true"` and filters nothing; AND across columns; 150 ms after the last keystroke; a `role="status"` line `Showing X of Y rows`; the total row reads `Total (all rows)` while a filter is on
+- [x] Update the summary's count when the granularity switch shows another period table
+- [x] Tests in `src/tests/reports/test_html.py`: which blocks are open for tables of 10 and 11 rows. In `src/tests/reports/test_html_browser.py`: sorting a numeric column orders by value with `-` last both ways and the third click restores the order; a text filter and each number form narrow the rows and update the count; an unreadable filter is marked and filters nothing; the total row keeps its place and its new label
 
 **Acceptance Criteria:**
 
-- [ ] A table of 11 body rows starts closed and one of 10 starts open
-- [ ] Without script every table shows, unsorted and unfiltered, inside its `<details>`
+- [x] A table of 11 body rows starts closed and one of 10 starts open
+- [x] Without script every table shows, unsorted and unfiltered, inside its `<details>`
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/reports/test_html.py src/tests/reports/test_html_browser.py` passes
-- [ ] `bin/audit-check.sh` exits 0
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/reports/test_html.py src/tests/reports/test_html_browser.py` passes
+- [x] `bin/audit-check.sh` exits 0
 
 **Notes:**
 

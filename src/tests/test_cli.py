@@ -40,6 +40,7 @@ import wambatic.fetch.client
 import wambatic.fetch.errors
 import wambatic.fetch.hosts
 import wambatic.fetch.ratelimit
+import wambatic.reports.assets
 import wambatic.reports.errors
 import wambatic.reports.service
 import wambatic.settings
@@ -1520,7 +1521,9 @@ def test_html_syncs_once_and_computes_five_times_and_writes_one_file(
     assert len(ran.syncs) == 1
     assert granularities == [['total', 'year', 'month', 'week', 'day']]
     assert ran.stdout == f'{out}\n'
-    assert [path.name for path in out.parent.iterdir()] == list(tests.fixtures.reports.REPORT_FILES)
+    assert sorted(path.name for path in out.parent.iterdir()) == sorted(
+        [*tests.fixtures.reports.REPORT_FILES, wambatic.reports.assets.assets_folder_name()]
+    )
 
 
 @pytest.mark.usefixtures('clock_after_fixtures')

@@ -25,6 +25,7 @@ import tests.fixtures.stats
 import wambatic.fetch.base
 import wambatic.fetch.cache
 import wambatic.fetch.errors
+import wambatic.reports.assets
 import wambatic.reports.base
 import wambatic.reports.errors
 import wambatic.reports.html
@@ -624,7 +625,11 @@ def test_report_of_a_fresh_cache_is_the_html_report_document(
         by_author=True,
         clock=tests.fixtures.stats.AFTER_FIXTURE_RANGES,
     )
-    expected = wambatic.reports.html.html_document(report, theme)  # type: ignore[arg-type]
+    expected = wambatic.reports.html.html_document(
+        report,
+        theme,  # type: ignore[arg-type]
+        f'/assets/{wambatic.reports.assets.assets_hash()}/',
+    )
 
     async def scenario() -> tuple[int, str, str]:
         async with serving(
@@ -823,3 +828,58 @@ def test_a_large_orgs_sync_does_not_block_the_pages(
     assert len(set(done_counts)) > 1
     assert done_counts == sorted(done_counts)
     assert report_status == 200
+
+
+def test_assets_are_served_with_their_media_type_and_a_long_cache_lifetime(
+    stats_cache: wambatic.fetch.cache.Cache,
+) -> None:
+    digest = wambatic.reports.assets.assets_hash()
+
+    async def scenario() -> list[httpx.Response]:
+        async with serving(web_settings(), stats_cache) as client:
+            return [
+                await client.get(f'/assets/{digest}/report.js'),
+                await client.get(f'/assets/{digest}/report.css'),
+                await client.get(f'/assets/{digest}/plotly.min.js'),
+            ]
+
+    script, style, plotly = asyncio.run(scenario())
+    assert script.status_code == 200
+    assert script.headers['content-type'] == 'text/javascript; charset=utf-8'
+    assert style.headers['content-type'] == 'text/css; charset=utf-8'
+    assert plotly.content == next(
+        a.content for a in wambatic.reports.assets.page_assets() if a.name == 'plotly.min.js'
+    )
+    for response in (script, style, plotly):
+        assert response.headers['cache-control'] == 'public, max-age=31536000, immutable'
+    assert script.content == next(
+        a.content for a in wambatic.reports.assets.page_assets() if a.name == 'report.js'
+    )
+
+
+@pytest.mark.parametrize('path', ['/assets/000000000000/report.js', '/assets/{digest}/nope.js'])
+def test_another_hash_or_name_is_a_404(stats_cache: wambatic.fetch.cache.Cache, path: str) -> None:
+    url = path.replace('{digest}', wambatic.reports.assets.assets_hash())
+
+    async def scenario() -> httpx.Response:
+        async with serving(web_settings(), stats_cache) as client:
+            return await client.get(url)
+
+    response = asyncio.run(scenario())
+    assert response.status_code == 404
+    assert 'cache-control' not in response.headers
+
+
+def test_the_report_page_points_at_the_assets_of_this_hash(
+    stats_cache: wambatic.fetch.cache.Cache,
+) -> None:
+    async def scenario() -> str:
+        async with serving(
+            web_settings(), stats_cache, clock=tests.fixtures.stats.AFTER_FIXTURE_RANGES
+        ) as client:
+            return (await client.get(f'/report?{HTML_PARAMS}')).text
+
+    text = asyncio.run(scenario())
+    base = f'/assets/{wambatic.reports.assets.assets_hash()}/'
+    assert f'<script defer src="{base}report.js"></script>' in text
+    assert f'<link rel="stylesheet" href="{base}report.css">' in text

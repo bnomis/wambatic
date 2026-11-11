@@ -53,7 +53,7 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 ## Task 2: Write the assets folder beside the page
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** medium
 **Spec Reference:** HTML report 2.0, Module location, API (`Asset`, `page_assets`, `assets_hash`, `assets_folder_name`, `write_assets`, `html_document`, `render_html`), Error handling, Implementation (Offline, with an assets folder), External dependencies; web app 2.0 (`/assets/HASH/NAME`)
@@ -62,28 +62,28 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 **Subtasks:**
 
-- [ ] Vendor `bundle/write-excel-file.min.js` of write-excel-file 4.1.1 (from the npm tarball `https://registry.npmjs.org/write-excel-file/-/write-excel-file-4.1.1.tgz`) as `src/wambatic/reports/vendor/write-excel-file.min.js`, with its `LICENSE` beside it
-- [ ] Create `src/wambatic/reports/assets.py` with `Asset`, `page_assets()` (cached; `plotly.min.js` from `plotly.offline.get_plotlyjs()`, `write-excel-file.min.js`, `tables.js`, `report.js`, `report.css` with the palette tokens filled), `assets_hash()`, `assets_folder_name()` and `write_assets(directory)`, writing a temporary sibling directory renamed into place, keeping an existing folder, and raising `OutputError` (`cannot write PATH: REASON`) on failure. Record `WRITE_EXCEL_FILE_VERSION = '4.1.1'` and its SHA-256 in the module
-- [ ] Add an empty `templates/tables.js` placeholder (Tasks 5 and 6 fill it), and check that `uv_build` ships `vendor/` and every template in the wheel
-- [ ] Change `html_document(report, theme, assets_url)` so `report.html` links `report.css` and loads the scripts with `<script defer src=...>` under `assets_url`, in the order `plotly.min.js`, `write-excel-file.min.js`, `tables.js`, `report.js`; the page data stays inline
-- [ ] Remove the `# auditme: accept[spec-api-signature-drift]` line above `def html_document(` in `agents/specs/html-report/spec.md`: with `assets_url` built, spec and code agree and `bin/audit-check.sh` must pass without it
-- [ ] Change `render_html` to call `write_assets(out.parent)` first and pass `assets_folder_name() + '/'`; the page is not written if the folder fails
-- [ ] Add the `/assets/{hash}/{name}` route to `web.py` with each asset's media type and `Cache-Control: public, max-age=31536000, immutable`, a 404 for another hash or name, and build `/report` with `assets_url='/assets/' + assets_hash() + '/'`
-- [ ] Add `<p class="assets-missing">` after the header, `This report's files (wambatic-assets-HASH) did not load; keep the page beside that folder.`, shown by default and hidden by `report.css`
-- [ ] Tests in `src/tests/reports/test_html.py`: the hash changes when an asset's content changes; `write_assets` keeps an existing folder and leaves no folder after a failed write; a failed folder write leaves no page; the vendored file's SHA-256 equals the recorded one; the page names only files under `assets_url`. In `src/tests/reports/test_web.py`: `/assets/HASH/report.js` answers with its media type and cache header, another hash is a 404, and `/report` points at `/assets/HASH/`. In `src/tests/reports/test_html_browser.py`: the existing checks pass with requests to the page and its folder allowed and every other request still refused, and a page opened without its folder shows the notice
+- [x] Vendor `bundle/write-excel-file.min.js` of write-excel-file 4.1.1 (from the npm tarball `https://registry.npmjs.org/write-excel-file/-/write-excel-file-4.1.1.tgz`) as `src/wambatic/reports/vendor/write-excel-file.min.js`, with its `LICENSE` beside it
+- [x] Create `src/wambatic/reports/assets.py` with `Asset`, `page_assets()` (cached; `plotly.min.js` from `plotly.offline.get_plotlyjs()`, `write-excel-file.min.js`, `tables.js`, `report.js`, `report.css` with the palette tokens filled), `assets_hash()`, `assets_folder_name()` and `write_assets(directory)`, writing a temporary sibling directory renamed into place, keeping an existing folder, and raising `OutputError` (`cannot write PATH: REASON`) on failure. Record `WRITE_EXCEL_FILE_VERSION = '4.1.1'` and its SHA-256 in the module
+- [x] Add an empty `templates/tables.js` placeholder (Tasks 5 and 6 fill it), and check that `uv_build` ships `vendor/` and every template in the wheel
+- [x] Change `html_document(report, theme, assets_url)` so `report.html` links `report.css` and loads the scripts with `<script defer src=...>` under `assets_url`, in the order `plotly.min.js`, `write-excel-file.min.js`, `tables.js`, `report.js`; the page data stays inline
+- [x] Remove the `# auditme: accept[spec-api-signature-drift]` line above `def html_document(` in `agents/specs/html-report/spec.md`: with `assets_url` built, spec and code agree and `bin/audit-check.sh` must pass without it
+- [x] Change `render_html` to call `write_assets(out.parent)` first and pass `assets_folder_name() + '/'`; the page is not written if the folder fails
+- [x] Add the `/assets/{hash}/{name}` route to `web.py` with each asset's media type and `Cache-Control: public, max-age=31536000, immutable`, a 404 for another hash or name, and build `/report` with `assets_url='/assets/' + assets_hash() + '/'`
+- [x] Add `<p class="assets-missing">` after the header, `This report's files (wambatic-assets-HASH) did not load; keep the page beside that folder.`, shown by default and hidden by `report.css`
+- [x] Tests in `src/tests/reports/test_html.py`: the hash changes when an asset's content changes; `write_assets` keeps an existing folder and leaves no folder after a failed write; a failed folder write leaves no page; the vendored file's SHA-256 equals the recorded one; the page names only files under `assets_url`. In `src/tests/reports/test_web.py`: `/assets/HASH/report.js` answers with its media type and cache header, another hash is a 404, and `/report` points at `/assets/HASH/`. In `src/tests/reports/test_html_browser.py`: the existing checks pass with requests to the page and its folder allowed and every other request still refused, and a page opened without its folder shows the notice
 
 **Acceptance Criteria:**
 
-- [ ] `report --format html` writes the page and `wambatic-assets-HASH/` beside it, and the page opens offline from disk with every chart drawn
-- [ ] A second report in the same directory reuses the folder; a changed asset makes a second folder and leaves the first unchanged
-- [ ] `bin/audit-check.sh` reports no `spec-api-signature-drift` for `html_document`, with the acceptance line removed
+- [x] `report --format html` writes the page and `wambatic-assets-HASH/` beside it, and the page opens offline from disk with every chart drawn
+- [x] A second report in the same directory reuses the folder; a changed asset makes a second folder and leaves the first unchanged
+- [x] `bin/audit-check.sh` reports no `spec-api-signature-drift` for `html_document`, with the acceptance line removed
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/reports/test_html.py src/tests/reports/test_html_browser.py src/tests/reports/test_web.py src/tests/reports/test_web_browser.py src/tests/test_cli.py src/tests/test_package.py` passes
-- [ ] `bin/audit-check.sh` exits 0
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/reports/test_html.py src/tests/reports/test_html_browser.py src/tests/reports/test_web.py src/tests/reports/test_web_browser.py src/tests/test_cli.py src/tests/test_package.py` passes
+- [x] `bin/audit-check.sh` exits 0
 
 **Notes:**
 

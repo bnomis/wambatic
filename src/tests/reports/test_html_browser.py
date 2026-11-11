@@ -8,6 +8,7 @@ import pytest
 
 import tests.fixtures.reports
 import tests.reports.conftest
+import wambatic.reports.assets
 import wambatic.reports.figures
 import wambatic.reports.html
 import wambatic.settings
@@ -44,8 +45,9 @@ def open_report(
         context = chromium.new_context(color_scheme=scheme)
         contexts.append(context)
         page = context.new_page()
+        folder = (out.parent / wambatic.reports.assets.assets_folder_name()).as_uri() + '/'
         requests, problems = tests.reports.conftest.watch_page(
-            page, lambda url: url == out.as_uri()
+            page, lambda url: url == out.as_uri() or url.startswith(folder)
         )
         page.goto(out.as_uri())
         page.wait_for_selector(f'#{FIRST_CHART} .main-svg')
@@ -181,3 +183,34 @@ def test_the_series_take_the_themes_colours(
         f'document.getElementById("{FIRST_CHART}").data[0].marker.color'
     )
     assert colour == wambatic.reports.figures.PALETTE['dark'].categorical[0]
+
+
+def test_a_page_opened_without_its_folder_shows_the_missing_files_notice(
+    org_report: wambatic.reports.html.HtmlReport,
+    tmp_path: pathlib.Path,
+    chromium: playwright.sync_api.Browser,
+) -> None:
+    out = wambatic.reports.html.render_html(org_report, tmp_path / 'out' / 'report.html', 'auto')
+    lonely = tmp_path / 'copy' / 'report.html'
+    lonely.parent.mkdir()
+    lonely.write_bytes(out.read_bytes())
+    context = chromium.new_context()
+    try:
+        page = context.new_page()
+        page.goto(lonely.as_uri())
+        notice = page.locator('.assets-missing')
+        notice.wait_for(state='visible')
+        folder = wambatic.reports.assets.assets_folder_name()
+        assert notice.inner_text() == (
+            f"This report's files ({folder}) did not load; keep the page beside that folder."
+        )
+        assert page.locator('table:not([hidden])').first.is_visible()
+    finally:
+        context.close()
+
+
+def test_a_page_opened_with_its_folder_hides_the_missing_files_notice(
+    open_report: collections.abc.Callable[..., Opened],
+) -> None:
+    opened = open_report()
+    assert not opened.page.locator('.assets-missing').is_visible()

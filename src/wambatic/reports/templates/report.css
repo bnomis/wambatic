@@ -178,3 +178,7 @@ footer .warning {
   color: var(--ink);
   font-weight: 600;
 }
+
+.assets-missing {
+  display: none;
+}

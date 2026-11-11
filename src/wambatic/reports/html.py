@@ -3,9 +3,7 @@ table, built from the results of one request that differ only in granularity."""
 
 import collections.abc
 import dataclasses
-import functools
 import html
-import importlib.resources
 import json
 import os
 import pathlib
@@ -16,6 +14,7 @@ import typing
 
 import plotly.offline
 
+import wambatic.reports.assets
 import wambatic.reports.errors
 import wambatic.reports.figures
 import wambatic.reports.rows
@@ -137,47 +136,6 @@ def check_report(report: HtmlReport) -> None:
             )
 
 
-TEMPLATE_NAMES = (
-    'form.html',
-    'message.html',
-    'progress.html',
-    'progress.js',
-    'report.css',
-    'report.html',
-    'report.js',
-)
-
-
-@functools.cache
-def read_template(name: str) -> str:
-    """The packaged template `name`.
-
-    Raises:
-        OutputError: when the template cannot be read or is not UTF-8.
-    """
-    resource = importlib.resources.files('wambatic.reports') / 'templates' / name
-    try:
-        return resource.read_text(encoding='utf-8')
-    except OSError, UnicodeDecodeError:
-        raise wambatic.reports.errors.OutputError(
-            f'cannot read the report template {name}; reinstall wambatic'
-        ) from None
-
-
-def read_plotlyjs() -> str:
-    """The plotly.js bundled with plotly.
-
-    Raises:
-        OutputError: when the file cannot be read or is not UTF-8.
-    """
-    try:
-        return str(plotly.offline.get_plotlyjs())
-    except OSError, UnicodeDecodeError:
-        raise wambatic.reports.errors.OutputError(
-            'cannot read the plotly.js bundled with plotly; reinstall wambatic'
-        ) from None
-
-
 def escape(text: object) -> str:
     return html.escape(str(text))
 
@@ -188,30 +146,9 @@ def json_for_script(data: object) -> str:
     return ''.join(JSON_ESCAPES.get(char, char) for char in text)
 
 
-def tokens(theme: wambatic.reports.figures.Theme) -> str:
-    """A theme's colours as the CSS custom properties the stylesheet reads."""
-    declarations = {
-        'page': theme.page,
-        'surface': theme.surface,
-        'ink': theme.ink,
-        'ink-secondary': theme.ink_secondary,
-        'grid': theme.grid,
-        **{f'series-{n}': colour for n, colour in enumerate(theme.categorical, 1)},
-        **{f'sequential-{n}': colour for n, colour in enumerate(theme.sequential, 1)},
-    }
-    return '\n  '.join(f'--{name}: {colour};' for name, colour in declarations.items())
-
-
 def theme_attribute(theme: wambatic.settings.Theme) -> str:
     """The `<html>` attribute that fixes a theme; `auto` leaves the choice to the viewer."""
     return '' if theme == 'auto' else f' data-theme="{theme}"'
-
-
-def stylesheet() -> str:
-    palette = wambatic.reports.figures.PALETTE
-    return string.Template(read_template('report.css')).substitute(
-        light=tokens(palette['light']), dark=tokens(palette['dark'])
-    )
 
 
 def cell(text: str, numeric: bool, tag: str = 'td') -> str:
@@ -661,36 +598,62 @@ def page_data(
     }
 
 
-def html_document(report: HtmlReport, theme: wambatic.settings.Theme) -> str:
-    """The whole self-contained page. Pure: the only reads are of this package's templates.
+def asset_tags(assets_url: str) -> tuple[str, str]:
+    """The stylesheet link and the script elements for the files under `assets_url`."""
+    link = (
+        f'<link rel="stylesheet" href="{escape(assets_url)}'
+        f'{wambatic.reports.assets.STYLESHEET_NAME}">'
+    )
+    scripts = '\n'.join(
+        f'<script defer src="{escape(assets_url)}{name}"></script>'
+        for name in wambatic.reports.assets.SCRIPT_NAMES
+    )
+    return link, scripts
+
+
+def html_document(report: HtmlReport, theme: wambatic.settings.Theme, assets_url: str) -> str:
+    """The whole page, which loads its scripts and stylesheet from `assets_url`, a URL path ending
+    in `/`. Pure: the only reads are of this package's templates and assets.
     Raises UsageError when the five results differ in anything but granularity."""
     check_report(report)
     built = build_page_figures(report)
     now = wambatic.reports.rows.popularity_now(report.total)
     languages = wambatic.reports.rows.languages_rows(report.total)
     title = f'wambatic: {wambatic.reports.rows.subject_text(report.total)}'
-    return string.Template(read_template('report.html')).substitute(
+    link, scripts = asset_tags(assets_url)
+    return string.Template(wambatic.reports.assets.read_template('report.html')).substitute(
         theme_attribute=theme_attribute(theme),
         title=escape(title),
-        style=stylesheet(),
+        stylesheet=link,
         header=header_html(report),
+        missing=missing_assets_html(),
         tiles=tiles_html(report.total, now, languages),
         sections=sections_html(report, built, now, languages),
         footer=footer_html(report.total),
         data=json_for_script(page_data(report, theme, built)),
-        plotlyjs=read_plotlyjs(),
-        script=read_template('report.js'),
+        scripts=scripts,
+    )
+
+
+def missing_assets_html() -> str:
+    """The notice shown when the page's folder did not load; only the stylesheet hides it."""
+    return (
+        '<p class="assets-missing">'
+        f"This report's files ({escape(wambatic.reports.assets.assets_folder_name())}) "
+        'did not load; keep the page beside that folder.</p>'
     )
 
 
 def render_html(
     report: HtmlReport, out: pathlib.Path, theme: wambatic.settings.Theme
 ) -> pathlib.Path:
-    """Write `html_document(report, theme)` to `out` and return it. The file is written to a
-    temporary file beside `out` and moved into place, so a failed write leaves `out` as it was
-    and no temporary file behind. Missing parent directories are created. Raises OutputError
-    when the file cannot be written."""
-    document = html_document(report, theme)
+    """Write the assets folder beside `out`, then `html_document(report, theme, ...)` to `out`,
+    and return `out`. The page is written to a temporary file beside `out` and moved into place,
+    so a failed write leaves `out` as it was and no temporary file behind; it is not written when
+    the folder cannot be. Missing parent directories are created. Raises OutputError when either
+    cannot be written."""
+    document = html_document(report, theme, f'{wambatic.reports.assets.assets_folder_name()}/')
+    wambatic.reports.assets.write_assets(out.parent)
     try:
         out.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(

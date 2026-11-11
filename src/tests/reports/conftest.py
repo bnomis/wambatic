@@ -4,7 +4,7 @@ import pathlib
 import playwright.sync_api
 import pytest
 
-import wambatic.reports.html
+import wambatic.reports.assets
 
 # The Chromium that Claude Code's cloud environment preinstalls; Playwright's own is tried first.
 PREINSTALLED_CHROMIUM = pathlib.Path('/opt/pw-browsers/chromium')
@@ -13,9 +13,9 @@ PREINSTALLED_CHROMIUM = pathlib.Path('/opt/pw-browsers/chromium')
 @pytest.fixture(autouse=True)
 def fresh_templates() -> collections.abc.Iterator[None]:
     """Templates are read once per process; a test that makes one unreadable must see the read."""
-    wambatic.reports.html.read_template.cache_clear()
+    wambatic.reports.assets.read_template.cache_clear()
     yield
-    wambatic.reports.html.read_template.cache_clear()
+    wambatic.reports.assets.read_template.cache_clear()
 
 
 def launch_failure(error: playwright.sync_api.Error) -> str:

@@ -96,7 +96,7 @@ mypy_path = 'src'
 explicit_package_bases = true
 
 # plotly ships no py.typed and no stubs (checked on 7.1.0, 2026-10-30), and only
-# wambatic.reports.html imports it, for the plotly.js it bundles.
+# wambatic.reports.html and wambatic.reports.assets import it, for the plotly.js it bundles.
 [[tool.mypy.overrides]]
 module = ['plotly', 'plotly.*']
 ignore_missing_imports = true

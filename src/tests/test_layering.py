@@ -3,7 +3,7 @@ import pathlib
 
 SOURCE = pathlib.Path(__file__).parents[1] / 'wambatic'
 COMPOSITION_ROOTS = ('wambatic.__main__', 'wambatic.cli')
-PLOTLY_IMPORTER = 'wambatic.reports.html'
+PLOTLY_IMPORTERS = ('wambatic.reports.assets', 'wambatic.reports.html')
 FETCH_IMPORTERS = ('wambatic.reports.service', 'wambatic.reports.web')
 
 
@@ -36,7 +36,7 @@ def violations(package_dir: pathlib.Path) -> list[str]:
     found: list[str] = []
     for path in sorted(package_dir.rglob('*.py')):
         module = module_name(path, package_dir)
-        if module != PLOTLY_IMPORTER and any(
+        if module not in PLOTLY_IMPORTERS and any(
             is_within(name, 'plotly') for name in sorted(all_imports(path))
         ):
             found.append(f'{module} imports plotly')

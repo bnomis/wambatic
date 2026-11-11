@@ -24,6 +24,7 @@ import wambatic.fetch.base
 import wambatic.fetch.cache
 import wambatic.fetch.errors
 import wambatic.fetch.ratelimit
+import wambatic.reports.assets
 import wambatic.reports.base
 import wambatic.reports.errors
 import wambatic.reports.html
@@ -45,6 +46,7 @@ BAD_REQUEST = (
 NOT_FOUND = (wambatic.fetch.errors.NotFoundError, wambatic.stats.errors.EmptySubjectError)
 # auditme: accept[non-alphabetical-literal] loopback names before addresses
 LOOPBACK_HOSTS = ('localhost', '127.0.0.1', '[::1]')
+ASSET_HEADERS = {'Cache-Control': 'public, max-age=31536000, immutable'}
 PAGE_PATHS = frozenset({'/', '/report'})
 TRUE_VALUES = frozenset({'1', 'on', 'true'})
 
@@ -332,15 +334,16 @@ def make_app(
     default_target: str | None = None,
     clock: collections.abc.Callable[[], datetime.datetime] = wambatic.fetch.ratelimit.utc_now,
 ) -> fastapi.FastAPI:
-    for name in wambatic.reports.html.TEMPLATE_NAMES:
-        wambatic.reports.html.read_template(name)
+    for name in wambatic.reports.assets.TEMPLATE_NAMES:
+        wambatic.reports.assets.read_template(name)
+    wambatic.reports.assets.page_assets()
     jobs = Jobs()
     theme = settings.report.html_theme
 
     def page(name: str, **values: str) -> str:
-        return string.Template(wambatic.reports.html.read_template(name)).substitute(
+        return string.Template(wambatic.reports.assets.read_template(name)).substitute(
             theme_attribute=wambatic.reports.html.theme_attribute(theme),
-            style=wambatic.reports.html.stylesheet(),
+            style=wambatic.reports.assets.stylesheet(),
             **values,
         )
 
@@ -512,15 +515,26 @@ def make_app(
                 target=wambatic.reports.html.escape(query.key[0]),
                 retry=wambatic.reports.html.escape(reload_path(request.url.components, None)),
                 data=wambatic.reports.html.json_for_script(data),
-                script=wambatic.reports.html.read_template('progress.js'),
+                script=wambatic.reports.assets.read_template('progress.js'),
             )
             return fastapi.responses.HTMLResponse(body, status_code=202)
         document = await asyncio.to_thread(
             wambatic.reports.html.html_document,
             wambatic.reports.html.html_report(outcome, query.request.granularity),
             theme,
+            f'/assets/{wambatic.reports.assets.assets_hash()}/',
         )
         return fastapi.responses.HTMLResponse(document)
+
+    @app.get('/assets/{digest}/{name}', include_in_schema=False)
+    async def asset(digest: str, name: str) -> fastapi.Response:
+        found = next(
+            (a for a in wambatic.reports.assets.page_assets() if a.name == name),
+            None,
+        )
+        if found is None or digest != wambatic.reports.assets.assets_hash():
+            return fastapi.responses.JSONResponse({'error': 'no such file'}, status_code=404)
+        return fastapi.Response(found.content, media_type=found.media_type, headers=ASSET_HEADERS)
 
     @app.get('/api/stats')
     async def stats(

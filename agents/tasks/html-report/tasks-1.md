@@ -240,7 +240,7 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 ## Task 7: Move the sync jobs to `jobs.py`
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** small
 **Spec Reference:** GraphQL API 1.0, Module location; web app 2.0, Module location and API
@@ -249,21 +249,21 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 **Subtasks:**
 
-- [ ] Move `SyncJob`, `Jobs`, `progress_json` and the sync-or-compute step `results_or_job` from `src/wambatic/reports/web.py` to `src/wambatic/reports/jobs.py` unchanged; `results_or_job` takes what it reads from `make_app`'s closure (settings, cache, jobs, clock and the job's run function) as arguments
-- [ ] Update `web.py` to import them, and move their tests from `src/tests/reports/test_web.py` to `src/tests/reports/test_jobs.py`
-- [ ] Update `src/tests/test_layering.py` and `src/tests/test_package.py` if they list the reports modules
+- [x] Move `SyncJob`, `Jobs`, `progress_json` and the sync-or-compute step `results_or_job` from `src/wambatic/reports/web.py` to `src/wambatic/reports/jobs.py` unchanged; `results_or_job` takes what it reads from `make_app`'s closure (settings, cache, jobs, clock and the job's run function) as arguments
+- [x] Update `web.py` to import them, and move their tests from `src/tests/reports/test_web.py` to `src/tests/reports/test_jobs.py`
+- [x] Update `src/tests/test_layering.py` and `src/tests/test_package.py` if they list the reports modules
 
 **Acceptance Criteria:**
 
-- [ ] Every web app behaviour is unchanged: the existing web tests pass with no other edit than their imports
-- [ ] `jobs.py` imports nothing from `web.py`
+- [x] Every web app behaviour is unchanged: the existing web tests pass with no other edit than their imports
+- [x] `jobs.py` imports nothing from `web.py`
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/reports/test_jobs.py src/tests/reports/test_web.py src/tests/reports/test_service.py src/tests/test_layering.py src/tests/test_package.py` passes
-- [ ] `bin/audit-check.sh` exits 0
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/reports/test_jobs.py src/tests/reports/test_web.py src/tests/reports/test_service.py src/tests/test_layering.py src/tests/test_package.py` passes
+- [x] `bin/audit-check.sh` exits 0
 
 **Notes:**
 

@@ -4,7 +4,11 @@ import pathlib
 SOURCE = pathlib.Path(__file__).parents[1] / 'wambatic'
 COMPOSITION_ROOTS = ('wambatic.__main__', 'wambatic.cli')
 PLOTLY_IMPORTERS = ('wambatic.reports.assets', 'wambatic.reports.html')
-FETCH_IMPORTERS = ('wambatic.reports.service', 'wambatic.reports.web')
+FETCH_IMPORTERS = (
+    'wambatic.reports.jobs',
+    'wambatic.reports.service',
+    'wambatic.reports.web',
+)
 
 
 def all_imports(path: pathlib.Path) -> set[str]:

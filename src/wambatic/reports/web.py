@@ -174,7 +174,12 @@ def make_app(
         await jobs.close()
 
     app = fastapi.FastAPI(
-        title='wambatic', version=wambatic.version.VERSION, lifespan=lifespan, redoc_url=None
+        title='wambatic',
+        version=wambatic.version.VERSION,
+        lifespan=lifespan,
+        openapi_url=None,
+        docs_url=None,
+        redoc_url=None,
     )
 
     @app.middleware('http')
@@ -263,11 +268,7 @@ def make_app(
         outcome = await results_or_job(query, wambatic.reports.html.period_requests(query.request))
         if isinstance(outcome, wambatic.reports.jobs.SyncJob):
             reload = reload_path(request.url.components, outcome.id)
-            data = {
-                'job': outcome.id,
-                'progress': f'/api/progress?job={outcome.id}',
-                'reload': reload,
-            }
+            data = {'job': outcome.id, 'reload': reload}
             body = page(
                 'progress.html',
                 target=wambatic.reports.html.escape(query.key[0]),
@@ -293,28 +294,6 @@ def make_app(
         if found is None or digest != wambatic.reports.assets.assets_hash():
             return fastapi.responses.JSONResponse({'error': 'no such file'}, status_code=404)
         return fastapi.Response(found.content, media_type=found.media_type, headers=ASSET_HEADERS)
-
-    @app.get('/api/stats')
-    async def stats(
-        raw: typing.Annotated[wambatic.reports.jobs.RawQuery, fastapi.Depends(raw_query)],
-    ) -> fastapi.responses.JSONResponse:
-        """The result as `report --format json` prints it, or 202 and a job to follow."""
-        query = wambatic.reports.jobs.parse_query(settings, raw, clock(), page=False)
-        outcome = await results_or_job(query, [query.request])
-        if isinstance(outcome, wambatic.reports.jobs.SyncJob):
-            return fastapi.responses.JSONResponse(
-                {'job': outcome.id, 'progress': f'/api/progress?job={outcome.id}'},
-                status_code=202,
-            )
-        return fastapi.responses.JSONResponse(wambatic.reports.base.result_to_dict(outcome[0]))
-
-    @app.get('/api/progress')
-    async def progress(job: JobId = None) -> fastapi.responses.JSONResponse:
-        """How a sync job is going."""
-        found = jobs.get(job) if job else None
-        if found is None:
-            return fastapi.responses.JSONResponse({'error': 'no such job'}, status_code=404)
-        return fastapi.responses.JSONResponse(wambatic.reports.jobs.progress_json(found))
 
     return app
 

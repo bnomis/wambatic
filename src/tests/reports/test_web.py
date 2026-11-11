@@ -7,7 +7,6 @@ import ipaddress
 import json
 import pathlib
 import re
-import subprocess
 import time
 import typing
 
@@ -75,15 +74,27 @@ async def serving(
             yield client
 
 
+JOB_QUERY = (
+    'query($id: ID!) { job(id: $id) { state reposListed reposPending reposDone rowsWritten '
+    'error status } }'
+)
+
+
+async def job_progress(client: httpx.AsyncClient, job_id: str) -> dict[str, typing.Any] | None:
+    """The `job` query of the progress page, as the page sends it."""
+    response = await client.post('/graphql', json={'query': JOB_QUERY, 'variables': {'id': job_id}})
+    return typing.cast(dict[str, typing.Any] | None, response.json()['data']['job'])
+
+
 async def finished(
     client: httpx.AsyncClient, job_id: str, seconds: float = 10.0
 ) -> dict[str, typing.Any]:
     """The progress of a job once it is done or failed."""
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
-        body = (await client.get(f'/api/progress?job={job_id}')).json()
-        if body['state'] in ('done', 'failed'):
-            return typing.cast(dict[str, typing.Any], body)
+        body = await job_progress(client, job_id)
+        if body is not None and body['state'] not in ('QUEUED', 'LISTING', 'SYNCING'):
+            return body
         await asyncio.sleep(0.02)
     raise AssertionError('the job did not finish')
 
@@ -109,50 +120,15 @@ def direct(
     )
 
 
-@pytest.mark.parametrize('by', ['month', 'total'])
-def test_api_stats_of_a_fresh_cache_is_the_json_report(
-    stats_cache: wambatic.fetch.cache.Cache,
-    stats_fetcher: wambatic.fetch.base.Fetcher,
-    by: str,
+@pytest.mark.parametrize('path', ['/api/progress', '/api/stats', '/docs', '/openapi.json'])
+def test_the_removed_rest_and_openapi_routes_answer_404(
+    stats_cache: wambatic.fetch.cache.Cache, path: str
 ) -> None:
-    settings = web_settings()
-    expected = direct(stats_fetcher, settings, by)
-
-    async def scenario() -> tuple[int, object]:
-        async with serving(settings, stats_cache) as client:
-            response = await client.get(f'/api/stats?{FRESH_PARAMS}&by={by}')
-            return response.status_code, response.json()
-
-    assert asyncio.run(scenario()) == (200, expected)
-
-
-@pytest.mark.parametrize(
-    ('params', 'message'),
-    [
-        ('target=a/b/c', 'the target must be one of'),
-        ('', 'target is required'),
-        ('target=org:octo-org&by=hour', '--by must be one of'),
-        ('target=org:octo-org&since=2026-1-1', '--since must be a date written YYYY-MM-DD'),
-        ('target=org:octo-org&groups=nope', 'unknown groups: nope'),
-        ('target=org:octo-org&tz=Mars/Base', 'stats.timezone is not a known time zone'),
-        ('target=org:octo-org&commit_tz=local', '--commit-tz must be report or author'),
-        ('target=user:octocat&by_author=1', '--by-author is for an organisation'),
-        ('target=org:octo-org&since=2027-01-31&until=2026-10-01', ''),
-        ('target=org:octo-org&since=0001-01-01', '--since may not be before 2008-01-01'),
-        ('target=org:octo-org&until=2027-01-22', '--until may not be after 2027-01-21'),
-    ],
-)
-def test_invalid_parameters_answer_400_with_the_cli_message(
-    stats_cache: wambatic.fetch.cache.Cache, params: str, message: str
-) -> None:
-    async def scenario() -> tuple[int, str]:
+    async def scenario() -> int:
         async with serving(web_settings(), stats_cache) as client:
-            response = await client.get(f'/api/stats?{params}')
-            return response.status_code, response.json()['error']
+            return (await client.get(path)).status_code
 
-    status, error = asyncio.run(scenario())
-    assert status == 400
-    assert message in error
+    assert asyncio.run(scenario()) == 404
 
 
 def test_a_report_page_with_a_date_before_github_answers_400(
@@ -163,144 +139,6 @@ def test_a_report_page_with_a_date_before_github_answers_400(
             return (await client.get('/report?target=org:octo-org&since=0001-01-01')).status_code
 
     assert asyncio.run(scenario()) == 400
-
-
-def test_a_stale_cache_answers_202_and_the_job_result_needs_no_second_sync(
-    monkeypatch: pytest.MonkeyPatch,
-    make_client: tests.conftest.MakeClient,
-    stats_cache: wambatic.fetch.cache.Cache,
-) -> None:
-    monkeypatch.setenv('GITHUB_TOKEN', 'test-token')
-    upstream = tests.fixtures.reports.alpha_upstream()
-
-    async def scenario() -> tuple[int, dict[str, typing.Any], int, int, int, int]:
-        async with tests.fixtures.fetch.server.ReplayServer({}, upstream.respond) as server:
-            tests.fixtures.reports.install_replay(monkeypatch, make_client, server)
-            async with serving(web_settings('0s'), stats_cache) as client:
-                first = await client.get(f'/api/stats?{ALPHA_PARAMS}')
-                job = first.json()['job']
-                assert first.json()['progress'] == f'/api/progress?job={job}'
-                done = await finished(client, job)
-                requests = len(server.received)
-                second = await client.get(f'/api/stats?{ALPHA_PARAMS}&job={job}')
-                return (
-                    first.status_code,
-                    done,
-                    second.status_code,
-                    len(server.received) - requests,
-                    requests,
-                    int(second.json()['format_version']),
-                )
-
-    status, done, second_status, extra, requests, version = asyncio.run(scenario())
-    assert (status, second_status, extra, version) == (202, 200, 0, 1)
-    assert requests > 0
-    assert done['state'] == 'done'
-    assert done['repos_listed'] == 1
-    assert done['repos_done'] == done['repos_pending']
-    assert done['error'] is None
-
-
-def test_a_missing_repository_answers_404_through_its_job(
-    monkeypatch: pytest.MonkeyPatch,
-    make_client: tests.conftest.MakeClient,
-    stats_cache: wambatic.fetch.cache.Cache,
-) -> None:
-    monkeypatch.setenv('GITHUB_TOKEN', 'test-token')
-    upstream = tests.fixtures.reports.alpha_upstream()
-
-    async def scenario() -> tuple[int, str, dict[str, typing.Any]]:
-        async with tests.fixtures.fetch.server.ReplayServer({}, upstream.respond) as server:
-            tests.fixtures.reports.install_replay(monkeypatch, make_client, server)
-            async with serving(web_settings('0s'), stats_cache) as client:
-                params = 'target=repo:ghost/none'
-                job = (await client.get(f'/api/stats?{params}')).json()['job']
-                done = await finished(client, job)
-                again = await client.get(f'/api/stats?{params}&job={job}')
-                return again.status_code, again.json()['error'], done
-
-    status, error, done = asyncio.run(scenario())
-    assert (status, done['state'], done['status']) == (404, 'failed', 404)
-    assert error == done['error']
-
-
-def test_a_sync_without_a_token_fails_502_naming_github_token(
-    monkeypatch: pytest.MonkeyPatch, stats_cache: wambatic.fetch.cache.Cache
-) -> None:
-    def no_gh(*args: object, **kwargs: object) -> typing.NoReturn:
-        raise FileNotFoundError
-
-    monkeypatch.setattr(subprocess, 'run', no_gh)
-
-    async def scenario() -> tuple[int, str]:
-        async with serving(web_settings('0s'), stats_cache) as client:
-            job = (await client.get(f'/api/stats?{ALPHA_PARAMS}')).json()['job']
-            await finished(client, job)
-            response = await client.get(f'/api/stats?{ALPHA_PARAMS}&job={job}')
-            return response.status_code, response.json()['error']
-
-    status, error = asyncio.run(scenario())
-    assert status == 502
-    assert 'GITHUB_TOKEN' in error
-
-
-def test_an_unexpected_error_answers_500_without_a_traceback_or_the_message(
-    monkeypatch: pytest.MonkeyPatch, stats_cache: wambatic.fetch.cache.Cache
-) -> None:
-    def boom(result: object) -> dict[str, object]:
-        raise RuntimeError('boom with a secret detail')
-
-    monkeypatch.setattr(wambatic.reports.base, 'result_to_dict', boom)
-
-    async def scenario() -> tuple[int, str]:
-        async with serving(web_settings(), stats_cache) as client:
-            response = await client.get(f'/api/stats?{FRESH_PARAMS}')
-            return response.status_code, response.text
-
-    status, text = asyncio.run(scenario())
-    assert status == 500
-    assert json.loads(text) == {'error': 'internal error; see the server log'}
-    assert 'Traceback' not in text
-
-
-def test_an_unexpected_error_logs_its_message_and_traceback_without_the_token(
-    monkeypatch: pytest.MonkeyPatch, stats_cache: wambatic.fetch.cache.Cache
-) -> None:
-    token = 'ghp_fake_token_for_tests'
-    monkeypatch.setenv('GITHUB_TOKEN', token)
-
-    def boom(result: object) -> dict[str, object]:
-        raise RuntimeError(f'request failed with {token}')
-
-    monkeypatch.setattr(wambatic.reports.base, 'result_to_dict', boom)
-    messages: list[str] = []
-    sink = loguru.logger.add(messages.append, level='ERROR', diagnose=False)
-
-    async def scenario() -> int:
-        async with serving(web_settings(), stats_cache) as client:
-            return (await client.get(f'/api/stats?{FRESH_PARAMS}')).status_code
-
-    try:
-        status = asyncio.run(scenario())
-    finally:
-        loguru.logger.remove(sink)
-    log = ''.join(messages)
-    assert status == 500
-    assert 'Unexpected error: request failed with ***' in log
-    assert 'Traceback' in log
-    assert token not in log
-
-
-def test_the_progress_of_an_unknown_job_is_404(stats_cache: wambatic.fetch.cache.Cache) -> None:
-    async def scenario() -> list[tuple[int, object]]:
-        async with serving(web_settings(), stats_cache) as client:
-            found = []
-            for query in ('?job=nope', ''):
-                response = await client.get(f'/api/progress{query}')
-                found.append((response.status_code, response.json()))
-            return found
-
-    assert asyncio.run(scenario()) == [(404, {'error': 'no such job'})] * 2
 
 
 @pytest.mark.parametrize(
@@ -345,42 +183,13 @@ def test_no_cors_header_is_sent(stats_cache: wambatic.fetch.cache.Cache) -> None
             headers = {'Origin': 'https://example.com'}
             return [
                 dict((await client.get(path, headers=headers)).headers)
-                for path in (f'/api/stats?{FRESH_PARAMS}', '/', '/api/progress?job=x')
+                for path in ('/graphql?query=%7Bversion%7D', '/', '/report?target=x')
             ]
 
     assert all(
         not any(name.lower().startswith('access-control') for name in found)
         for found in asyncio.run(scenario())
     )
-
-
-def test_openapi_lists_the_data_routes_with_every_parameter(
-    stats_cache: wambatic.fetch.cache.Cache,
-) -> None:
-    async def scenario() -> tuple[dict[str, typing.Any], int, int]:
-        async with serving(web_settings(), stats_cache) as client:
-            schema = (await client.get('/openapi.json')).json()
-            return (
-                schema,
-                (await client.get('/redoc')).status_code,
-                (await client.get('/docs')).status_code,
-            )
-
-    schema, redoc, docs = asyncio.run(scenario())
-    assert sorted(schema['paths']) == ['/api/progress', '/api/stats']
-    parameters = {item['name'] for item in schema['paths']['/api/stats']['get']['parameters']}
-    assert parameters == {
-        'target',
-        'by',
-        'since',
-        'until',
-        'groups',
-        'by_author',
-        'tz',
-        'commit_tz',
-        'job',
-    }
-    assert (redoc, docs) == (404, 200)
 
 
 # The pages
@@ -546,7 +355,7 @@ def test_report_of_a_stale_cache_shows_progress_then_the_report_without_a_second
 
     status, text, data, second_status, extra, report = asyncio.run(scenario())
     assert status == 202
-    assert data['progress'] == f'/api/progress?job={data["job"]}'
+    assert set(data) == {'job', 'reload'}
     assert data['reload'].startswith('/report?target=repo%3Aocto-org%2Falpha&')
     assert data['reload'].endswith(f'&job={data["job"]}')
     assert 'repo:octo-org/alpha' in text
@@ -563,25 +372,24 @@ def test_a_failed_job_is_reported_once_then_a_new_request_starts_a_new_job(
     monkeypatch.setenv('GITHUB_TOKEN', 'test-token')
     upstream = tests.fixtures.reports.alpha_upstream()
 
-    async def scenario() -> tuple[int, str, int, bool]:
+    async def scenario() -> tuple[str, int, dict[str, typing.Any] | None, bool]:
         async with tests.fixtures.fetch.server.ReplayServer({}, upstream.respond) as server:
             tests.fixtures.reports.install_replay(monkeypatch, make_client, server)
             async with serving(web_settings('0s'), stats_cache) as client:
                 params = 'target=repo:ghost/none'
                 first = await client.get(f'/report?{params}')
                 data = progress_data(first.text)
-                await finished(client, data['job'])
-                reported = await client.get(data['reload'])
-                gone = await client.get(f'/api/progress?job={data["job"]}')
+                reported = await finished(client, data['job'])
+                gone = await job_progress(client, data['job'])
                 again = await client.get(f'/report?{params}')
                 return (
-                    reported.status_code,
-                    reported.headers['content-type'],
-                    gone.status_code,
+                    reported['state'],
+                    reported['status'],
+                    gone,
                     progress_data(again.text)['job'] != data['job'],
                 )
 
-    assert asyncio.run(scenario()) == (404, 'text/html; charset=utf-8', 404, True)
+    assert asyncio.run(scenario()) == ('FAILED', 404, None, True)
 
 
 # Loopback
@@ -657,14 +465,15 @@ def test_a_large_orgs_sync_does_not_block_the_pages(
                 while True:
                     page, seconds = await timed(client, '/')
                     assert page.status_code == 200
-                    progress, more = await timed(client, data['progress'])
-                    waits += [seconds, more]
-                    body = progress.json()
-                    assert body['state'] != 'failed', body['error']
-                    if body['state'] == 'done':
+                    started = time.monotonic()
+                    body = await job_progress(client, data['job'])
+                    waits += [seconds, time.monotonic() - started]
+                    assert body is not None
+                    assert body['state'] != 'FAILED', body['error']
+                    if body['state'] == 'DONE':
                         break
-                    if body['repos_done'] is not None:
-                        done_counts.append(body['repos_done'])
+                    if body['reposDone'] is not None:
+                        done_counts.append(body['reposDone'])
                     await asyncio.sleep(0.2)
                 report = await client.get(data['reload'])
                 return first.status_code, waits, done_counts, report.status_code, first_seconds

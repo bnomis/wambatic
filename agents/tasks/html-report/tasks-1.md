@@ -311,7 +311,7 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 ## Task 9: Remove the REST routes and poll GraphQL from the progress page
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** medium
 **Spec Reference:** GraphQL API 1.0, Implementation (Removed); web app 2.0, Implementation (routes, Sync jobs, Error handling)
@@ -320,21 +320,21 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 **Subtasks:**
 
-- [ ] Remove the `/api/stats` and `/api/progress` routes from `web.py`, and build the app with `openapi_url=None, docs_url=None, redoc_url=None`
-- [ ] Change `templates/progress.js` to `POST /graphql` with `Content-Type: application/json` and the `job` query of the web app spec, once a second, and load the report with `&job=ID` when the state is `DONE`, or show the error when `FAILED`
-- [ ] Update `src/tests/reports/test_web.py`: drop the REST tests the GraphQL tests now cover, assert the four removed paths answer 404, and keep the `/report` and progress-page tests; update `src/tests/reports/test_web_browser.py` so the progress page becomes the report through GraphQL polling with no request outside the server
+- [x] Remove the `/api/stats` and `/api/progress` routes from `web.py`, and build the app with `openapi_url=None, docs_url=None, redoc_url=None`
+- [x] Change `templates/progress.js` to `POST /graphql` with `Content-Type: application/json` and the `job` query of the web app spec, once a second, and load the report with `&job=ID` when the state is `DONE`, or show the error when `FAILED`
+- [x] Update `src/tests/reports/test_web.py`: drop the REST tests the GraphQL tests now cover, assert the four removed paths answer 404, and keep the `/report` and progress-page tests; update `src/tests/reports/test_web_browser.py` so the progress page becomes the report through GraphQL polling with no request outside the server
 
 **Acceptance Criteria:**
 
-- [ ] A `/report` request that needs a sync shows the progress page, which becomes the report with every chart drawn
-- [ ] `GET /api/stats`, `GET /api/progress`, `GET /openapi.json` and `GET /docs` answer 404
+- [x] A `/report` request that needs a sync shows the progress page, which becomes the report with every chart drawn
+- [x] `GET /api/stats`, `GET /api/progress`, `GET /openapi.json` and `GET /docs` answer 404
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/reports/test_web.py src/tests/reports/test_web_browser.py src/tests/reports/test_api.py` passes
-- [ ] `bin/audit-check.sh` exits 0
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/reports/test_web.py src/tests/reports/test_web_browser.py src/tests/reports/test_api.py` passes
+- [x] `bin/audit-check.sh` exits 0
 
 **Notes:**
 

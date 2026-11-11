@@ -1,7 +1,7 @@
 # GraphQL API
 
 **Version:** 1.1
-**Status:** proposed
+**Status:** implemented
 **Date:** 2026-11-11
 
 The web app's API: one GraphQL endpoint, `/graphql`, that answers stats for a target, starts or joins a sync, and reports how a sync job is going. It replaces the REST routes `/api/stats` and `/api/progress` and FastAPI's `/openapi.json` and `/docs`; the user decided on 2026-11-11 to replace REST rather than add GraphQL beside it, and chose [Strawberry](https://strawberry.rocks/) as the library. Part of [Reports](../reports/spec.md); served by the [Web app](../web-app/spec.md) 2.0.

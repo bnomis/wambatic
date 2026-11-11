@@ -382,7 +382,7 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 ## Task 11: Close the list
 
-**Status:** todo
+**Status:** done
 **Priority:** medium
 **Complexity:** small
 **Spec Reference:** implementation order 1.14, step 16; every spec section above (closing)
@@ -391,22 +391,22 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 **Subtasks:**
 
-- [ ] Mark step 16 `done` in `agents/specs/implementation-order.md`, linking this list, and set its `**Status:**` to `implemented`
-- [ ] Set the spec's `**Status:**` to `implemented` in `agents/specs/html-report/spec.md`, `agents/specs/graphql-api/spec.md`, `agents/specs/web-app/spec.md`, `agents/specs/reports/spec.md` and `agents/specs/user-guide/spec.md`
-- [ ] Add the list to `agents/tasks/index.md` if it is not there
+- [x] Mark step 16 `done` in `agents/specs/implementation-order.md`, linking this list, and set its `**Status:**` to `implemented`
+- [x] Set the spec's `**Status:**` to `implemented` in `agents/specs/html-report/spec.md`, `agents/specs/graphql-api/spec.md`, `agents/specs/web-app/spec.md`, `agents/specs/reports/spec.md` and `agents/specs/user-guide/spec.md`
+- [x] Add the list to `agents/tasks/index.md` if it is not there
 
 **Acceptance Criteria:**
 
-- [ ] Every spec this list builds says `implemented`, and step 16 says `done`
+- [x] Every spec this list builds says `implemented`, and step 16 says `done`
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] `uv sync --group docs` succeeds
-- [ ] `mkdocs build --strict` exits 0
-- [ ] `pre-commit run --all-files` exits 0
-- [ ] `bin/audit-check.sh` exits 0
-- [ ] `pytest src/tests/reports src/tests/test_cli.py src/tests/test_docs.py src/tests/test_layering.py src/tests/test_package.py src/tests/test_screenshots.py` passes: every test that reaches `reports`, the package this list changes
+- [x] `source bin/activate.sh` succeeds
+- [x] `uv sync --group docs` succeeds
+- [x] `mkdocs build --strict` exits 0
+- [x] `pre-commit run --all-files` exits 0
+- [x] `bin/audit-check.sh` exits 0
+- [x] `pytest src/tests/reports src/tests/test_cli.py src/tests/test_docs.py src/tests/test_layering.py src/tests/test_package.py src/tests/test_screenshots.py` passes: every test that reaches `reports`, the package this list changes
 
 **Notes:**
 

@@ -1,7 +1,7 @@
 # HTML report
 
 **Version:** 2.0
-**Status:** proposed
+**Status:** implemented
 **Date:** 2026-11-11
 
 The static HTML report of `--format html`, also served by the web app: its figures, page layout, tabs, tables, granularity switch, palette and themes, table export, and the headless-browser test. Part of [Reports](../reports/spec.md).

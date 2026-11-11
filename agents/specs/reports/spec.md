@@ -1,7 +1,7 @@
 # Reports
 
 **Version:** 1.16
-**Status:** proposed
+**Status:** implemented
 **Date:** 2026-11-11
 
 The three ways a user sees a `StatsResult`: a terminal report, a static HTML report (a page and its assets folder), and a local web app with a GraphQL API. All three render the same result object, so they never disagree. It also defines the `wambatic` command line.

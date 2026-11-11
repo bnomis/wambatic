@@ -1,7 +1,7 @@
 # User guide
 
 **Version:** 1.1
-**Status:** proposed
+**Status:** implemented
 **Date:** 2026-11-11
 
 A user guide for wambatic: an [MkDocs](https://www.mkdocs.org/) site in the

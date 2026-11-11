@@ -16,7 +16,7 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 ## Task 1: Check that Strawberry works under Python 3.14
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** small
 **Spec Reference:** GraphQL API 1.1, External dependencies; review-1 item 17
@@ -25,22 +25,22 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 **Subtasks:**
 
-- [ ] Starting-point check: `grep -rnwE 'assets_hash|page_assets|write_assets|graphql_router|ApiContext|SyncNeeded' src/wambatic` finds nothing, and `src/wambatic/reports/api.py`, `jobs.py` and `assets.py` do not exist; if any does, stop the task as `blocked` naming what was found
-- [ ] Add `strawberry-graphql[fastapi]==0.338.0` to the runtime dependencies in `pyproject.toml` (an exact pin, as the GraphQL API spec says) and run `uv lock` and `uv sync`
-- [ ] Add `openpyxl` to the development dependencies (for Task 6's browser test) and lock it
-- [ ] Write `src/tests/reports/test_api.py` with one test: a throwaway `strawberry.Schema` with a `hello: String!` query, mounted on a `fastapi.FastAPI` with `strawberry.fastapi.GraphQLRouter`, answers `POST /graphql {"query": "{ hello }"}` over `httpx.ASGITransport` with `{"data": {"hello": "world"}}`
-- [ ] If the install or the test fails under Python 3.14, stop the task as `blocked` with the error; do not try another version or library
+- [x] Starting-point check: `grep -rnwE 'assets_hash|page_assets|write_assets|graphql_router|ApiContext|SyncNeeded' src/wambatic` finds nothing, and `src/wambatic/reports/api.py`, `jobs.py` and `assets.py` do not exist; if any does, stop the task as `blocked` naming what was found
+- [x] Add `strawberry-graphql[fastapi]==0.338.0` to the runtime dependencies in `pyproject.toml` (an exact pin, as the GraphQL API spec says) and run `uv lock` and `uv sync`
+- [x] Add `openpyxl` to the development dependencies (for Task 6's browser test) and lock it
+- [x] Write `src/tests/reports/test_api.py` with one test: a throwaway `strawberry.Schema` with a `hello: String!` query, mounted on a `fastapi.FastAPI` with `strawberry.fastapi.GraphQLRouter`, answers `POST /graphql {"query": "{ hello }"}` over `httpx.ASGITransport` with `{"data": {"hello": "world"}}`
+- [x] If the install or the test fails under Python 3.14, stop the task as `blocked` with the error; do not try another version or library
 
 **Acceptance Criteria:**
 
-- [ ] `uv run python -c 'import importlib.metadata, strawberry.fastapi; print(importlib.metadata.version("strawberry-graphql"))'` prints `0.338.0` under Python 3.14, with `exclude-newer` unchanged
-- [ ] The throwaway query test passes, and mypy accepts the test file
+- [x] `uv run python -c 'import importlib.metadata, strawberry.fastapi; print(importlib.metadata.version("strawberry-graphql"))'` prints `0.338.0` under Python 3.14, with `exclude-newer` unchanged
+- [x] The throwaway query test passes, and mypy accepts the test file
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/reports/test_api.py src/tests/test_package.py` passes
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/reports/test_api.py src/tests/test_package.py` passes
 
 **Notes:**
 

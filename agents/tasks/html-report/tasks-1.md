@@ -16,7 +16,7 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 ## Task 1: Check that Strawberry works under Python 3.14
 
-**Status:** todo
+**Status:** in-progress
 **Priority:** high
 **Complexity:** small
 **Spec Reference:** GraphQL API 1.0, External dependencies; review-1 item 17
@@ -46,6 +46,7 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 - Key files: `pyproject.toml`, `uv.lock`, `src/tests/reports/test_api.py`
 - Task 8 replaces the throwaway test with the real schema's tests
+- BLOCKED (2026-11-11): `uv lock` cannot resolve `strawberry-graphql[fastapi]==0.341.2`. The project's `[tool.uv] exclude-newer = "14 days"` quarantine hides it: it was published 2026-11-07, so it only becomes eligible on 2026-11-21. Needs the operator to choose: wait until it passes the quarantine, or add `exclude-newer-package = { strawberry-graphql = "2026-11-08" }` (or similar) to `pyproject.toml`, which relaxes the supply-chain measure for this one package. The `pyproject.toml` edits were reverted; nothing else in the subtasks has been done.
 
 ---
 

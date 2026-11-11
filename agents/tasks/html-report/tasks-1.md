@@ -10,7 +10,7 @@ The report page starts with the summary tiles, puts each section in a tab, wraps
 
 The project has no affected-tests tool: each task names its test files. Every `pytest` and `mkdocs` command runs after `source bin/activate.sh`; `mkdocs` needs `uv sync --group docs` first. Browser tests (marker `browser`) run when Playwright's Chromium can be launched and are skipped otherwise; a task whose acceptance rests on them runs them locally and stops as `blocked` if Chromium cannot be launched. Never list environment variables or print a token: test one with `[ -n "${GITHUB_TOKEN:-}" ]` and print only yes or no.
 
-The pre-push audit (`bin/audit-check.sh`) reports `spec-api-signature-drift` on `html_document` until Task 2 adds `assets_url`; that is expected before Task 2, and every task from Task 2 on must leave the audit passing.
+The spec gives `html_document` an `assets_url` parameter the code does not have yet, so its API block carries a `# auditme: accept[spec-api-signature-drift]` line (added 2026-11-11 so the specs could be pushed); Task 2 builds the parameter and removes that line, and every task must leave `bin/audit-check.sh` passing.
 
 ---
 
@@ -64,6 +64,7 @@ The pre-push audit (`bin/audit-check.sh`) reports `spec-api-signature-drift` on 
 - [ ] Create `src/wambatic/reports/assets.py` with `Asset`, `page_assets()` (cached; `plotly.min.js` from `plotly.offline.get_plotlyjs()`, `write-excel-file.min.js`, `tables.js`, `report.js`, `report.css` with the palette tokens filled), `assets_hash()`, `assets_folder_name()` and `write_assets(directory)`, writing a temporary sibling directory renamed into place, keeping an existing folder, and raising `OutputError` (`cannot write PATH: REASON`) on failure. Record `WRITE_EXCEL_FILE_VERSION = '4.1.1'` and its SHA-256 in the module
 - [ ] Add an empty `templates/tables.js` placeholder (Tasks 5 and 6 fill it), and check that `uv_build` ships `vendor/` and every template in the wheel
 - [ ] Change `html_document(report, theme, assets_url)` so `report.html` links `report.css` and loads the scripts with `<script defer src=...>` under `assets_url`, in the order `plotly.min.js`, `write-excel-file.min.js`, `tables.js`, `report.js`; the page data stays inline
+- [ ] Remove the `# auditme: accept[spec-api-signature-drift]` line above `def html_document(` in `agents/specs/html-report/spec.md`: with `assets_url` built, spec and code agree and `bin/audit-check.sh` must pass without it
 - [ ] Change `render_html` to call `write_assets(out.parent)` first and pass `assets_folder_name() + '/'`; the page is not written if the folder fails
 - [ ] Add the `/assets/{hash}/{name}` route to `web.py` with each asset's media type and `Cache-Control: public, max-age=31536000, immutable`, a 404 for another hash or name, and build `/report` with `assets_url='/assets/' + assets_hash() + '/'`
 - [ ] Add `<p class="assets-missing">` after the header, `This report's files (wambatic-assets-HASH) did not load; keep the page beside that folder.`, shown by default and hidden by `report.css`
@@ -73,7 +74,7 @@ The pre-push audit (`bin/audit-check.sh`) reports `spec-api-signature-drift` on 
 
 - [ ] `report --format html` writes the page and `wambatic-assets-HASH/` beside it, and the page opens offline from disk with every chart drawn
 - [ ] A second report in the same directory reuses the folder; a changed asset makes a second folder and leaves the first unchanged
-- [ ] `bin/audit-check.sh` reports no `spec-api-signature-drift` for `html_document`
+- [ ] `bin/audit-check.sh` reports no `spec-api-signature-drift` for `html_document`, with the acceptance line removed
 
 **Definition of Done:**
 

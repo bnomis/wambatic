@@ -50,6 +50,7 @@ class HtmlReport:
     periods: dict[Granularity, StatsResult]  # exactly YEAR, MONTH, WEEK and DAY
     initial: Granularity                     # the granularity shown on load; a key of `periods`
 
+# auditme: accept[spec-api-signature-drift] assets_url is 2.0, not built yet; tasks-1.md Task 2 removes this line
 def html_document(
     report: HtmlReport, theme: typing.Literal['auto', 'dark', 'light'], assets_url: str
 ) -> str:

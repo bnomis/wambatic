@@ -213,6 +213,16 @@ def test_the_document_holds_no_copy_of_plotly_js_but_names_its_version(
     assert f'plotly.js: {plotly.offline.get_plotlyjs_version()}' in document
 
 
+def test_the_footer_names_the_excel_writer_version_and_the_data_holds_the_file_stem(
+    org_report: wambatic.reports.html.HtmlReport,
+) -> None:
+    document = html_document(org_report, 'auto')
+    version = wambatic.reports.assets.WRITE_EXCEL_FILE_VERSION
+    assert f'<p>write-excel-file: {version}</p>' in document
+    stem = wambatic.reports.html.report_filename(org_report.total.subject).removesuffix('.html')
+    assert f'"stem": "{stem}"' in document
+
+
 def test_the_page_names_only_files_under_the_assets_url(
     org_report: wambatic.reports.html.HtmlReport,
 ) -> None:

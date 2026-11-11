@@ -203,7 +203,7 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 ## Task 6: Export tables to CSV and Excel
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** medium
 **Spec Reference:** HTML report 2.0, Tables (Export), Error handling (failed export), Layout item 5 (footer version), External dependencies
@@ -212,25 +212,25 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 **Subtasks:**
 
-- [ ] In `templates/tables.js`, add `CSV` and `Excel` buttons beside each data table, exporting the shown rows in the shown order with the header and without the total row
-- [ ] Name files `<page stem>-<slugified table title>[-<granularity>].csv|.xlsx`, the page stem passed in the page data from `report_filename`
-- [ ] CSV: RFC 4180, CRLF, UTF-8 with a byte order mark, numbers from `data-value` without separators, empty values as empty fields, and a leading `'` on a text cell starting with `=`, `+`, `-` or `@`
-- [ ] Excel: `writeXlsxFile` with one sheet named after the table (at most 31 characters, without `[]:*?/\`), a bold header row, numbers as numbers and text as text
-- [ ] Download through a `Blob` URL and an `<a download>` click, revoking the URL afterwards; a failure shows one line beside the buttons and writes nothing
-- [ ] Add the write-excel-file version to the provenance footer
-- [ ] Tests in `src/tests/reports/test_html_browser.py`: after a filter and a sort, both buttons download (Playwright's download event) files whose rows match the shown rows; the CSV starts with the byte order mark and guards a login planted as `=cmd`; the `.xlsx` read with `openpyxl` has numeric cells for number columns and the sheet name rule; with the Excel library removed from the folder, the Excel button shows its failure line. In `src/tests/reports/test_html.py`: the footer names the version
+- [x] In `templates/tables.js`, add `CSV` and `Excel` buttons beside each data table, exporting the shown rows in the shown order with the header and without the total row
+- [x] Name files `<page stem>-<slugified table title>[-<granularity>].csv|.xlsx`, the page stem passed in the page data from `report_filename`
+- [x] CSV: RFC 4180, CRLF, UTF-8 with a byte order mark, numbers from `data-value` without separators, empty values as empty fields, and a leading `'` on a text cell starting with `=`, `+`, `-` or `@`
+- [x] Excel: `writeXlsxFile` with one sheet named after the table (at most 31 characters, without `[]:*?/\`), a bold header row, numbers as numbers and text as text
+- [x] Download through a `Blob` URL and an `<a download>` click, revoking the URL afterwards; a failure shows one line beside the buttons and writes nothing
+- [x] Add the write-excel-file version to the provenance footer
+- [x] Tests in `src/tests/reports/test_html_browser.py`: after a filter and a sort, both buttons download (Playwright's download event) files whose rows match the shown rows; the CSV starts with the byte order mark and guards a login planted as `=cmd`; the `.xlsx` read with `openpyxl` has numeric cells for number columns and the sheet name rule; with the Excel library removed from the folder, the Excel button shows its failure line. In `src/tests/reports/test_html.py`: the footer names the version
 
 **Acceptance Criteria:**
 
-- [ ] Both exports open in a spreadsheet with the rows and order shown on the page
-- [ ] No exported cell is a formula
+- [x] Both exports open in a spreadsheet with the rows and order shown on the page
+- [x] No exported cell is a formula
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/reports/test_html.py src/tests/reports/test_html_browser.py` passes
-- [ ] `bin/audit-check.sh` exits 0
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/reports/test_html.py src/tests/reports/test_html_browser.py` passes
+- [x] `bin/audit-check.sh` exits 0
 
 **Notes:**
 

@@ -101,6 +101,12 @@ explicit_package_bases = true
 module = ['plotly', 'plotly.*']
 ignore_missing_imports = true
 
+# openpyxl ships no py.typed; only the export test in test_html_browser.py imports it, to read an
+# exported .xlsx back.
+[[tool.mypy.overrides]]
+module = ['openpyxl', 'openpyxl.*']
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ['src/tests']
 pythonpath = ['src']

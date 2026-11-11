@@ -568,6 +568,7 @@ def footer_html(total: wambatic.stats.base.StatsResult) -> str:
     lines = [
         *wambatic.reports.rows.provenance_lines(total),
         f'plotly.js: {plotly.offline.get_plotlyjs_version()}',
+        f'write-excel-file: {wambatic.reports.assets.WRITE_EXCEL_FILE_VERSION}',
     ]
     return (
         '<footer>'
@@ -735,6 +736,7 @@ def page_data(
 ) -> dict[str, object]:
     calendar = built.calendar
     return {
+        'stem': pathlib.PurePath(report_filename(report.total.subject)).stem,
         'initial': str(report.initial),
         'theme': theme,
         'palette': {

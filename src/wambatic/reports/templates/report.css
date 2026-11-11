@@ -271,3 +271,28 @@ th .sort .arrow {
 table[hidden] + .table-status {
   display: none;
 }
+
+.table-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 8px;
+}
+
+.table-tools .export {
+  padding: 2px 10px;
+  border: 1px solid var(--grid);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.export-error {
+  color: var(--ink);
+  font-size: 0.85rem;
+}
+
+table[hidden] + .table-status + .table-tools {
+  display: none;
+}

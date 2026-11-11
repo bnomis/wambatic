@@ -40,6 +40,34 @@
     return value.toLocaleString('en-US');
   }
 
+  var stem = JSON.parse(document.getElementById('wambatic-data').textContent).stem;
+  var FORMULA_START = /^[=+\-@]/;
+  var SHEET_FORBIDDEN = /[\[\]:*?\/\\]/g;
+
+  function slug(text) {
+    return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  }
+
+  function csvField(value) {
+    var text = value === null ? '' : String(value);
+    if (FORMULA_START.test(text)) {
+      text = "'" + text;
+    }
+    return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+  }
+
+  function download(blob, name) {
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 0);
+  }
+
   function enhance(table) {
     var head = table.tHead.rows[0];
     var body = table.tBodies[0];
@@ -58,6 +86,93 @@
     status.className = 'table-status';
     status.setAttribute('role', 'status');
     table.insertAdjacentElement('afterend', status);
+
+    var labels = Array.prototype.map.call(head.cells, function (cell) {
+      return cell.textContent;
+    });
+    var title = table.caption.firstChild.textContent;
+    var granularity = table.getAttribute('data-granularity');
+    var baseName = [stem, slug(title)].concat(granularity ? [granularity] : []).join('-');
+
+    var tools = document.createElement('div');
+    tools.className = 'table-tools';
+    var failure = document.createElement('span');
+    failure.className = 'export-error';
+    failure.setAttribute('role', 'alert');
+    status.insertAdjacentElement('afterend', tools);
+
+    function shownRows() {
+      var rows = [labels.map(function (label) {
+        return { text: label, header: true };
+      })];
+      Array.prototype.forEach.call(body.rows, function (row) {
+        if (row.hidden) {
+          return;
+        }
+        rows.push(Array.prototype.map.call(row.cells, function (td, column) {
+          if (types[column] === 'number') {
+            var raw = td.getAttribute('data-value');
+            return { number: raw === null || raw === '' ? null : Number(raw), text: raw || '' };
+          }
+          return { text: td.textContent };
+        }));
+      });
+      return rows;
+    }
+
+    function exportCsv() {
+      var lines = shownRows().map(function (row) {
+        return row.map(function (item) {
+          return 'number' in item ? item.text : csvField(item.text);
+        }).join(',');
+      });
+      var blob = new Blob(
+        ['﻿' + lines.join('\r\n') + '\r\n'], { type: 'text/csv;charset=utf-8' }
+      );
+      download(blob, baseName + '.csv');
+    }
+
+    function exportExcel() {
+      if (typeof writeXlsxFile !== 'function') {
+        throw new Error('the Excel writer did not load');
+      }
+      var data = shownRows().map(function (row) {
+        return row.map(function (item) {
+          var cell = { value: 'number' in item ? item.number : item.text };
+          if (item.header) {
+            cell.fontWeight = 'bold';
+          }
+          return cell;
+        });
+      });
+      var sheet = title.replace(SHEET_FORBIDDEN, '').slice(0, 31) || 'Sheet1';
+      return writeXlsxFile(data, { sheet: sheet }).toBlob().then(function (blob) {
+        download(blob, baseName + '.xlsx');
+      });
+    }
+
+    function attempt(action) {
+      failure.textContent = '';
+      var done;
+      try {
+        done = Promise.resolve(action());
+      } catch (error) {
+        done = Promise.reject(error);
+      }
+      done.catch(function () {
+        failure.textContent = 'The export failed; nothing was saved.';
+      });
+    }
+
+    [['CSV', exportCsv], ['Excel', exportExcel]].forEach(function (entry) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'export';
+      button.textContent = entry[0];
+      button.addEventListener('click', function () { attempt(entry[1]); });
+      tools.appendChild(button);
+    });
+    tools.appendChild(failure);
 
     var filterRow = document.createElement('tr');
     filterRow.className = 'filters';

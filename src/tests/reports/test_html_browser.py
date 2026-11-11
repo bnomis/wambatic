@@ -3,6 +3,7 @@ import dataclasses
 import pathlib
 import typing
 
+import openpyxl
 import playwright.sync_api
 import pytest
 
@@ -316,6 +317,8 @@ def test_with_script_disabled_every_panel_shows(
         context.close()
 
 
+# auditme: accept[non-alphabetical-literal] the order a case-blind, number-aware sort gives
+LOGINS_BY_NAME = ['alpha', 'Beta', 'gamma2', 'gamma10']
 PLANTED = (
     ('alpha', 5, 100),
     ('Beta', 12, 40),
@@ -403,7 +406,7 @@ def test_sorting_text_compares_numbers_inside_the_text_by_value(
 ) -> None:
     _, table = contributors
     sort_by(table, 'Login')
-    assert column(table, 1) == ['alpha', 'Beta', 'gamma2', 'gamma10']
+    assert column(table, 1) == LOGINS_BY_NAME
 
 
 def status_line(table: playwright.sync_api.Locator) -> playwright.sync_api.Locator:
@@ -497,3 +500,122 @@ def test_the_summary_count_follows_a_granularity_switch(
         assert block.locator('.row-count').inner_text() == (
             f'{expected} row' if expected == 1 else f'{expected} rows'
         )
+
+
+EXPORTED = (*PLANTED, ('=cmd', 3, 10))
+
+
+@pytest.fixture
+def exporting(
+    open_report: collections.abc.Callable[..., Opened], org_report: wambatic.reports.html.HtmlReport
+) -> tuple[Opened, playwright.sync_api.Locator]:
+    rows = [
+        {
+            'login': login,
+            'commits': commits,
+            'lines_added': added,
+            'lines_deleted': 0,
+            'lines_net': added,
+            'active_days': 1,
+        }
+        for login, commits, added in EXPORTED
+    ]
+    total = dataclasses.replace(
+        org_report.total, tables={**org_report.total.tables, 'top_contributors': rows}
+    )
+    opened = open_report(report=dataclasses.replace(org_report, total=total))
+    opened.page.click('[role=tab][aria-controls=tab-contributors]')
+    return opened, table_titled(opened.page, 'Top contributors')
+
+
+def download_of(
+    table: playwright.sync_api.Locator, button: str, tmp_path: pathlib.Path
+) -> pathlib.Path:
+    with table.page.expect_download() as info:
+        table.locator('xpath=following-sibling::div[@class="table-tools"]').get_by_role(
+            'button', name=button, exact=True
+        ).click()
+    target = tmp_path / info.value.suggested_filename
+    info.value.save_as(target)
+    return target
+
+
+def wait_for_logins(table: playwright.sync_api.Locator, expected: list[str]) -> None:
+    for _ in range(40):
+        if column(table, 1) == expected:
+            break
+        table.page.wait_for_timeout(50)
+    assert column(table, 1) == expected
+
+
+def test_csv_holds_the_shown_rows_in_the_shown_order_and_guards_formulas(
+    exporting: tuple[Opened, playwright.sync_api.Locator], tmp_path: pathlib.Path
+) -> None:
+    _, table = exporting
+    table.locator('tr.filters input').nth(1).fill('>1')
+    sort_by(table, 'Commits')
+    sort_by(table, 'Commits')
+    expected = [
+        login for login, commits, _ in sorted(EXPORTED, key=lambda row: -row[1]) if commits > 1
+    ]
+    wait_for_logins(table, expected)
+    target = download_of(table, 'CSV', tmp_path)
+    assert target.name.endswith('-top-contributors.csv')
+    raw = target.read_bytes()
+    assert raw.startswith(b'\xef\xbb\xbf')
+    lines = raw.decode('utf-8-sig').split('\r\n')
+    assert lines[-1] == ''
+    assert lines[0].split(',')[0] == 'Login'
+    assert [line.split(',')[0] for line in lines[1:-1]] == [
+        "'" + login if login == '=cmd' else login for login in expected
+    ]
+    assert lines[1].split(',')[1] == '12'
+
+
+def test_excel_holds_the_shown_rows_with_numbers_as_numbers(
+    exporting: tuple[Opened, playwright.sync_api.Locator], tmp_path: pathlib.Path
+) -> None:
+    _, table = exporting
+    table.locator('tr.filters input').nth(0).fill('a')
+    sort_by(table, 'Login')
+    expected = LOGINS_BY_NAME
+    wait_for_logins(table, expected)
+    target = download_of(table, 'Excel', tmp_path)
+    assert target.name.endswith('-top-contributors.xlsx')
+    sheet = openpyxl.load_workbook(target).active
+    assert sheet is not None
+    assert sheet.title == 'Top contributors'
+    rows = list(sheet.iter_rows(values_only=True))
+    assert rows[0][0] == 'Login'
+    assert sheet.cell(1, 1).font.bold
+    assert [row[0] for row in rows[1:]] == expected
+    assert all(isinstance(row[1], int | float) for row in rows[1:])
+    assert all(cell.data_type != 'f' for row in sheet.iter_rows() for cell in row)
+
+
+def test_a_missing_excel_library_shows_one_failure_line_and_saves_nothing(
+    org_report: wambatic.reports.html.HtmlReport,
+    tmp_path: pathlib.Path,
+    chromium: playwright.sync_api.Browser,
+) -> None:
+    out = wambatic.reports.html.render_html(org_report, tmp_path / 'out' / 'report.html', 'auto')
+    folder = out.parent / wambatic.reports.assets.assets_folder_name()
+    (folder / 'write-excel-file.min.js').unlink()
+    context = chromium.new_context()
+    try:
+        page = context.new_page()
+        downloads: list[object] = []
+        page.on('download', lambda download: downloads.append(download))
+        page.goto(out.as_uri())
+        page.wait_for_selector(f'#{FIRST_CHART} .main-svg')
+        table = page.locator('table.period:not([hidden])').first
+        table.evaluate('table => { table.closest("details").open = true }')
+        tools = table.locator('xpath=following-sibling::div[@class="table-tools"]')
+        tools.get_by_role('button', name='Excel', exact=True).click()
+        playwright.sync_api.expect(tools.locator('.export-error')).to_have_text(
+            'The export failed; nothing was saved.'
+        )
+        page.wait_for_timeout(200)
+        assert downloads == []
+    finally:
+        context.close()

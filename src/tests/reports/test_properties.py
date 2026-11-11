@@ -351,3 +351,38 @@ def test_format_number_round_trips_and_signs_only_positive_values(
     assert text.startswith('+') == (signed and value > 0)
     if decimals is None and float(value).is_integer():
         assert '.' not in text
+
+
+CELL_METRICS = sorted(
+    {
+        *wambatic.reports.rows.TOTAL_METRICS,
+        *wambatic.reports.rows.FLOW_COUNTS,
+        *wambatic.reports.rows.FLOW_TIMES,
+        *wambatic.reports.rows.DELIVERY_UNITS,
+        *wambatic.reports.rows.POPULARITY_TABLE_METRICS,
+    }
+)
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(
+    hypothesis.strategies.sampled_from(CELL_METRICS),
+    hypothesis.strategies.one_of(
+        hypothesis.strategies.none(),
+        hypothesis.strategies.floats(min_value=0, max_value=1e9, allow_nan=False),
+    ),
+)
+def test_a_period_cell_holds_the_value_its_text_was_formatted_from(
+    metric: str, value: float | None
+) -> None:
+    [number] = wambatic.reports.html.period_numbers([metric], [value])
+    markup = wambatic.reports.html.cell(number, numeric=True)
+    match = re.fullmatch(r'<td class=num data-value="([^"]*)">([^<]*)</td>', markup)
+    assert match
+    raw, text = match.groups()
+    assert text == wambatic.reports.terminal.format_cell(metric, value)
+    if value is None:
+        assert raw == ''
+    else:
+        ratio = wambatic.reports.rows.DELIVERY_UNITS.get(metric) == 'ratio'
+        assert float(raw) == (value * 100 if ratio else value)

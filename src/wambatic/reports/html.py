@@ -3,6 +3,7 @@ table, built from the results of one request that differ only in granularity."""
 
 import collections.abc
 import dataclasses
+import functools
 import html
 import json
 import os
@@ -34,6 +35,7 @@ FILE_MODE = 0o644
 PROXIES_LINE = 'The DORA figures are proxies; how each is measured is described in the README.'
 OTHER_LANGUAGE = wambatic.stats.popularity.OTHER
 POPULARITY_LINE = 'Counts are as of the last sync; totals count the stars and forks that exist now.'
+FORMAT_NET = functools.partial(wambatic.reports.terminal.format_number, signed=True)
 JSON_ESCAPES = {'&': '\\u0026', '<': '\\u003c', '>': '\\u003e'}
 
 
@@ -151,28 +153,64 @@ def theme_attribute(theme: wambatic.settings.Theme) -> str:
     return '' if theme == 'auto' else f' data-theme="{theme}"'
 
 
-def cell(text: str, numeric: bool, tag: str = 'td') -> str:
-    return f'<{tag}{" class=num" if numeric else ""}>{escape(text)}</{tag}>'
+@dataclasses.dataclass(frozen=True, slots=True)
+class Number:
+    """A numeric cell: the text shown and the value it was formatted from (None for no data)."""
+
+    text: str
+    value: float | None
+
+
+def raw_value(value: float | None) -> str:
+    """The `data-value` text: empty for no data, else the number with no needless `.0`."""
+    if value is None:
+        return ''
+    if isinstance(value, float) and not value.is_integer():
+        return repr(value)
+    return str(int(value))
+
+
+def number(format_text: collections.abc.Callable[[float], str], value: float | None) -> Number:
+    """A cell for `value` shown as `format_text` gives it, or `-` for no data."""
+    text = wambatic.reports.rows.NO_DATA if value is None else format_text(value)
+    return Number(text, value)
+
+
+def head_cell(text: str, numeric: bool) -> str:
+    kind = 'number' if numeric else 'text'
+    return f'<th{" class=num" if numeric else ""} data-type="{kind}">{escape(text)}</th>'
+
+
+def cell(content: str | Number, numeric: bool) -> str:
+    if isinstance(content, Number):
+        return f'<td class=num data-value="{raw_value(content.value)}">{escape(content.text)}</td>'
+    return f'<td{" class=num" if numeric else ""}>{escape(content)}</td>'
 
 
 def table_html(
     title: str,
     headers: collections.abc.Sequence[str],
-    rows: collections.abc.Sequence[collections.abc.Sequence[str]],
+    rows: collections.abc.Sequence[collections.abc.Sequence[str | Number]],
     *,
-    footer: collections.abc.Sequence[str] | None = None,
+    footer: collections.abc.Sequence[str | Number] | None = None,
     note: str = '',
     attributes: str = '',
+    numeric: collections.abc.Sequence[bool] | None = None,
 ) -> str:
-    """A data table whose first column is text and the others numbers."""
-    head = ''.join(cell(h, i > 0, 'th') for i, h in enumerate(headers))
+    """A data table whose first column is text and the others numbers, unless `numeric` says
+    which columns are numbers. A numeric column holds `Number` cells carrying their raw value."""
+    kinds = [i > 0 for i in range(len(headers))] if numeric is None else list(numeric)
+    head = ''.join(head_cell(h, kinds[i]) for i, h in enumerate(headers))
     body = ''.join(
-        '<tr>' + ''.join(cell(text, i > 0) for i, text in enumerate(row)) + '</tr>' for row in rows
+        '<tr>' + ''.join(cell(item, kinds[i]) for i, item in enumerate(row)) + '</tr>'
+        for row in rows
     )
     foot = ''
     if footer is not None:
         foot = (
-            '<tfoot><tr>' + ''.join(cell(t, i > 0) for i, t in enumerate(footer)) + '</tr></tfoot>'
+            '<tfoot><tr>'
+            + ''.join(cell(item, kinds[i]) for i, item in enumerate(footer))
+            + '</tr></tfoot>'
         )
     caption = escape(title) + (f'<span class="note">{escape(note)}</span>' if note else '')
     return (
@@ -181,30 +219,41 @@ def table_html(
     )
 
 
+def period_numbers(
+    metrics: collections.abc.Sequence[str], values: collections.abc.Sequence[float | None]
+) -> list[Number]:
+    """The cells of one period row; a ratio's value is the 0 to 100 percentage its text shows."""
+    return [
+        Number(
+            wambatic.reports.terminal.format_cell(metric, value),
+            None
+            if value is None
+            else value * 100
+            if wambatic.reports.rows.DELIVERY_UNITS.get(metric) == 'ratio'
+            else value,
+        )
+        for metric, value in zip(metrics, values, strict=True)
+    ]
+
+
 def period_table_html(
     table: wambatic.reports.rows.PeriodTable,
     granularity: wambatic.stats.base.Granularity,
     hidden: bool,
     note: str,
 ) -> str:
-    rows = [
+    rows: list[list[str | Number]] = [
         [
             row.label + (wambatic.reports.rows.PARTIAL_MARK if row.partial else ''),
-            *(
-                wambatic.reports.terminal.format_cell(metric, value)
-                for metric, value in zip(table.metrics, row.values, strict=True)
-            ),
+            *period_numbers(table.metrics, row.values),
         ]
         for row in table.rows
     ]
-    footer = None
+    footer: list[str | Number] | None = None
     if table.total is not None:
         footer = [
             'Total',
-            *(
-                wambatic.reports.terminal.format_cell(metric, value)
-                for metric, value in zip(table.metrics, table.total, strict=True)
-            ),
+            *period_numbers(table.metrics, table.total),
         ]
     attributes = f' class="period" data-granularity="{granularity}"' + (' hidden' if hidden else '')
     return table_html(
@@ -250,14 +299,14 @@ def dora_note(table: wambatic.reports.rows.PeriodTable) -> str:
 def popularity_now_html(now: wambatic.reports.rows.PopularityNow | None) -> str:
     if now is None:
         return ''
-    format_number = wambatic.reports.terminal.format_number
 
-    def texts(row: wambatic.reports.rows.PopularityRow) -> list[str]:
+    def texts(row: wambatic.reports.rows.PopularityRow) -> list[str | Number]:
         return [
             row.repo,
-            format_number(row.stars),
-            format_number(row.forks),
-            format_number(row.watchers),
+            *(
+                number(wambatic.reports.terminal.format_number, count)
+                for count in (row.stars, row.forks, row.watchers)
+            ),
         ]
 
     return table_html(
@@ -278,8 +327,8 @@ def languages_html(languages: wambatic.reports.rows.Languages | None) -> str:
         [
             [
                 row.language,
-                wambatic.reports.terminal.format_number(row.bytes),
-                f'{row.share * 100:,.1f}%',
+                number(wambatic.reports.terminal.format_number, row.bytes),
+                number(lambda share: f'{share:,.1f}%', row.share * 100),
             ]
             for row in languages.rows
         ],
@@ -298,10 +347,10 @@ def breakdown_html(result: wambatic.stats.base.StatsResult) -> str:
                     [
                         [
                             row.name,
-                            wambatic.reports.terminal.format_number(row.commits),
-                            wambatic.reports.terminal.format_number(row.lines_added),
-                            wambatic.reports.terminal.format_number(row.lines_deleted),
-                            wambatic.reports.terminal.format_number(row.lines_net, signed=True),
+                            number(wambatic.reports.terminal.format_number, row.commits),
+                            number(wambatic.reports.terminal.format_number, row.lines_added),
+                            number(wambatic.reports.terminal.format_number, row.lines_deleted),
+                            number(FORMAT_NET, row.lines_net),
                         ]
                         for row in rows
                     ],
@@ -314,18 +363,17 @@ def contributors_html(result: wambatic.stats.base.StatsResult) -> str:
     rows = wambatic.reports.rows.top_contributors(result)
     if not rows:
         return ''
-    format_number = wambatic.reports.terminal.format_number
     return table_html(
         'Top contributors',
         wambatic.reports.rows.CONTRIBUTOR_HEADERS,
         [
             [
                 row.login,
-                format_number(row.commits),
-                format_number(row.lines_added),
-                format_number(row.lines_deleted),
-                format_number(row.lines_net, signed=True),
-                format_number(row.active_days),
+                number(wambatic.reports.terminal.format_number, row.commits),
+                number(wambatic.reports.terminal.format_number, row.lines_added),
+                number(wambatic.reports.terminal.format_number, row.lines_deleted),
+                number(FORMAT_NET, row.lines_net),
+                number(wambatic.reports.terminal.format_number, row.active_days),
             ]
             for row in rows
         ],
@@ -338,7 +386,12 @@ def unavailable_html(result: wambatic.stats.base.StatsResult) -> str:
         return ''
     return (
         '<section id="unavailable"><h2>Unavailable</h2>'
-        + table_html('Unavailable', wambatic.reports.rows.UNAVAILABLE_HEADERS, rows)
+        + table_html(
+            'Unavailable',
+            wambatic.reports.rows.UNAVAILABLE_HEADERS,
+            rows,
+            numeric=(False, False),
+        )
         + '</section>'
     )
 

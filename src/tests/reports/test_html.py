@@ -33,6 +33,11 @@ def html_document(
     return wambatic.reports.html.html_document(report, theme, ASSETS_URL)
 
 
+def without_values(document: str) -> str:
+    """The page without its `data-value` attributes, to compare the markup of the shown text."""
+    return re.sub(r' data-value="[^"]*"', '', document)
+
+
 class Page(html.parser.HTMLParser):
     """The parts of a report page the tests look at."""
 
@@ -192,7 +197,7 @@ def test_a_median_with_no_data_is_a_dash(org_report: wambatic.reports.html.HtmlR
 def test_the_period_tables_hold_the_terminals_rows(
     org_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    document = html_document(org_report, 'auto')
+    document = without_values(html_document(org_report, 'auto'))
     assert '<td>2026-10</td><td class=num>7</td><td class=num>3</td>' in document
     assert '<td>Total</td><td class=num>10</td><td class=num>3</td>' in document
     assert '<td class=num>+34</td>' in document
@@ -702,7 +707,7 @@ def test_every_delivery_figure_has_its_element_and_the_section_holds_its_charts(
 def test_the_delivery_tables_hold_the_rows_of_rows_py_once_per_granularity(
     delivery_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    document = html_document(delivery_report, 'auto')
+    document = without_values(html_document(delivery_report, 'auto'))
     section = document.split('id="delivery"')[1].split('</section>')[0]
     for title in ('Delivery by period', 'DORA proxies by period'):
         assert section.count(f'<caption>{title}') == 4, title
@@ -778,7 +783,7 @@ def test_the_popularity_section_holds_its_charts_and_says_what_the_counts_are(
 def test_the_popularity_tables_hold_the_rows_of_rows_py(
     popularity_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    section = popularity_section(html_document(popularity_report, 'auto'))
+    section = without_values(popularity_section(html_document(popularity_report, 'auto')))
     assert section.count('<caption>Popularity by period') == 4
     assert section.count(' hidden') == 3
     assert '<td>2026-10</td><td class=num>3</td><td class=num>5</td>' in section
@@ -844,3 +849,82 @@ def test_a_failed_folder_write_leaves_no_page(
     with pytest.raises(wambatic.reports.errors.OutputError, match='cannot write .*no space left'):
         wambatic.reports.html.render_html(org_report, out, 'auto')
     assert list((tmp_path / 'out').iterdir()) == []
+
+
+NUMERIC_CELL = re.compile(r'<td class=num data-value="([^"]*)">([^<]*)</td>')
+TABLE_HEAD = re.compile(r'<table[^>]*>.*?<thead><tr>(.*?)</tr></thead>', re.DOTALL)
+REPORT_FIXTURES = ['delivery_report', 'org_report', 'popularity_report', 'repo_report']
+
+
+def shown_forms(value: float) -> set[str]:
+    format_number = wambatic.reports.terminal.format_number
+    return {
+        format_number(value),
+        format_number(value, signed=True),
+        format_number(value, decimals=1),
+        f'{value:,.1f}%',
+    }
+
+
+@pytest.mark.parametrize('fixture', REPORT_FIXTURES)
+def test_every_numeric_cell_holds_the_value_its_text_was_formatted_from(
+    fixture: str, request: pytest.FixtureRequest
+) -> None:
+    document = html_document(request.getfixturevalue(fixture))
+    cells = NUMERIC_CELL.findall(document)
+    assert cells
+    for raw, text in cells:
+        if text == '-':
+            assert raw == ''
+        else:
+            assert html.unescape(text) in shown_forms(float(raw)), (raw, text)
+
+
+@pytest.mark.parametrize('fixture', REPORT_FIXTURES)
+def test_every_header_cell_says_its_type_and_the_first_column_is_text(
+    fixture: str, request: pytest.FixtureRequest
+) -> None:
+    document = html_document(request.getfixturevalue(fixture))
+    heads = TABLE_HEAD.findall(document)
+    assert heads
+    for head in heads:
+        kinds = re.findall(r'<th[^>]*data-type="(number|text)"', head)
+        assert kinds
+        assert kinds[0] == 'text'
+        assert head.count('<th') == len(kinds)
+
+
+@pytest.mark.parametrize(
+    ('content', 'expected'),
+    [
+        (
+            wambatic.reports.html.Number('1,234', 1234.0),
+            '<td class=num data-value="1234">1,234</td>',
+        ),
+        (wambatic.reports.html.Number('+56', 56), '<td class=num data-value="56">+56</td>'),
+        (
+            wambatic.reports.html.Number('12.5%', 12.5),
+            '<td class=num data-value="12.5">12.5%</td>',
+        ),
+        (wambatic.reports.html.Number('-', None), '<td class=num data-value="">-</td>'),
+        ('octo', '<td>octo</td>'),
+    ],
+)
+def test_a_cell_carries_the_number_its_text_shows(
+    content: str | wambatic.reports.html.Number, expected: str
+) -> None:
+    assert wambatic.reports.html.cell(content, numeric=False) == expected
+
+
+def test_the_unavailable_table_has_only_text_columns(
+    org_report: wambatic.reports.html.HtmlReport,
+) -> None:
+    rows = [{'metric': 'commit dates: octo-org/alpha', 'reason': 'dated in UTC: no author offset'}]
+    total = dataclasses.replace(
+        org_report.total, tables={**org_report.total.tables, 'unavailable': rows}
+    )
+    document = html_document(dataclasses.replace(org_report, total=total))
+    section = document.split('id="unavailable"')[1].split('</section>')[0]
+    assert section.count('data-type="text"') == 2
+    assert 'data-type="number"' not in section
+    assert 'data-value' not in section

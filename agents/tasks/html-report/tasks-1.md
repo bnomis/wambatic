@@ -95,7 +95,7 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 ## Task 3: Give every table cell its type and raw value
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** small
 **Spec Reference:** HTML report 2.0, Tables (Values)
@@ -104,22 +104,22 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 **Subtasks:**
 
-- [ ] Change `cell` and `table_html` in `src/wambatic/reports/html.py` to take, per column, `data-type="number"` or `data-type="text"` on the header cell, and per numeric body and footer cell a `data-value`: `repr` of a float, `str` of an int, or empty for `None`
-- [ ] Pass the raw values from `period_table_html` (from `PeriodTable.rows` and `total`) and from the breakdown, contributors, languages and popularity-now builders, which format numbers they already hold; ratios keep the 0 to 100 percentage they show
-- [ ] Mark the text columns (the first column, and Login, Name, Language, Repository, Metric and Reason) `text`
-- [ ] Tests in `src/tests/reports/test_html.py`: for every table of a report built from the stats fixtures, each numeric cell's `data-value` parsed as a number formats to its text through the same formatter, and each `-` cell has an empty `data-value`; a hypothesis property test in `src/tests/reports/test_properties.py` for arbitrary values of each metric kind
+- [x] Change `cell` and `table_html` in `src/wambatic/reports/html.py` to take, per column, `data-type="number"` or `data-type="text"` on the header cell, and per numeric body and footer cell a `data-value`: `repr` of a float, `str` of an int, or empty for `None`
+- [x] Pass the raw values from `period_table_html` (from `PeriodTable.rows` and `total`) and from the breakdown, contributors, languages and popularity-now builders, which format numbers they already hold; ratios keep the 0 to 100 percentage they show
+- [x] Mark the text columns (the first column, and Login, Name, Language, Repository, Metric and Reason) `text`
+- [x] Tests in `src/tests/reports/test_html.py`: for every table of a report built from the stats fixtures, each numeric cell's `data-value` parsed as a number formats to its text through the same formatter, and each `-` cell has an empty `data-value`; a hypothesis property test in `src/tests/reports/test_properties.py` for arbitrary values of each metric kind
 
 **Acceptance Criteria:**
 
-- [ ] A cell showing `1,234` carries `data-value="1234"`, `+56` carries `56`, `12.5%` carries `12.5`
-- [ ] The page's visible text is unchanged
+- [x] A cell showing `1,234` carries `data-value="1234"`, `+56` carries `56`, `12.5%` carries `12.5`
+- [x] The page's visible text is unchanged
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/reports/test_html.py src/tests/reports/test_properties.py src/tests/reports/test_rows.py` passes
-- [ ] `bin/audit-check.sh` exits 0
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/reports/test_html.py src/tests/reports/test_properties.py src/tests/reports/test_rows.py` passes
+- [x] `bin/audit-check.sh` exits 0
 
 **Notes:**
 

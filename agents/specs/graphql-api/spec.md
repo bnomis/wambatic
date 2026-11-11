@@ -1,10 +1,12 @@
 # GraphQL API
 
-**Version:** 1.0
+**Version:** 1.1
 **Status:** proposed
 **Date:** 2026-11-11
 
 The web app's API: one GraphQL endpoint, `/graphql`, that answers stats for a target, starts or joins a sync, and reports how a sync job is going. It replaces the REST routes `/api/stats` and `/api/progress` and FastAPI's `/openapi.json` and `/docs`; the user decided on 2026-11-11 to replace REST rather than add GraphQL beside it, and chose [Strawberry](https://strawberry.rocks/) as the library. Part of [Reports](../reports/spec.md); served by the [Web app](../web-app/spec.md) 2.0.
+
+Version 1.1 (2026-11-11) pins strawberry-graphql 0.338.0 instead of 0.341.2, which the project's 14-day dependency quarantine hides; see External dependencies.
 
 A client asks only for the fields it needs, so a script that wants one series of a large org does not receive every table. The data is the same as `report --format json` prints: every field is read from `result_to_dict`, so the API and the JSON output never disagree.
 
@@ -123,5 +125,5 @@ def graphql_router(context: ApiContext) -> strawberry.fastapi.GraphQLRouter:
 
 ## External dependencies
 
-- [strawberry-graphql](https://strawberry.rocks/) 0.341.2 (MIT, released 2026-11-07, read on PyPI 2026-11-11), with its FastAPI integration. It is before 1.0 and releases often, with breaking changes noted in its changelog, so `pyproject.toml` pins it exactly (`strawberry-graphql[fastapi]==0.341.2`) and an upgrade is a deliberate change that re-runs the schema test. It brings `graphql-core` (`>=3.3,<3.4`). Its PyPI classifiers do not list Python 3.14 (checked 2026-11-11); the first task installs it under 3.14 and runs the tests before anything else is built on it, and stops with the failure if it does not work.
+- [strawberry-graphql](https://strawberry.rocks/) 0.338.0 (MIT, released 2026-10-26, read on PyPI 2026-11-11), with its FastAPI integration. The project's `[tool.uv] exclude-newer = "14 days"` hides any release younger than 14 days, so the pin is the newest release outside that window on the day the list ran; 1.0 of this spec named 0.341.2 (released 2026-11-07), which `uv lock` could not resolve (found by tasks-1.md Task 1 on 2026-11-11). It is before 1.0 and releases often, with breaking changes noted in its changelog, so `pyproject.toml` pins it exactly (`strawberry-graphql[fastapi]==0.338.0`) and an upgrade is a deliberate change that re-runs the schema test. It brings `graphql-core` (`>=3.3,<3.4`; 3.3.1 resolved). Its PyPI classifiers do not list Python 3.14 (checked 2026-11-11), but it imports and answers a query through FastAPI under Python 3.14.7 (checked 2026-11-11); the first task repeats that check as a test.
 - FastAPI and uvicorn, as in the [Web app](../web-app/spec.md).

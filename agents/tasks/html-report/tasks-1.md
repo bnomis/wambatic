@@ -16,24 +16,24 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 ## Task 1: Check that Strawberry works under Python 3.14
 
-**Status:** in-progress
+**Status:** todo
 **Priority:** high
 **Complexity:** small
-**Spec Reference:** GraphQL API 1.0, External dependencies; review-1 item 17
+**Spec Reference:** GraphQL API 1.1, External dependencies; review-1 item 17
 
-**Technical Goal:** strawberry-graphql 0.341.2 does not list Python 3.14 on PyPI (checked 2026-11-11). Prove it installs and serves a query under the project's Python before anything is built on it.
+**Technical Goal:** strawberry-graphql 0.338.0 does not list Python 3.14 on PyPI (checked 2026-11-11). Prove it installs and serves a query under the project's Python before anything is built on it.
 
 **Subtasks:**
 
 - [ ] Starting-point check: `grep -rnwE 'assets_hash|page_assets|write_assets|graphql_router|ApiContext|SyncNeeded' src/wambatic` finds nothing, and `src/wambatic/reports/api.py`, `jobs.py` and `assets.py` do not exist; if any does, stop the task as `blocked` naming what was found
-- [ ] Add `strawberry-graphql[fastapi]==0.341.2` to the runtime dependencies in `pyproject.toml` (an exact pin, as the GraphQL API spec says) and run `uv lock` and `uv sync`
+- [ ] Add `strawberry-graphql[fastapi]==0.338.0` to the runtime dependencies in `pyproject.toml` (an exact pin, as the GraphQL API spec says) and run `uv lock` and `uv sync`
 - [ ] Add `openpyxl` to the development dependencies (for Task 6's browser test) and lock it
 - [ ] Write `src/tests/reports/test_api.py` with one test: a throwaway `strawberry.Schema` with a `hello: String!` query, mounted on a `fastapi.FastAPI` with `strawberry.fastapi.GraphQLRouter`, answers `POST /graphql {"query": "{ hello }"}` over `httpx.ASGITransport` with `{"data": {"hello": "world"}}`
 - [ ] If the install or the test fails under Python 3.14, stop the task as `blocked` with the error; do not try another version or library
 
 **Acceptance Criteria:**
 
-- [ ] `uv run python -c 'import strawberry, strawberry.fastapi; print(strawberry.__version__)'` prints `0.341.2` under Python 3.14
+- [ ] `uv run python -c 'import importlib.metadata, strawberry.fastapi; print(importlib.metadata.version("strawberry-graphql"))'` prints `0.338.0` under Python 3.14, with `exclude-newer` unchanged
 - [ ] The throwaway query test passes, and mypy accepts the test file
 
 **Definition of Done:**
@@ -46,7 +46,8 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 - Key files: `pyproject.toml`, `uv.lock`, `src/tests/reports/test_api.py`
 - Task 8 replaces the throwaway test with the real schema's tests
-- BLOCKED (2026-11-11): `uv lock` cannot resolve `strawberry-graphql[fastapi]==0.341.2`. The project's `[tool.uv] exclude-newer = "14 days"` quarantine hides it: it was published 2026-11-07, so it only becomes eligible on 2026-11-21. Needs the operator to choose: wait until it passes the quarantine, or add `exclude-newer-package = { strawberry-graphql = "2026-11-08" }` (or similar) to `pyproject.toml`, which relaxes the supply-chain measure for this one package. The `pyproject.toml` edits were reverted; nothing else in the subtasks has been done.
+- Was blocked (2026-11-11): `uv lock` cannot resolve `strawberry-graphql[fastapi]==0.341.2`. The project's `[tool.uv] exclude-newer = "14 days"` quarantine hides it: it was published 2026-11-07, so it only becomes eligible on 2026-11-21. Needs the operator to choose: wait until it passes the quarantine, or add `exclude-newer-package = { strawberry-graphql = "2026-11-08" }` (or similar) to `pyproject.toml`, which relaxes the supply-chain measure for this one package. The `pyproject.toml` edits were reverted; nothing else in the subtasks has been done.
+- Unblocked (2026-11-11, operator session): pin `strawberry-graphql[fastapi]==0.338.0` (released 2026-10-26), the newest release outside the 14-day window, and leave `exclude-newer` unchanged. Checked in the operator session: `uv lock` resolves it with `graphql-core` 3.3.1, and it imports and answers `{ hello }` through `GraphQLRouter` under Python 3.14.7. GraphQL API spec 1.1 records the new pin.
 
 ---
 

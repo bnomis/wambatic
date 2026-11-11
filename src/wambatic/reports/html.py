@@ -554,81 +554,155 @@ def footer_html(total: wambatic.stats.base.StatsResult) -> str:
     )
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class Panel:
+    """One tab: its panel id, its title and what it holds. `intro` is a line under the heading
+    that does not count as content, so a tab with only an intro does not appear."""
+
+    key: str
+    title: str
+    parts: list[str]
+    intro: str = ''
+
+    @property
+    def content(self) -> str:
+        return ''.join(self.parts)
+
+    @property
+    def panel_id(self) -> str:
+        return f'tab-{self.key}'
+
+
+def charts_html(*groups: collections.abc.Iterable[str]) -> str:
+    """The `div` that lays out charts, or nothing when there are none."""
+    joined = ''.join(''.join(group) for group in groups)
+    return f'<div class="charts">{joined}</div>' if joined else ''
+
+
+def panel_html(panel: Panel) -> str:
+    return (
+        f'<section id="{panel.panel_id}" role="tabpanel" class="tab-panel">'
+        f'<h2>{escape(panel.title)}</h2>{panel.intro}{panel.content}</section>'
+    )
+
+
+def tab_bar_html(panels: collections.abc.Sequence[Panel]) -> str:
+    """The tab bar, hidden until the page script shows it, since the tabs only work with script."""
+    buttons = ''.join(
+        f'<button type="button" role="tab" id="tab-button-{panel.key}" '
+        f'aria-controls="{panel.panel_id}" aria-selected="false" tabindex="-1">'
+        f'{escape(panel.title)}</button>'
+        for panel in panels
+    )
+    return f'<div class="tab-bar" role="tablist" hidden>{buttons}</div>'
+
+
+def activity_panels(
+    report: HtmlReport, built: PageFigures, figures: list[wambatic.reports.figures.Figure]
+) -> list[Panel]:
+    total = report.total
+    if wambatic.reports.rows.activity_table(total) is None:
+        return []
+    by_key = {f.key: f for f in figures if f.group == 'activity'}
+
+    def chart(*keys: str) -> list[str]:
+        return [figure_html(by_key[key]) for key in keys if key in by_key]
+
+    def range_charts(*keys: str) -> list[str]:
+        return [figure_html(f) for f in built.range_figures if f.key in keys]
+
+    calendar = [] if built.calendar is None else [figure_html(built.calendar, True)]
+    return [
+        Panel(
+            'commits',
+            'Commits',
+            [
+                charts_html(chart('activity-commits', 'activity-active-days'), calendar),
+                period_tables_html(report, wambatic.reports.rows.activity_table, partial_note),
+            ],
+        ),
+        Panel(
+            'contributors',
+            'Contributors',
+            [
+                charts_html(
+                    chart('activity-contributors'),
+                    range_charts(
+                        'activity-top-contributors', 'activity-by-repository', 'activity-by-author'
+                    ),
+                ),
+                contributors_html(total),
+                breakdown_html(total),
+            ],
+        ),
+        Panel('lines', 'Lines', [charts_html(chart('activity-lines'))]),
+    ]
+
+
 def sections_html(
     report: HtmlReport,
     built: PageFigures,
     now: wambatic.reports.rows.PopularityNow | None,
     languages: wambatic.reports.rows.Languages | None,
 ) -> str:
+    """The tab bar, the panels that have content, then Unavailable outside every panel."""
     total = report.total
     figures = period_figures(report, built)
-    range_figures = built.range_figures
-    calendar = built.calendar
-    sections = []
-    if wambatic.reports.rows.activity_table(total) is not None:
-        charts = [f for f in figures if f.group == 'activity']
-        wide = [calendar] if calendar is not None else []
-        pieces = [
-            '<section id="activity"><h2>Activity</h2>',
-            '<div class="charts">',
-            *(figure_html(f) for f in charts),
-            *(figure_html(f, True) for f in wide),
-            *(figure_html(f) for f in range_figures if f.group == 'activity'),
-            '</div>',
-            period_tables_html(report, wambatic.reports.rows.activity_table, partial_note),
-            breakdown_html(total),
-            contributors_html(total),
-            '</section>',
-        ]
-        sections.append(''.join(pieces))
+    panels = activity_panels(report, built, figures)
     if wambatic.reports.rows.flow_table(total) is not None:
-        pieces = [
-            '<section id="flow"><h2>Flow</h2>',
-            '<div class="charts">',
-            *(figure_html(f) for f in figures if f.group == 'flow'),
-            '</div>',
-            period_tables_html(report, wambatic.reports.rows.flow_table, partial_note),
-            period_tables_html(
-                report,
-                wambatic.reports.rows.flow_times_table,
-                wambatic.reports.terminal.flow_times_caption,
-            ),
-            '</section>',
-        ]
-        sections.append(''.join(pieces))
+        panels.append(
+            Panel(
+                'flow',
+                'Flow',
+                [
+                    charts_html(figure_html(f) for f in figures if f.group == 'flow'),
+                    period_tables_html(report, wambatic.reports.rows.flow_table, partial_note),
+                    period_tables_html(
+                        report,
+                        wambatic.reports.rows.flow_times_table,
+                        wambatic.reports.terminal.flow_times_caption,
+                    ),
+                ],
+            )
+        )
     if wambatic.reports.rows.delivery_table(total) is not None:
         has_dora = wambatic.reports.rows.dora_table(total) is not None
-        pieces = [
-            '<section id="delivery"><h2>Delivery</h2>',
-            f'<p class="proxies">{escape(PROXIES_LINE)}</p>' if has_dora else '',
-            '<div class="charts">',
-            *(figure_html(f) for f in figures if f.group == 'delivery'),
-            '</div>',
-            period_tables_html(report, wambatic.reports.rows.delivery_table, delivery_note),
-            period_tables_html(report, wambatic.reports.rows.dora_table, dora_note),
-            '</section>',
-        ]
-        sections.append(''.join(pieces))
+        panels.append(
+            Panel(
+                'delivery',
+                'Delivery',
+                [
+                    charts_html(figure_html(f) for f in figures if f.group == 'delivery'),
+                    period_tables_html(report, wambatic.reports.rows.delivery_table, delivery_note),
+                    period_tables_html(report, wambatic.reports.rows.dora_table, dora_note),
+                ],
+                f'<p class="proxies">{escape(PROXIES_LINE)}</p>' if has_dora else '',
+            )
+        )
     if wambatic.reports.rows.popularity_table(total) is not None:
-        pieces = [
-            '<section id="popularity"><h2>Popularity</h2>',
-            f'<p class="popularity-note">{escape(POPULARITY_LINE)}</p>',
-            '<div class="charts">',
-            *(figure_html(f) for f in figures if f.group == 'popularity'),
-            *(figure_html(f) for f in range_figures if f.group == 'popularity'),
-            '</div>',
-            period_tables_html(
-                report,
-                wambatic.reports.rows.popularity_table,
-                wambatic.reports.terminal.popularity_caption,
-            ),
-            popularity_now_html(now),
-            languages_html(languages),
-            '</section>',
-        ]
-        sections.append(''.join(pieces))
-    sections.append(unavailable_html(total))
-    return ''.join(sections)
+        panels.append(
+            Panel(
+                'popularity',
+                'Popularity',
+                [
+                    charts_html(
+                        (figure_html(f) for f in figures if f.group == 'popularity'),
+                        (figure_html(f) for f in built.range_figures if f.group == 'popularity'),
+                    ),
+                    period_tables_html(
+                        report,
+                        wambatic.reports.rows.popularity_table,
+                        wambatic.reports.terminal.popularity_caption,
+                    ),
+                    popularity_now_html(now),
+                    languages_html(languages),
+                ],
+                f'<p class="popularity-note">{escape(POPULARITY_LINE)}</p>',
+            )
+        )
+    present = [panel for panel in panels if panel.content]
+    bar = tab_bar_html(present) if present else ''
+    return bar + ''.join(panel_html(panel) for panel in present) + unavailable_html(total)
 
 
 def page_data(

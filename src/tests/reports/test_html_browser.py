@@ -58,6 +58,13 @@ def open_report(
         context.close()
 
 
+def show_chart(page: playwright.sync_api.Page, key: str) -> None:
+    """Open the tab holding chart `key` and wait for it to be drawn."""
+    panel: str = page.evaluate(f'document.getElementById("{key}").closest("[role=tabpanel]").id')
+    page.click(f'[role=tab][aria-controls={panel}]')
+    page.wait_for_selector(f'#{key} .main-svg')
+
+
 def keys(report: wambatic.reports.html.HtmlReport) -> list[str]:
     figures = [
         figure
@@ -79,7 +86,11 @@ def test_the_file_opens_offline_without_errors_and_every_chart_is_drawn(
     expected = keys(org_report)
     assert 'activity-calendar' in expected
     for key in expected:
-        opened.page.wait_for_selector(f'#{key} .main-svg')
+        show_chart(opened.page, key)
+        width: float = opened.page.evaluate(
+            f'document.getElementById("{key}").getBoundingClientRect().width'
+        )
+        assert width > 0, key
     assert opened.requests == []
     assert opened.problems == []
 
@@ -92,10 +103,10 @@ def test_a_delivery_report_draws_every_chart_with_no_request_or_error(
     expected = keys(delivery_report)
     assert {'delivery-runs', 'delivery-lead-time', 'delivery-time-to-restore'} <= set(expected)
     for key in expected:
-        opened.page.wait_for_selector(f'#{key} .main-svg')
+        show_chart(opened.page, key)
     for granularity in wambatic.reports.html.PERIODS:
         opened.page.check(f'input[name=granularity][value={granularity}]')
-        opened.page.wait_for_selector('#delivery-runs .main-svg')
+        show_chart(opened.page, 'delivery-runs')
     assert opened.requests == []
     assert opened.problems == []
 
@@ -108,10 +119,10 @@ def test_a_popularity_report_draws_every_chart_with_no_request_or_error(
     expected = keys(popularity_report)
     assert {'popularity-stars-added', 'popularity-languages'} <= set(expected)
     for key in expected:
-        opened.page.wait_for_selector(f'#{key} .main-svg')
+        show_chart(opened.page, key)
     for granularity in wambatic.reports.html.PERIODS:
         opened.page.check(f'input[name=granularity][value={granularity}]')
-        opened.page.wait_for_selector('#popularity-stars-total .main-svg')
+        show_chart(opened.page, 'popularity-stars-total')
     assert opened.requests == []
     assert opened.problems == []
 
@@ -214,3 +225,92 @@ def test_a_page_opened_with_its_folder_hides_the_missing_files_notice(
 ) -> None:
     opened = open_report()
     assert not opened.page.locator('.assets-missing').is_visible()
+
+
+def selected_tab(page: playwright.sync_api.Page) -> str:
+    selected: str = page.eval_on_selector(
+        '[role=tab][aria-selected=true]', 'button => button.getAttribute("aria-controls")'
+    )
+    return selected
+
+
+def test_a_tab_first_opened_after_a_granularity_switch_shows_that_granularity(
+    open_report: collections.abc.Callable[..., Opened], org_report: wambatic.reports.html.HtmlReport
+) -> None:
+    opened = open_report()
+    page = opened.page
+    page.check('input[name=granularity][value=day]')
+    page.click('[role=tab][aria-controls=tab-lines]')
+    figures = wambatic.reports.figures.build_figures(
+        org_report.periods[wambatic.stats.base.Granularity.DAY]
+    )
+    lines = next(f for f in figures if f.key == 'activity-lines')
+    expected = len(lines.data[0]['x'])  # type: ignore[arg-type]
+    page.wait_for_function(
+        f'document.getElementById("activity-lines").data[0].x.length === {expected}'
+    )
+    assert opened.problems == []
+
+
+def test_the_first_tab_shows_on_load_and_the_arrow_keys_home_and_end_move_the_selection(
+    open_report: collections.abc.Callable[..., Opened],
+) -> None:
+    opened = open_report()
+    page = opened.page
+    tabs = page.eval_on_selector_all(
+        '[role=tab]', 'buttons => buttons.map(b => b.getAttribute("aria-controls"))'
+    )
+    assert tabs[0] == 'tab-commits' and len(tabs) >= 4
+    assert selected_tab(page) == tabs[0]
+    shown = page.eval_on_selector_all(
+        '[role=tabpanel]', 'panels => panels.filter(p => !p.hidden).map(p => p.id)'
+    )
+    assert shown == [tabs[0]]
+    page.focus(f'[role=tab][aria-controls={tabs[0]}]')
+    page.keyboard.press('ArrowRight')
+    assert selected_tab(page) == tabs[1]
+    page.keyboard.press('End')
+    assert selected_tab(page) == tabs[-1]
+    page.keyboard.press('ArrowRight')
+    assert selected_tab(page) == tabs[0]
+    page.keyboard.press('ArrowLeft')
+    assert selected_tab(page) == tabs[-1]
+    page.keyboard.press('Home')
+    assert selected_tab(page) == tabs[0]
+    assert page.url.endswith('#tab-commits')
+    assert opened.problems == []
+
+
+def test_a_fragment_opens_on_its_tab(
+    org_report: wambatic.reports.html.HtmlReport,
+    tmp_path: pathlib.Path,
+    chromium: playwright.sync_api.Browser,
+) -> None:
+    out = wambatic.reports.html.render_html(org_report, tmp_path / 'out' / 'report.html', 'auto')
+    context = chromium.new_context()
+    try:
+        page = context.new_page()
+        page.goto(f'{out.as_uri()}#tab-flow')
+        page.wait_for_selector('#tab-flow:not([hidden])')
+        assert selected_tab(page) == 'tab-flow'
+    finally:
+        context.close()
+
+
+def test_with_script_disabled_every_panel_shows(
+    org_report: wambatic.reports.html.HtmlReport,
+    tmp_path: pathlib.Path,
+    chromium: playwright.sync_api.Browser,
+) -> None:
+    out = wambatic.reports.html.render_html(org_report, tmp_path / 'out' / 'report.html', 'auto')
+    context = chromium.new_context(java_script_enabled=False)
+    try:
+        page = context.new_page()
+        page.goto(out.as_uri())
+        panels = page.locator('[role=tabpanel]')
+        assert panels.count() >= 4
+        for index in range(panels.count()):
+            assert panels.nth(index).is_visible()
+        assert not page.locator('[role=tablist]').is_visible()
+    finally:
+        context.close()

@@ -130,7 +130,7 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 ## Task 4: Put each section in a tab
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** large
 **Spec Reference:** HTML report 2.0, Implementation (Layout items 1 to 5, Tabs, Granularity switch), Error handling (assets missing)
@@ -139,23 +139,23 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 **Subtasks:**
 
-- [ ] Change the layout in `html.py` to the header, the missing-assets notice, the tiles, the tab bar, then the panels `tab-commits`, `tab-contributors`, `tab-lines`, `tab-flow`, `tab-delivery` and `tab-popularity` holding the charts and tables the spec lists for each, then Unavailable and the footer outside every panel; a tab and its panel appear only when the panel has content
-- [ ] Write the tab bar as a `role="tablist"` of `role="tab"` buttons with `aria-controls`, and each panel as `<section role="tabpanel">` with its heading; the tab bar is hidden and every panel shows without script
-- [ ] In `report.js`: show the first present tab, or the panel named by the URL fragment; set the fragment with `history.replaceState` on a choice; Left, Right, Home and End move between tabs
-- [ ] Draw a panel's charts with `Plotly.newPlot` the first time it shows; on a granularity change redraw the shown panel's charts and mark the others to be redrawn when they next show
-- [ ] Tests in `src/tests/reports/test_html.py`: the panel order and contents for an `activity`, `flow`, `delivery` and `popularity` report; a report without `flow` has no Flow tab; Unavailable sits outside the panels. In `src/tests/reports/test_html_browser.py`: every chart in every tab has a non-zero width once its tab shows; a granularity switch then a tab first opened after it shows the new granularity's buckets; arrow keys, Home and End move the selection; `#tab-flow` opens on Flow; with script disabled every panel shows
+- [x] Change the layout in `html.py` to the header, the missing-assets notice, the tiles, the tab bar, then the panels `tab-commits`, `tab-contributors`, `tab-lines`, `tab-flow`, `tab-delivery` and `tab-popularity` holding the charts and tables the spec lists for each, then Unavailable and the footer outside every panel; a tab and its panel appear only when the panel has content
+- [x] Write the tab bar as a `role="tablist"` of `role="tab"` buttons with `aria-controls`, and each panel as `<section role="tabpanel">` with its heading; the tab bar is hidden and every panel shows without script
+- [x] In `report.js`: show the first present tab, or the panel named by the URL fragment; set the fragment with `history.replaceState` on a choice; Left, Right, Home and End move between tabs
+- [x] Draw a panel's charts with `Plotly.newPlot` the first time it shows; on a granularity change redraw the shown panel's charts and mark the others to be redrawn when they next show
+- [x] Tests in `src/tests/reports/test_html.py`: the panel order and contents for an `activity`, `flow`, `delivery` and `popularity` report; a report without `flow` has no Flow tab; Unavailable sits outside the panels. In `src/tests/reports/test_html_browser.py`: every chart in every tab has a non-zero width once its tab shows; a granularity switch then a tab first opened after it shows the new granularity's buckets; arrow keys, Home and End move the selection; `#tab-flow` opens on Flow; with script disabled every panel shows
 
 **Acceptance Criteria:**
 
-- [ ] The page opens on the tiles and the first tab, and every chart and table of 1.3 is in exactly one panel
-- [ ] No console error and no page error in the browser test
+- [x] The page opens on the tiles and the first tab, and every chart and table of 1.3 is in exactly one panel
+- [x] No console error and no page error in the browser test
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/reports/test_html.py src/tests/reports/test_html_browser.py src/tests/reports/test_web_browser.py` passes
-- [ ] `bin/audit-check.sh` exits 0
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/reports/test_html.py src/tests/reports/test_html_browser.py src/tests/reports/test_web_browser.py` passes
+- [x] `bin/audit-check.sh` exits 0
 
 **Notes:**
 

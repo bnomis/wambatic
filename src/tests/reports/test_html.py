@@ -438,8 +438,8 @@ def test_a_repo_page_has_no_by_repository_table_and_the_sections_of_its_groups(
 ) -> None:
     document = html_document(repo_report, 'auto')
     assert 'By repository' not in document
-    assert 'id="activity"' in document
-    assert 'id="flow"' in document
+    assert 'id="tab-commits"' in document
+    assert 'id="tab-flow"' in document
     assert 'repo octo-org/alpha' in document
 
 
@@ -462,8 +462,9 @@ def test_a_group_the_result_lacks_has_no_section(
         initial=org_report.initial,
     )
     document = html_document(report, 'auto')
-    assert 'id="activity"' in document
-    assert 'id="flow"' not in document
+    assert 'id="tab-commits"' in document
+    assert 'id="tab-flow"' not in document
+    assert panel_ids(document) == ACTIVITY_PANELS
     assert 'PRs opened' not in document
 
 
@@ -674,10 +675,10 @@ def test_the_delivery_section_and_tiles_appear_only_with_delivery_series(
     delivery_report: wambatic.reports.html.HtmlReport,
 ) -> None:
     without = html_document(org_report, 'auto')
-    assert 'id="delivery"' not in without
+    assert 'id="tab-delivery"' not in without
     assert 'Workflow runs' not in Page(without).tiles
     page = Page(html_document(delivery_report, 'auto'))
-    assert page.by_id('delivery')
+    assert page.by_id('tab-delivery')
     assert page.tiles['Workflow runs'] == '13'
     assert page.tiles['Success rate'] == '66.7%'  # 6 of 9 completed runs
     assert page.tiles['Releases'] == '6'
@@ -700,7 +701,7 @@ def test_every_delivery_figure_has_its_element_and_the_section_holds_its_charts(
     assert 'delivery-lead-time' in keys
     for key in keys:
         assert page.by_id(key)['role'] == 'img'
-    section = document.split('id="delivery"')[1].split('</section>')[0]
+    section = document.split('id="tab-delivery"')[1].split('</section>')[0]
     assert all(f'id="{key}"' in section for key in keys)
 
 
@@ -708,7 +709,7 @@ def test_the_delivery_tables_hold_the_rows_of_rows_py_once_per_granularity(
     delivery_report: wambatic.reports.html.HtmlReport,
 ) -> None:
     document = without_values(html_document(delivery_report, 'auto'))
-    section = document.split('id="delivery"')[1].split('</section>')[0]
+    section = document.split('id="tab-delivery"')[1].split('</section>')[0]
     for title in ('Delivery by period', 'DORA proxies by period'):
         assert section.count(f'<caption>{title}') == 4, title
     assert section.count(' hidden') == 6  # all but the initial granularity of two tables
@@ -739,7 +740,7 @@ def test_a_page_with_delivery_but_no_proxy_has_no_proxy_table_or_line(
 
 
 def popularity_section(document: str) -> str:
-    return document.split('id="popularity"')[1].split('</section>')[0]
+    return document.split('id="tab-popularity"')[1].split('</section>')[0]
 
 
 def test_the_popularity_section_and_tiles_appear_only_with_popularity_series(
@@ -747,10 +748,10 @@ def test_the_popularity_section_and_tiles_appear_only_with_popularity_series(
     popularity_report: wambatic.reports.html.HtmlReport,
 ) -> None:
     without = html_document(org_report, 'auto')
-    assert 'id="popularity"' not in without
+    assert 'id="tab-popularity"' not in without
     assert 'Top language' not in Page(without).tiles
     page = Page(html_document(popularity_report, 'auto'))
-    assert page.by_id('popularity')
+    assert page.by_id('tab-popularity')
     assert page.tiles['Stars'] == '10'  # alpha 6 and beta 4
     assert page.tiles['Forks'] == '5'
     assert page.tiles['Watchers'] == '6'
@@ -776,7 +777,8 @@ def test_the_popularity_section_holds_its_charts_and_says_what_the_counts_are(
     assert 'as of the last sync' in section
     assert 'exist now' in section
     assert (
-        'id="popularity-languages"' not in document.split('id="activity"')[1].split('</section>')[0]
+        'id="popularity-languages"'
+        not in document.split('id="tab-commits"')[1].split('</section>')[0]
     )
 
 
@@ -928,3 +930,63 @@ def test_the_unavailable_table_has_only_text_columns(
     assert section.count('data-type="text"') == 2
     assert 'data-type="number"' not in section
     assert 'data-value' not in section
+
+
+ACTIVITY_PANELS = ['tab-commits', 'tab-contributors', 'tab-lines']
+
+
+def panel_ids(document: str) -> list[str]:
+    return re.findall(r'<section id="(tab-[a-z]+)" role="tabpanel"', document)
+
+
+def test_the_panels_follow_the_spec_order_and_hold_their_charts(
+    org_report: wambatic.reports.html.HtmlReport,
+    delivery_report: wambatic.reports.html.HtmlReport,
+    popularity_report: wambatic.reports.html.HtmlReport,
+) -> None:
+    document = html_document(org_report, 'auto')
+    assert panel_ids(document)[:3] == ACTIVITY_PANELS
+    commits = document.split('id="tab-commits"')[1].split('</section>')[0]
+    assert 'id="activity-commits"' in commits
+    assert 'id="activity-active-days"' in commits
+    assert 'id="activity-calendar"' in commits
+    assert 'id="activity-lines"' not in commits
+    contributors = document.split('id="tab-contributors"')[1].split('</section>')[0]
+    assert 'id="activity-contributors"' in contributors
+    assert 'id="activity-top-contributors"' in contributors
+    assert 'id="activity-commits"' not in contributors
+    lines = document.split('id="tab-lines"')[1].split('</section>')[0]
+    assert 'id="activity-lines"' in lines
+    assert panel_ids(html_document(delivery_report, 'auto')) == [
+        'tab-commits',
+        'tab-contributors',
+        'tab-lines',
+        'tab-flow',
+        'tab-delivery',
+    ]
+    assert panel_ids(html_document(popularity_report, 'auto'))[-1] == 'tab-popularity'
+
+
+def test_every_tab_button_names_its_panel_and_the_bar_is_hidden_until_script_runs(
+    popularity_report: wambatic.reports.html.HtmlReport,
+) -> None:
+    document = html_document(popularity_report, 'auto')
+    ids = panel_ids(document)
+    assert '<div class="tab-bar" role="tablist" hidden>' in document
+    assert re.findall(r'role="tab" id="[a-z-]+" aria-controls="(tab-[a-z]+)"', document) == ids
+    panels = re.findall(r'<section id="tab-[^>]*>', document)
+    assert panels and all('hidden' not in tag for tag in panels)
+
+
+def test_unavailable_sits_outside_the_panels(
+    org_report: wambatic.reports.html.HtmlReport,
+) -> None:
+    rows = [{'metric': 'releases', 'reason': 'not fetched'}]
+    total = dataclasses.replace(
+        org_report.total, tables={**org_report.total.tables, 'unavailable': rows}
+    )
+    report = dataclasses.replace(org_report, total=total)
+    document = html_document(report, 'auto')
+    before = document.split('<section id="unavailable">')[0]
+    assert before.count('<section') == before.count('</section>')
+    assert document.rindex('role="tabpanel"') < document.index('id="unavailable"')

@@ -78,6 +78,10 @@
     return result;
   }
 
+  var panels = Array.prototype.slice.call(document.querySelectorAll('[role="tabpanel"]'));
+  var drawn = {};
+  var current = null;
+
   function draw(figure, redraw) {
     var element = document.getElementById(figure.key);
     if (!element) {
@@ -91,16 +95,21 @@
     }
   }
 
-  function drawPeriods(granularity, redraw) {
+  function inPanel(panel, key) {
+    var element = document.getElementById(key);
+    return element && panel.contains(element);
+  }
+
+  function drawPeriods(panel, granularity, redraw) {
     var figures = {};
     data.periods[granularity].forEach(function (figure) {
       figures[figure.key] = figure;
     });
     periodKeys.forEach(function (key) {
-      var element = document.getElementById(key);
-      if (!element) {
+      if (!inPanel(panel, key)) {
         return;
       }
+      var element = document.getElementById(key);
       if (figures[key]) {
         element.parentElement.hidden = false;
         draw(figures[key], redraw);
@@ -110,13 +119,28 @@
     });
   }
 
-  function drawFixed(redraw) {
-    data.range.forEach(function (figure) {
-      draw(figure, redraw);
+  function drawFixed(panel, redraw) {
+    data.range.concat(data.calendar ? [data.calendar] : []).forEach(function (figure) {
+      if (inPanel(panel, figure.key)) {
+        draw(figure, redraw);
+      }
     });
-    if (data.calendar) {
-      draw(data.calendar, redraw);
+  }
+
+  function drawPanel(panel) {
+    var stamp = shown + '/' + activeTheme();
+    var before = drawn[panel.id];
+    if (before === stamp) {
+      panel.querySelectorAll('.plot').forEach(function (element) {
+        if (element.data) {
+          Plotly.Plots.resize(element);
+        }
+      });
+      return;
     }
+    drawPeriods(panel, shown, before !== undefined);
+    drawFixed(panel, before !== undefined);
+    drawn[panel.id] = stamp;
   }
 
   function showTables(granularity) {
@@ -125,10 +149,68 @@
     });
   }
 
+  function buttonFor(panel) {
+    return document.querySelector('[role="tab"][aria-controls="' + panel.id + '"]');
+  }
+
+  function select(panel, setFragment) {
+    current = panel;
+    panels.forEach(function (other) {
+      var active = other === panel;
+      other.hidden = !active;
+      var button = buttonFor(other);
+      if (button) {
+        button.setAttribute('aria-selected', active ? 'true' : 'false');
+        button.tabIndex = active ? 0 : -1;
+      }
+    });
+    if (setFragment) {
+      history.replaceState(null, '', '#' + panel.id);
+    }
+    drawPanel(panel);
+  }
+
+  function moveTab(event) {
+    var index = panels.indexOf(current);
+    var keys = {
+      ArrowLeft: index - 1 < 0 ? panels.length - 1 : index - 1,
+      ArrowRight: (index + 1) % panels.length,
+      Home: 0,
+      End: panels.length - 1
+    };
+    if (!(event.key in keys)) {
+      return;
+    }
+    event.preventDefault();
+    var target = panels[keys[event.key]];
+    select(target, true);
+    buttonFor(target).focus();
+  }
+
+  function startTabs() {
+    var bar = document.querySelector('[role="tablist"]');
+    if (!bar || !panels.length) {
+      return;
+    }
+    bar.hidden = false;
+    panels.forEach(function (panel) {
+      buttonFor(panel).addEventListener('click', function () {
+        select(panel, true);
+      });
+    });
+    bar.addEventListener('keydown', moveTab);
+    var named = panels.filter(function (panel) {
+      return '#' + panel.id === window.location.hash;
+    });
+    select(named.length ? named[0] : panels[0], false);
+  }
+
   function choose(event) {
     shown = event.target.value;
     showTables(shown);
-    drawPeriods(shown, true);
+    if (current) {
+      drawPanel(current);
+    }
   }
 
   document.querySelectorAll('input[name="granularity"]').forEach(function (radio) {
@@ -136,11 +218,11 @@
   });
 
   dark.addEventListener('change', function () {
-    drawPeriods(shown, true);
-    drawFixed(true);
+    if (current) {
+      drawPanel(current);
+    }
   });
 
   showTables(shown);
-  drawPeriods(shown, false);
-  drawFixed(false);
+  startTabs();
 })();

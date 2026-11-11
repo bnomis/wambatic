@@ -16,6 +16,7 @@ import wambatic.reports.errors
 import wambatic.reports.service
 import wambatic.settings
 import wambatic.stats.base
+import wambatic.stats.engine
 import wambatic.stats.errors
 
 JobKey = tuple[str, frozenset[str]]
@@ -26,6 +27,7 @@ BAD_REQUEST = (
     wambatic.stats.errors.InvalidRangeError,
     wambatic.stats.errors.InvalidRequestError,
 )
+TRUE_VALUES = frozenset({'1', 'on', 'true'})
 NOT_FOUND = (wambatic.fetch.errors.NotFoundError, wambatic.stats.errors.EmptySubjectError)
 
 
@@ -159,20 +161,19 @@ def progress_json(job: SyncJob) -> dict[str, object]:
 RunSync = collections.abc.Callable[[SyncJob], collections.abc.Awaitable[None]]
 
 
-async def results_or_job(
+async def ready_results(
     settings: wambatic.settings.Settings,
     cache: wambatic.fetch.cache.Cache,
     jobs: Jobs,
     clock: collections.abc.Callable[[], datetime.datetime],
-    run: RunSync,
     *,
     target: wambatic.fetch.base.Subject | str,
     key: JobKey,
     job_id: str | None,
     requests: list[wambatic.stats.base.StatsRequest],
-) -> list[wambatic.stats.base.StatsResult] | SyncJob:
-    """The results at once when the cache is fresh or the request names its finished job;
-    else the job that brings the cache up to date, started with `run`.
+) -> list[wambatic.stats.base.StatsResult] | SyncJob | None:
+    """The results at once when the cache is fresh or the request names its finished job; the
+    unfinished job the request names; else None, when a sync is needed. Starts nothing.
 
     Raises:
         JobError: the finished job for the request failed.
@@ -216,4 +217,125 @@ async def results_or_job(
             return job
     if not isinstance(target, str) and not await stale(target):
         return await compute(target)
-    return jobs.start(key, run)
+    return None
+
+
+async def results_or_job(
+    settings: wambatic.settings.Settings,
+    cache: wambatic.fetch.cache.Cache,
+    jobs: Jobs,
+    clock: collections.abc.Callable[[], datetime.datetime],
+    run: RunSync,
+    *,
+    target: wambatic.fetch.base.Subject | str,
+    key: JobKey,
+    job_id: str | None,
+    requests: list[wambatic.stats.base.StatsRequest],
+) -> list[wambatic.stats.base.StatsResult] | SyncJob:
+    """The results of `ready_results`, else the job that brings the cache up to date, started
+    with `run`.
+
+    Raises:
+        JobError: the finished job for the request failed.
+        EmptySubjectError: there is nothing to report.
+        UnknownGroupError: a group is outside `GROUPS`.
+        InvalidRequestError: the request is invalid for the subject.
+        InvalidRangeError: `since` is after `until`.
+        CacheError: the cache cannot be read.
+    """
+    ready = await ready_results(
+        settings,
+        cache,
+        jobs,
+        clock,
+        target=target,
+        key=key,
+        job_id=job_id,
+        requests=requests,
+    )
+    return jobs.start(key, run) if ready is None else ready
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class RawQuery:
+    """The query parameters of a data request, as the client sent them."""
+
+    target: str | None
+    by: str | None
+    since: str | None
+    until: str | None
+    groups: str | None
+    by_author: str | None
+    tz: str | None
+    commit_tz: str | None
+    job: str | None
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Query:
+    """A data request after parsing: the target, the request and the key its sync job has."""
+
+    target: wambatic.fetch.base.Subject | str
+    request: wambatic.stats.base.StatsRequest
+    key: wambatic.reports.jobs.JobKey
+    job: str | None
+
+
+def blank_to_none(value: str | None) -> str | None:
+    """A form submits an empty field as an empty value, which means the field was left out."""
+    return value.strip() or None if value is not None else None
+
+
+def parse_query(
+    settings: wambatic.settings.Settings,
+    raw: RawQuery,
+    today: datetime.datetime,
+    *,
+    page: bool,
+) -> Query:
+    """The CLI's parsers applied to the parameters, so a value the CLI rejects is rejected with
+    the same message.
+
+    Raises:
+        UsageError: a query parameter is invalid.
+        SettingsError: `settings.stats.timezone` is not a known time zone.
+        UnknownGroupError: a group is outside `GROUPS`.
+    """
+    text = (blank_to_none(raw.target) or '').strip()
+    if not text:
+        raise wambatic.reports.errors.UsageError(
+            f'target is required: {wambatic.reports.service.TARGET_FORMS}'
+        )
+    target = wambatic.reports.service.parse_target(text)
+    by = blank_to_none(raw.by) or 'month'
+    if page and by == 'total':
+        raise wambatic.reports.errors.UsageError(
+            'by=total is not for the report page: the page shows the totals as tiles and '
+            'switches between year, month, week and day'
+        )
+    by_author = (raw.by_author or '').lower() in TRUE_VALUES
+    if by_author and not isinstance(target, str):
+        wambatic.reports.service.check_by_author(target)
+    tz = blank_to_none(raw.tz)
+    commit_tz = blank_to_none(raw.commit_tz)
+    stats = settings.stats
+    if tz is not None:
+        stats = dataclasses.replace(stats, timezone=tz)
+    if commit_tz is not None:
+        stats = dataclasses.replace(
+            stats, commit_timezone=wambatic.reports.service.parse_commit_tz(commit_tz)
+        )
+    effective = dataclasses.replace(settings, stats=stats)
+    request = wambatic.reports.service.make_request(
+        by,
+        blank_to_none(raw.since),
+        blank_to_none(raw.until),
+        blank_to_none(raw.groups),
+        by_author,
+        effective,
+        today,
+    )
+    resources = (
+        wambatic.stats.engine.resources_for(request.groups) & wambatic.fetch.base.BUILT_RESOURCES
+    )
+    return Query(target, request, (text, resources), blank_to_none(raw.job))

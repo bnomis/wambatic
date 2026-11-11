@@ -4,7 +4,6 @@ a large target needs run as jobs, so no request waits for a sync."""
 import asyncio
 import collections.abc
 import contextlib
-import dataclasses
 import datetime
 import ipaddress
 import socket
@@ -23,6 +22,7 @@ import wambatic.fetch.base
 import wambatic.fetch.cache
 import wambatic.fetch.errors
 import wambatic.fetch.ratelimit
+import wambatic.reports.api
 import wambatic.reports.assets
 import wambatic.reports.base
 import wambatic.reports.errors
@@ -39,7 +39,6 @@ import wambatic.version
 LOOPBACK_HOSTS = ('localhost', '127.0.0.1', '[::1]')
 ASSET_HEADERS = {'Cache-Control': 'public, max-age=31536000, immutable'}
 PAGE_PATHS = frozenset({'/', '/report'})
-TRUE_VALUES = frozenset({'1', 'on', 'true'})
 
 
 Target = typing.Annotated[
@@ -80,21 +79,6 @@ JobId = typing.Annotated[
 ]
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
-class RawQuery:
-    """The query parameters of a data request, as the client sent them."""
-
-    target: str | None
-    by: str | None
-    since: str | None
-    until: str | None
-    groups: str | None
-    by_author: str | None
-    tz: str | None
-    commit_tz: str | None
-    job: str | None
-
-
 # auditme: accept[passthrough-shim] the FastAPI dependency that reads the query string
 def raw_query(
     target: Target = None,
@@ -106,78 +90,10 @@ def raw_query(
     tz: Tz = None,
     commit_tz: CommitTz = None,
     job: JobId = None,
-) -> RawQuery:
-    return RawQuery(target, by, since, until, groups, by_author, tz, commit_tz, job)
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
-class Query:
-    """A data request after parsing: the target, the request and the key its sync job has."""
-
-    target: wambatic.fetch.base.Subject | str
-    request: wambatic.stats.base.StatsRequest
-    key: wambatic.reports.jobs.JobKey
-    job: str | None
-
-
-def blank_to_none(value: str | None) -> str | None:
-    """A form submits an empty field as an empty value, which means the field was left out."""
-    return value.strip() or None if value is not None else None
-
-
-def parse_query(
-    settings: wambatic.settings.Settings,
-    raw: RawQuery,
-    today: datetime.datetime,
-    *,
-    page: bool,
-) -> Query:
-    """The CLI's parsers applied to the parameters, so a value the CLI rejects is rejected with
-    the same message.
-
-    Raises:
-        UsageError: a query parameter is invalid.
-        SettingsError: `settings.stats.timezone` is not a known time zone.
-        UnknownGroupError: a group is outside `GROUPS`.
-    """
-    text = (blank_to_none(raw.target) or '').strip()
-    if not text:
-        raise wambatic.reports.errors.UsageError(
-            f'target is required: {wambatic.reports.service.TARGET_FORMS}'
-        )
-    target = wambatic.reports.service.parse_target(text)
-    by = blank_to_none(raw.by) or 'month'
-    if page and by == 'total':
-        raise wambatic.reports.errors.UsageError(
-            'by=total is not for the report page: the page shows the totals as tiles and '
-            'switches between year, month, week and day'
-        )
-    by_author = (raw.by_author or '').lower() in TRUE_VALUES
-    if by_author and not isinstance(target, str):
-        wambatic.reports.service.check_by_author(target)
-    tz = blank_to_none(raw.tz)
-    commit_tz = blank_to_none(raw.commit_tz)
-    stats = settings.stats
-    if tz is not None:
-        stats = dataclasses.replace(stats, timezone=tz)
-    if commit_tz is not None:
-        stats = dataclasses.replace(
-            stats, commit_timezone=wambatic.reports.service.parse_commit_tz(commit_tz)
-        )
-    effective = dataclasses.replace(settings, stats=stats)
-    request = wambatic.reports.service.make_request(
-        by,
-        blank_to_none(raw.since),
-        blank_to_none(raw.until),
-        blank_to_none(raw.groups),
-        by_author,
-        effective,
-        today,
+) -> wambatic.reports.jobs.RawQuery:
+    return wambatic.reports.jobs.RawQuery(
+        target, by, since, until, groups, by_author, tz, commit_tz, job
     )
-    resources = (
-        wambatic.stats.engine.resources_for(request.groups) & wambatic.fetch.base.BUILT_RESOURCES
-    )
-    return Query(target, request, (text, resources), blank_to_none(raw.job))
 
 
 CallNext = collections.abc.Callable[[fastapi.Request], collections.abc.Awaitable[fastapi.Response]]
@@ -221,7 +137,7 @@ def make_app(
             return fastapi.responses.HTMLResponse(body, status_code=status)
         return fastapi.responses.JSONResponse({'error': message}, status_code=status)
 
-    def sync_runner(query: Query) -> wambatic.reports.jobs.RunSync:
+    def sync_runner(query: wambatic.reports.jobs.Query) -> wambatic.reports.jobs.RunSync:
         async def run(job: wambatic.reports.jobs.SyncJob) -> None:
             job.subject = await wambatic.reports.service.sync_target(
                 settings,
@@ -238,7 +154,7 @@ def make_app(
         return run
 
     async def results_or_job(
-        query: Query, requests: list[wambatic.stats.base.StatsRequest]
+        query: wambatic.reports.jobs.Query, requests: list[wambatic.stats.base.StatsRequest]
     ) -> list[wambatic.stats.base.StatsResult] | wambatic.reports.jobs.SyncJob:
         return await wambatic.reports.jobs.results_or_job(
             settings,
@@ -312,6 +228,19 @@ def make_app(
         )
         return error_reply(request, 400, message)
 
+    @app.exception_handler(wambatic.reports.api.UnsupportedMediaType)
+    async def unsupported_media_type(
+        request: fastapi.Request, error: wambatic.reports.api.UnsupportedMediaType
+    ) -> fastapi.Response:
+        return fastapi.responses.JSONResponse({'error': str(error)}, status_code=415)
+
+    app.include_router(
+        wambatic.reports.api.graphql_router(
+            wambatic.reports.api.ApiContext(settings, cache, jobs, clock, sync_runner)
+        ),
+        prefix='/graphql',
+    )
+
     @app.get('/', include_in_schema=False)
     async def form() -> fastapi.responses.HTMLResponse:
         target = wambatic.reports.html.escape(default_target or '')
@@ -327,9 +256,10 @@ def make_app(
 
     @app.get('/report', include_in_schema=False)
     async def report(
-        request: fastapi.Request, raw: typing.Annotated[RawQuery, fastapi.Depends(raw_query)]
+        request: fastapi.Request,
+        raw: typing.Annotated[wambatic.reports.jobs.RawQuery, fastapi.Depends(raw_query)],
     ) -> fastapi.responses.HTMLResponse:
-        query = parse_query(settings, raw, clock(), page=True)
+        query = wambatic.reports.jobs.parse_query(settings, raw, clock(), page=True)
         outcome = await results_or_job(query, wambatic.reports.html.period_requests(query.request))
         if isinstance(outcome, wambatic.reports.jobs.SyncJob):
             reload = reload_path(request.url.components, outcome.id)
@@ -366,10 +296,10 @@ def make_app(
 
     @app.get('/api/stats')
     async def stats(
-        raw: typing.Annotated[RawQuery, fastapi.Depends(raw_query)],
+        raw: typing.Annotated[wambatic.reports.jobs.RawQuery, fastapi.Depends(raw_query)],
     ) -> fastapi.responses.JSONResponse:
         """The result as `report --format json` prints it, or 202 and a job to follow."""
-        query = parse_query(settings, raw, clock(), page=False)
+        query = wambatic.reports.jobs.parse_query(settings, raw, clock(), page=False)
         outcome = await results_or_job(query, [query.request])
         if isinstance(outcome, wambatic.reports.jobs.SyncJob):
             return fastapi.responses.JSONResponse(

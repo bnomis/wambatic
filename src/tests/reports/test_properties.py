@@ -13,6 +13,7 @@ import wambatic.fetch.base
 import wambatic.reports.errors
 import wambatic.reports.figures
 import wambatic.reports.html
+import wambatic.reports.jobs
 import wambatic.reports.rows
 import wambatic.reports.terminal
 import wambatic.reports.web
@@ -297,10 +298,10 @@ def test_parse_query_returns_a_query_or_raises_a_usage_error(
     job: str | None,
     page: bool,
 ) -> None:
-    raw = wambatic.reports.web.RawQuery(target, by, since, until, groups, by_author, tz, None, job)
+    raw = wambatic.reports.jobs.RawQuery(target, by, since, until, groups, by_author, tz, None, job)
     today = datetime.datetime(2027, 1, 20, 12, 0, tzinfo=datetime.UTC)
     try:
-        query = wambatic.reports.web.parse_query(
+        query = wambatic.reports.jobs.parse_query(
             wambatic.settings.Settings(), raw, today, page=page
         )
     except wambatic.reports.errors.UsageError, wambatic.settings.SettingsError:

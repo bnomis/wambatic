@@ -29,6 +29,7 @@ import wambatic.reports.assets
 import wambatic.reports.base
 import wambatic.reports.errors
 import wambatic.reports.html
+import wambatic.reports.jobs
 import wambatic.reports.service
 import wambatic.reports.web
 import wambatic.settings
@@ -447,7 +448,7 @@ def test_the_commit_tz_parameter_overrides_the_setting(
     setting: str, param: str | None, expected: str
 ) -> None:
     settings = wambatic.settings.load_settings(None, {'stats': {'commit_timezone': setting}})
-    raw = wambatic.reports.web.RawQuery(
+    raw = wambatic.reports.jobs.RawQuery(
         target='org:octo-org',
         by=None,
         since=None,
@@ -458,7 +459,7 @@ def test_the_commit_tz_parameter_overrides_the_setting(
         commit_tz=param,
         job=None,
     )
-    query = wambatic.reports.web.parse_query(settings, raw, tests.fixtures.stats.NOW, page=False)
+    query = wambatic.reports.jobs.parse_query(settings, raw, tests.fixtures.stats.NOW, page=False)
     assert query.request.settings.commit_timezone == expected
 
 

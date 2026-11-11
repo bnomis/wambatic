@@ -89,13 +89,13 @@ import collections.abc
 import fastapi
 import strawberry.fastapi
 
-@dataclasses.dataclass(frozen=True, slots=True)
-class ApiContext:
+@dataclasses.dataclass   # not frozen: the router sets `request` and `response` on a BaseContext
+class ApiContext(strawberry.fastapi.BaseContext):
     settings: Settings
     cache: Cache
     jobs: Jobs
     clock: collections.abc.Callable[[], datetime.datetime]
-    run_sync: collections.abc.Callable[[SyncJob], collections.abc.Awaitable[None]]
+    sync_runner: collections.abc.Callable[[Query], RunSync]   # the sync a query's job runs
 
 schema: strawberry.Schema   # Query, Mutation, with the WambaticErrors extension
 
@@ -115,7 +115,7 @@ def graphql_router(context: ApiContext) -> strawberry.fastapi.GraphQLRouter:
 ## Implementation
 
 - *Stats.* `stats` computes at once when `input.job` is the finished job of the same key (target and groups) or when the target is a `Subject` and `needs_sync` with `fetch.max_age` (the fetching flags off) is false, and returns `Stats`; otherwise it returns `SyncNeeded`. It never starts a sync: a query has no side effects, and a client that wants fresh data calls the `sync` mutation, polls `job`, then queries `stats` with `job`. The computation runs off the event loop as the web app's routes do (`results_or_job` in `jobs.py`), and `Stats` is built from `result_to_dict(result)`, whose keys map to the fields above (`format_version` to `formatVersion`, `by_kind` to `byKind`, `by_author` to `byAuthor`).
-- *Sync.* `sync` calls `Jobs.start` with the key and `context.run_sync`, the same function the progress page's jobs run, and returns the job; one sync runs at a time and the others wait as `QUEUED`, as in the web app. A bare NAME is resolved inside the job, so `sync` answers at once.
+- *Sync.* `sync` calls `Jobs.start` with the key and `context.sync_runner(query)`, the same runner the progress page's jobs use (it takes the parsed query because the job's key does not hold `by_author`), and returns the job; one sync runs at a time and the others wait as `QUEUED`, as in the web app. A bare NAME is resolved inside the job, so `sync` answers at once.
 - *Transport.* `strawberry.fastapi.GraphQLRouter(schema, context_getter=..., graphql_ide='graphiql', allow_queries_via_get=True, multipart_uploads_enabled=False)`, mounted with `app.include_router(router, prefix='/graphql')`. Strawberry refuses mutations over GET. The web app's existing middlewares apply: the loopback `Host` check, the debug request log, and `convert_errors` for anything raised outside a resolver.
 - *Cross-site requests.* A web page on another site cannot read the answer (no CORS headers are sent), but it could make the browser POST a form to a loopback server and start a sync with the operator's token. So a POST to `/graphql` whose `Content-Type` is not `application/json` gets 415 `{"error": "POST /graphql needs Content-Type: application/json"}` from a check in `api.py` before Strawberry reads the body: a browser sends a JSON content type cross-site only after a CORS preflight, which the server never approves.
 - *GraphiQL.* A browser's GET of `/graphql` with no query shows Strawberry's GraphiQL page, which loads its script and stylesheet from a CDN (unpkg), so it needs a network connection where the app's own pages do not; this replaces FastAPI's `/docs`, which loaded from jsDelivr for the same reason.

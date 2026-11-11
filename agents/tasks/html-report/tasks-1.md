@@ -273,7 +273,7 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 ## Task 8: Serve the GraphQL API at `/graphql`
 
-**Status:** todo
+**Status:** done
 **Priority:** high
 **Complexity:** large
 **Spec Reference:** GraphQL API 1.0, API, Error handling, Implementation (Stats, Sync, Transport, Cross-site requests, GraphiQL, Schema size, Testing)
@@ -282,24 +282,24 @@ The spec gives `html_document` an `assets_url` parameter the code does not have 
 
 **Subtasks:**
 
-- [ ] Create `src/wambatic/reports/api.py` with the Strawberry types of the spec's SDL (`Granularity`, `CommitTimezone`, `JobState`, `StatsInput`, `Query`, `Mutation`, `StatsOutcome`, `SyncNeeded`, `Stats`, `Subject`, `RequestInfo`, `Series`, `Point`, `SyncJob`), `ApiContext`, `schema` and `graphql_router(context)`
-- [ ] Resolvers: `stats` computes through `jobs.results_or_job` and builds `Stats` from `result_to_dict`, returns `SyncNeeded` on stale data and never starts a sync; `series(metrics:, by:)` filters; `job(id)` is `null` for an unknown job and forgets a failed job once reported; `sync` calls `Jobs.start` with `context.run_sync`; `version` is wambatic's version. Inputs go through `service.parse_target` and `service.make_request`
-- [ ] The `WambaticErrors` schema extension: `extensions.code` and `extensions.status` per the spec's mapping, `BAD_QUERY` for syntax and validation errors, redacted messages, `internal error; see the server log` for anything else with `loguru.logger.exception`, and no traceback
-- [ ] A check before Strawberry reads a POST: a `Content-Type` other than `application/json` gets 415 `{"error": "POST /graphql needs Content-Type: application/json"}`
-- [ ] Mount the router in `make_app` at `/graphql` with `graphql_ide='graphiql'`, `allow_queries_via_get=True` and `multipart_uploads_enabled=False`; the loopback `Host` check and the request log apply
-- [ ] Replace the throwaway test in `src/tests/reports/test_api.py` with the spec's Testing list: `stats` on fresh data equals `result_to_dict` for each granularity; the `series` filters; `SyncNeeded` on stale data with no job started; `sync`, `job` polling to `DONE`, then `stats(job:)`; two `sync` calls share a job; each error's code and status; a planted exception gives `INTERNAL` with no traceback and no token (set in the environment for the test); a mutation over GET refused; `text/plain` and `application/x-www-form-urlencoded` POSTs get 415; and `strawberry export-schema wambatic.reports.api:schema` equals the SDL in `agents/specs/graphql-api/spec.md`
+- [x] Create `src/wambatic/reports/api.py` with the Strawberry types of the spec's SDL (`Granularity`, `CommitTimezone`, `JobState`, `StatsInput`, `Query`, `Mutation`, `StatsOutcome`, `SyncNeeded`, `Stats`, `Subject`, `RequestInfo`, `Series`, `Point`, `SyncJob`), `ApiContext`, `schema` and `graphql_router(context)`
+- [x] Resolvers: `stats` computes through `jobs.results_or_job` and builds `Stats` from `result_to_dict`, returns `SyncNeeded` on stale data and never starts a sync; `series(metrics:, by:)` filters; `job(id)` is `null` for an unknown job and forgets a failed job once reported; `sync` calls `Jobs.start` with `context.sync_runner(query)`; `version` is wambatic's version. Inputs go through `service.parse_target` and `service.make_request`
+- [x] The `WambaticErrors` schema extension: `extensions.code` and `extensions.status` per the spec's mapping, `BAD_QUERY` for syntax and validation errors, redacted messages, `internal error; see the server log` for anything else with `loguru.logger.exception`, and no traceback
+- [x] A check before Strawberry reads a POST: a `Content-Type` other than `application/json` gets 415 `{"error": "POST /graphql needs Content-Type: application/json"}`
+- [x] Mount the router in `make_app` at `/graphql` with `graphql_ide='graphiql'`, `allow_queries_via_get=True` and `multipart_uploads_enabled=False`; the loopback `Host` check and the request log apply
+- [x] Replace the throwaway test in `src/tests/reports/test_api.py` with the spec's Testing list: `stats` on fresh data equals `result_to_dict` for each granularity; the `series` filters; `SyncNeeded` on stale data with no job started; `sync`, `job` polling to `DONE`, then `stats(job:)`; two `sync` calls share a job; each error's code and status; a planted exception gives `INTERNAL` with no traceback and no token (set in the environment for the test); a mutation over GET refused; `text/plain` and `application/x-www-form-urlencoded` POSTs get 415; and `strawberry export-schema wambatic.reports.api:schema` equals the SDL in `agents/specs/graphql-api/spec.md`
 
 **Acceptance Criteria:**
 
-- [ ] `curl -s -H 'Content-Type: application/json' -d '{"query": "{ version }"}' http://127.0.0.1:PORT/graphql` answers `{"data": {"version": ...}}` from a running `wambatic serve`
-- [ ] The exported schema matches the spec's SDL exactly
+- [x] `curl -s -H 'Content-Type: application/json' -d '{"query": "{ version }"}' http://127.0.0.1:PORT/graphql` answers `{"data": {"version": ...}}` from a running `wambatic serve`
+- [x] The exported schema matches the spec's SDL exactly
 
 **Definition of Done:**
 
-- [ ] `source bin/activate.sh` succeeds
-- [ ] The task's commit passes its pre-commit hooks (never `--no-verify`)
-- [ ] `pytest src/tests/reports/test_api.py src/tests/reports/test_jobs.py src/tests/reports/test_web.py src/tests/test_layering.py src/tests/test_package.py` passes
-- [ ] `bin/audit-check.sh` exits 0
+- [x] `source bin/activate.sh` succeeds
+- [x] The task's commit passes its pre-commit hooks (never `--no-verify`)
+- [x] `pytest src/tests/reports/test_api.py src/tests/reports/test_jobs.py src/tests/reports/test_web.py src/tests/test_layering.py src/tests/test_package.py` passes
+- [x] `bin/audit-check.sh` exits 0
 
 **Notes:**
 

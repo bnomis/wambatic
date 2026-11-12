@@ -145,14 +145,16 @@ def assets_folder_name() -> str:
 def write_assets(directory: pathlib.Path) -> pathlib.Path:
     """Write `assets_folder_name()` under `directory` unless it already exists; return its path.
     The folder is written as a temporary sibling and renamed into place, so it is complete or
-    absent.
+    absent. An existing folder is kept only when it is a real directory holding exactly these
+    bytes, so a folder planted in a shared directory cannot put its scripts in the page.
 
     Raises:
-        OutputError: `cannot write PATH: REASON` when it cannot be written.
+        OutputError: `cannot write PATH: REASON` when it cannot be written, or when it exists
+            and does not hold this version's files.
     """
     target = directory / assets_folder_name()
-    if target.is_dir():
-        return target
+    if target.exists() or target.is_symlink():
+        return checked_folder(target)
     temporary: pathlib.Path | None = None
     try:
         directory.mkdir(parents=True, exist_ok=True)
@@ -164,8 +166,9 @@ def write_assets(directory: pathlib.Path) -> pathlib.Path:
             os.rename(temporary, target)
         except OSError:
             # Another run made the same folder meanwhile: keep it.
-            if not target.is_dir():
+            if not (target.exists() or target.is_symlink()):
                 raise
+            checked_folder(target)
     except OSError as e:
         # auditme: accept[except-interpolation] the OS reason says what to fix
         message = f'cannot write {target}: {e.strerror or e}'
@@ -174,4 +177,31 @@ def write_assets(directory: pathlib.Path) -> pathlib.Path:
         if temporary is not None:
             # auditme: accept[filesystem-op-without-envelope] best-effort cleanup
             shutil.rmtree(temporary, ignore_errors=True)
+    return target
+
+
+def checked_folder(target: pathlib.Path) -> pathlib.Path:
+    """Return `target` when it is a real directory whose files match `page_assets()` byte for byte.
+
+    Raises:
+        OutputError: `cannot write PATH: it exists and does not hold this version's files;
+            remove it` otherwise.
+    """
+    try:
+        matches = (
+            not target.is_symlink()
+            and target.is_dir()
+            and all(
+                not (target / asset.name).is_symlink()
+                and (target / asset.name).read_bytes() == asset.content
+                for asset in page_assets()
+            )
+        )
+    except OSError:
+        matches = False
+    if not matches:
+        message = (
+            f"cannot write {target}: it exists and does not hold this version's files; remove it"
+        )
+        raise wambatic.reports.errors.OutputError(message)
     return target

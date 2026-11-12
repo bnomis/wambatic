@@ -2,6 +2,7 @@ import hashlib
 import importlib.resources
 import os
 import pathlib
+import shutil
 import stat
 
 import pytest
@@ -66,14 +67,33 @@ def test_write_assets_writes_every_asset_under_the_hashed_folder(tmp_path: pathl
     assert [path.name for path in folder.parent.iterdir()] == [folder.name]
 
 
-def test_write_assets_keeps_an_existing_folder(tmp_path: pathlib.Path) -> None:
+def test_write_assets_keeps_an_existing_folder_holding_the_same_files(
+    tmp_path: pathlib.Path,
+) -> None:
     folder = wambatic.reports.assets.write_assets(tmp_path)
     marker = folder / 'marker'
     marker.write_text('mine')
-    (folder / 'report.js').write_text('edited')
     assert wambatic.reports.assets.write_assets(tmp_path) == folder
     assert marker.read_text() == 'mine'
-    assert (folder / 'report.js').read_text() == 'edited'
+
+
+def test_an_existing_folder_with_an_edited_file_is_refused(tmp_path: pathlib.Path) -> None:
+    folder = wambatic.reports.assets.write_assets(tmp_path)
+    (folder / 'report.js').write_text('planted')
+    with pytest.raises(wambatic.reports.errors.OutputError) as caught:
+        wambatic.reports.assets.write_assets(tmp_path)
+    expected = f"cannot write {folder}: it exists and does not hold this version's files; remove it"
+    assert str(caught.value) == expected
+    assert (folder / 'report.js').read_text() == 'planted'
+
+
+def test_an_existing_folder_that_is_a_symlink_is_refused(tmp_path: pathlib.Path) -> None:
+    elsewhere = wambatic.reports.assets.write_assets(tmp_path / 'elsewhere')
+    out = tmp_path / 'out'
+    out.mkdir()
+    (out / elsewhere.name).symlink_to(elsewhere)
+    with pytest.raises(wambatic.reports.errors.OutputError, match='does not hold'):
+        wambatic.reports.assets.write_assets(out)
 
 
 def test_a_changed_asset_makes_a_second_folder_and_leaves_the_first(
@@ -115,13 +135,30 @@ def test_a_folder_made_by_another_run_meanwhile_is_kept(
     real_rename = os.rename
 
     def lose_the_race(source: pathlib.Path, destination: pathlib.Path) -> None:
-        target.mkdir()
-        (target / 'report.js').write_text('theirs')
+        shutil.copytree(source, target)
+        (target / 'theirs').write_text('theirs')
         real_rename(source, destination)
 
     monkeypatch.setattr(os, 'rename', lose_the_race)
     assert wambatic.reports.assets.write_assets(tmp_path) == target
-    assert (target / 'report.js').read_text() == 'theirs'
+    assert (target / 'theirs').read_text() == 'theirs'
+    assert [path.name for path in tmp_path.iterdir()] == [target.name]
+
+
+def test_a_folder_planted_meanwhile_with_other_files_is_refused(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = tmp_path / wambatic.reports.assets.assets_folder_name()
+    real_rename = os.rename
+
+    def plant(source: pathlib.Path, destination: pathlib.Path) -> None:
+        target.mkdir()
+        (target / 'report.js').write_text('planted')
+        real_rename(source, destination)
+
+    monkeypatch.setattr(os, 'rename', plant)
+    with pytest.raises(wambatic.reports.errors.OutputError, match='does not hold'):
+        wambatic.reports.assets.write_assets(tmp_path)
     assert [path.name for path in tmp_path.iterdir()] == [target.name]
 
 

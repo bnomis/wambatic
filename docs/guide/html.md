@@ -92,6 +92,9 @@ closed, and its title says how many rows it holds.
 - The assets folder, `wambatic-assets-HASH`, is written in the same directory. Its name carries a hash of
   its contents, so a newer wambatic adds a folder beside an old one and never changes it, and every page
   loads the files it was made with. Reports written into one directory share a folder.
+  An existing folder is reused only when its files are exactly the ones this wambatic writes; one that
+  differs (edited, or put there by someone else) stops the run with `cannot write PATH: it exists and
+  does not hold this version's files; remove it`, and no page is written.
 - Missing directories are created and an existing file is replaced.
 - The write is atomic: a failed write leaves the earlier file as it was, and no partial file. The folder
   is written first, so no page points at a folder that is missing.

@@ -27,8 +27,8 @@ STATES = [  # auditme: accept[non-alphabetical-literal] the order the states are
     'Syncing repositories',
     'Done, loading the report',
 ]
-EVERY_CHART_DRAWN = """() => {
-  const plots = [...document.querySelectorAll('.plot')];
+EVERY_SHOWN_CHART_DRAWN = """() => {
+  const plots = [...document.querySelectorAll('[role=tabpanel]:not([hidden]) .plot')];
   return plots.length > 0 && plots.every((plot) => plot.querySelector('.main-svg'));
 }"""
 PROGRESS_SHOWN = """(states) => {
@@ -79,7 +79,7 @@ def running_server(
     cache.close()
 
 
-def test_the_progress_page_becomes_the_report_with_every_chart_drawn(
+def test_the_progress_page_becomes_the_report_with_every_shown_chart_drawn(
     running_server: str, chromium: playwright.sync_api.Browser
 ) -> None:
     context = chromium.new_context()
@@ -93,7 +93,7 @@ def test_the_progress_page_becomes_the_report_with_every_chart_drawn(
         assert response.status == 202
         page.wait_for_function(PROGRESS_SHOWN, arg=STATES)
         page.wait_for_selector('#activity-commits .main-svg', timeout=60000)
-        page.wait_for_function(EVERY_CHART_DRAWN)
+        page.wait_for_function(EVERY_SHOWN_CHART_DRAWN)
         assert '&job=' in page.url
         assert foreign == []
         assert problems == []

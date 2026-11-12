@@ -4,10 +4,8 @@ a large target needs run as jobs, so no request waits for a sync."""
 import asyncio
 import collections.abc
 import contextlib
-import dataclasses
 import datetime
 import ipaddress
-import secrets
 import socket
 import string
 import time
@@ -24,9 +22,12 @@ import wambatic.fetch.base
 import wambatic.fetch.cache
 import wambatic.fetch.errors
 import wambatic.fetch.ratelimit
+import wambatic.reports.api
+import wambatic.reports.assets
 import wambatic.reports.base
 import wambatic.reports.errors
 import wambatic.reports.html
+import wambatic.reports.jobs
 import wambatic.reports.service
 import wambatic.settings
 import wambatic.stats.base
@@ -34,131 +35,10 @@ import wambatic.stats.engine
 import wambatic.stats.errors
 import wambatic.version
 
-JobKey = tuple[str, frozenset[str]]
-INTERNAL_ERROR = 'internal error; see the server log'
-BAD_REQUEST = (
-    wambatic.settings.SettingsError,
-    wambatic.stats.errors.UnknownGroupError,
-    wambatic.stats.errors.InvalidRangeError,
-    wambatic.stats.errors.InvalidRequestError,
-)
-NOT_FOUND = (wambatic.fetch.errors.NotFoundError, wambatic.stats.errors.EmptySubjectError)
 # auditme: accept[non-alphabetical-literal] loopback names before addresses
 LOOPBACK_HOSTS = ('localhost', '127.0.0.1', '[::1]')
+ASSET_HEADERS = {'Cache-Control': 'public, max-age=31536000, immutable'}
 PAGE_PATHS = frozenset({'/', '/report'})
-TRUE_VALUES = frozenset({'1', 'on', 'true'})
-
-
-class JobError(Exception):
-    """A failed job's error, raised again for the request that reports it."""
-
-    def __init__(self, message: str, status: int) -> None:
-        super().__init__(message)
-        self.status = status
-
-
-def error_status(error: BaseException) -> int:
-    """The HTTP status an error maps to (reports spec, Error handling)."""
-    if isinstance(error, JobError):
-        return error.status
-    if isinstance(error, (wambatic.reports.errors.UsageError, *BAD_REQUEST)):
-        return 400
-    if isinstance(error, NOT_FOUND):
-        return 404
-    if isinstance(error, wambatic.fetch.errors.FetchError):
-        return 502
-    return 500
-
-
-def error_response(error: BaseException) -> tuple[int, str]:
-    """The status and the message a response may show: redacted, and for an unexpected error
-    only a pointer to the log, where its traceback is."""
-    status = error_status(error)
-    if status == 500:
-        loguru.logger.exception(f'Unexpected error: {wambatic.reports.service.redact_error(error)}')
-        return status, INTERNAL_ERROR
-    return status, wambatic.reports.service.redact_environment_token(str(error))
-
-
-@dataclasses.dataclass(slots=True)
-class SyncJob:
-    # Mutable by design: the background sync updates the phase and progress that the page polls.
-    id: str
-    key: JobKey
-    phase: typing.Literal['queued', 'running', 'done', 'failed'] = 'queued'
-    progress: wambatic.fetch.base.SyncProgress = dataclasses.field(
-        default_factory=wambatic.fetch.base.SyncProgress
-    )
-    subject: wambatic.fetch.base.Subject | None = None
-    error: str | None = None
-    status: int | None = None
-
-    @property
-    def state(self) -> typing.Literal['queued', 'listing', 'syncing', 'done', 'failed']:
-        """`listing` until the fetcher has read the repository listing, then `syncing`."""
-        if self.phase == 'running':
-            return 'listing' if self.progress.repos_listed is None else 'syncing'
-        return self.phase
-
-
-class Jobs:
-    """Each key's latest job; one job syncs at a time, the others wait as `queued`."""
-
-    def __init__(self) -> None:
-        self.latest: dict[JobKey, SyncJob] = {}
-        self.by_id: dict[str, SyncJob] = {}
-        self.tasks: set[asyncio.Task[None]] = set()
-        self.lock = asyncio.Lock()
-
-    def start(
-        self, key: JobKey, run: collections.abc.Callable[[SyncJob], collections.abc.Awaitable[None]]
-    ) -> SyncJob:
-        """The key's running or queued job, else a new one running `run`."""
-        current = self.latest.get(key)
-        if current is not None and current.phase in ('queued', 'running'):
-            return current
-        if current is not None:
-            del self.by_id[current.id]
-        job = SyncJob(secrets.token_hex(8), key)
-        self.latest[key] = job
-        self.by_id[job.id] = job
-        task = asyncio.get_running_loop().create_task(self.execute(job, run))
-        self.tasks.add(task)
-        task.add_done_callback(self.tasks.discard)
-        return job
-
-    def get(self, job_id: str) -> SyncJob | None:
-        return self.by_id.get(job_id)
-
-    def forget(self, job: SyncJob) -> None:
-        """Drop `job` unless a newer job has replaced it."""
-        if self.latest.get(job.key) is job:
-            del self.latest[job.key]
-            del self.by_id[job.id]
-
-    async def execute(
-        self,
-        job: SyncJob,
-        run: collections.abc.Callable[[SyncJob], collections.abc.Awaitable[None]],
-    ) -> None:
-        # Error boundary (review-2 Decision 1): a failed job would otherwise
-        # leave its progress page hanging.
-        try:
-            async with self.lock:
-                job.phase = 'running'
-                await run(job)
-            job.phase = 'done'
-        # auditme: accept[silent-broad-except] logged by error_response()
-        except Exception as e:  # noqa: BLE001 - logged by error_response()
-            job.status, job.error = error_response(e)
-            job.phase = 'failed'
-
-    async def close(self) -> None:
-        """Cancel the running and queued jobs and wait for them to end."""
-        tasks = list(self.tasks)
-        for task in tasks:
-            task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 Target = typing.Annotated[
@@ -199,21 +79,6 @@ JobId = typing.Annotated[
 ]
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
-class RawQuery:
-    """The query parameters of a data request, as the client sent them."""
-
-    target: str | None
-    by: str | None
-    since: str | None
-    until: str | None
-    groups: str | None
-    by_author: str | None
-    tz: str | None
-    commit_tz: str | None
-    job: str | None
-
-
 # auditme: accept[passthrough-shim] the FastAPI dependency that reads the query string
 def raw_query(
     target: Target = None,
@@ -225,96 +90,13 @@ def raw_query(
     tz: Tz = None,
     commit_tz: CommitTz = None,
     job: JobId = None,
-) -> RawQuery:
-    return RawQuery(target, by, since, until, groups, by_author, tz, commit_tz, job)
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
-class Query:
-    """A data request after parsing: the target, the request and the key its sync job has."""
-
-    target: wambatic.fetch.base.Subject | str
-    request: wambatic.stats.base.StatsRequest
-    key: JobKey
-    job: str | None
-
-
-def blank_to_none(value: str | None) -> str | None:
-    """A form submits an empty field as an empty value, which means the field was left out."""
-    return value.strip() or None if value is not None else None
-
-
-def parse_query(
-    settings: wambatic.settings.Settings,
-    raw: RawQuery,
-    today: datetime.datetime,
-    *,
-    page: bool,
-) -> Query:
-    """The CLI's parsers applied to the parameters, so a value the CLI rejects is rejected with
-    the same message.
-
-    Raises:
-        UsageError: a query parameter is invalid.
-        SettingsError: `settings.stats.timezone` is not a known time zone.
-        UnknownGroupError: a group is outside `GROUPS`.
-    """
-    text = (blank_to_none(raw.target) or '').strip()
-    if not text:
-        raise wambatic.reports.errors.UsageError(
-            f'target is required: {wambatic.reports.service.TARGET_FORMS}'
-        )
-    target = wambatic.reports.service.parse_target(text)
-    by = blank_to_none(raw.by) or 'month'
-    if page and by == 'total':
-        raise wambatic.reports.errors.UsageError(
-            'by=total is not for the report page: the page shows the totals as tiles and '
-            'switches between year, month, week and day'
-        )
-    by_author = (raw.by_author or '').lower() in TRUE_VALUES
-    if by_author and not isinstance(target, str):
-        wambatic.reports.service.check_by_author(target)
-    tz = blank_to_none(raw.tz)
-    commit_tz = blank_to_none(raw.commit_tz)
-    stats = settings.stats
-    if tz is not None:
-        stats = dataclasses.replace(stats, timezone=tz)
-    if commit_tz is not None:
-        stats = dataclasses.replace(
-            stats, commit_timezone=wambatic.reports.service.parse_commit_tz(commit_tz)
-        )
-    effective = dataclasses.replace(settings, stats=stats)
-    request = wambatic.reports.service.make_request(
-        by,
-        blank_to_none(raw.since),
-        blank_to_none(raw.until),
-        blank_to_none(raw.groups),
-        by_author,
-        effective,
-        today,
+) -> wambatic.reports.jobs.RawQuery:
+    return wambatic.reports.jobs.RawQuery(
+        target, by, since, until, groups, by_author, tz, commit_tz, job
     )
-    resources = (
-        wambatic.stats.engine.resources_for(request.groups) & wambatic.fetch.base.BUILT_RESOURCES
-    )
-    return Query(target, request, (text, resources), blank_to_none(raw.job))
 
 
 CallNext = collections.abc.Callable[[fastapi.Request], collections.abc.Awaitable[fastapi.Response]]
-
-
-def progress_json(job: SyncJob) -> dict[str, object]:
-    progress = job.progress
-    rows = None if progress.repos_listed is None else sum(progress.rows_written.values())
-    return {
-        'job': job.id,
-        'state': job.state,
-        'repos_listed': progress.repos_listed,
-        'repos_pending': progress.repos_pending,
-        'repos_done': None if progress.repos_pending is None else progress.repos_done,
-        'rows_written': rows,
-        'error': job.error,
-        'status': job.status,
-    }
 
 
 def reload_path(url: urllib.parse.SplitResult, job_id: str | None) -> str:
@@ -332,15 +114,16 @@ def make_app(
     default_target: str | None = None,
     clock: collections.abc.Callable[[], datetime.datetime] = wambatic.fetch.ratelimit.utc_now,
 ) -> fastapi.FastAPI:
-    for name in wambatic.reports.html.TEMPLATE_NAMES:
-        wambatic.reports.html.read_template(name)
-    jobs = Jobs()
+    for name in wambatic.reports.assets.TEMPLATE_NAMES:
+        wambatic.reports.assets.read_template(name)
+    wambatic.reports.assets.page_assets()
+    jobs = wambatic.reports.jobs.Jobs()
     theme = settings.report.html_theme
 
     def page(name: str, **values: str) -> str:
-        return string.Template(wambatic.reports.html.read_template(name)).substitute(
+        return string.Template(wambatic.reports.assets.read_template(name)).substitute(
             theme_attribute=wambatic.reports.html.theme_attribute(theme),
-            style=wambatic.reports.html.stylesheet(),
+            style=wambatic.reports.assets.stylesheet(),
             **values,
         )
 
@@ -354,32 +137,8 @@ def make_app(
             return fastapi.responses.HTMLResponse(body, status_code=status)
         return fastapi.responses.JSONResponse({'error': message}, status_code=status)
 
-    async def stale(subject: wambatic.fetch.base.Subject, resources: frozenset[str]) -> bool:
-        reader = wambatic.reports.service.make_fetcher('', cache, settings.fetch)
-        provenance = await reader.provenance(subject, resources)
-        return wambatic.reports.service.needs_sync(
-            provenance, resources, settings.fetch, full_refresh=False, no_fetch=False, now=clock()
-        )
-
-    async def compute(
-        subject: wambatic.fetch.base.Subject,
-        query: Query,
-        requests: list[wambatic.stats.base.StatsRequest],
-    ) -> list[wambatic.stats.base.StatsResult]:
-        _, results = await wambatic.reports.service.sync_and_compute(
-            settings,
-            cache,
-            subject,
-            requests,
-            full_refresh=False,
-            no_fetch=False,
-            sync=False,
-            clock=clock,
-        )
-        return results
-
-    def start_job(query: Query) -> SyncJob:
-        async def run(job: SyncJob) -> None:
+    def sync_runner(query: wambatic.reports.jobs.Query) -> wambatic.reports.jobs.RunSync:
+        async def run(job: wambatic.reports.jobs.SyncJob) -> None:
             job.subject = await wambatic.reports.service.sync_target(
                 settings,
                 cache,
@@ -392,34 +151,22 @@ def make_app(
                 clock=clock,
             )
 
-        return jobs.start(query.key, run)
+        return run
 
     async def results_or_job(
-        query: Query, requests: list[wambatic.stats.base.StatsRequest]
-    ) -> list[wambatic.stats.base.StatsResult] | SyncJob:
-        """The results at once when the cache is fresh or the request names its finished job;
-        else the job that brings the cache up to date.
-
-        Raises:
-            JobError: the finished job for the request failed.
-            EmptySubjectError: there is nothing to report.
-            UnknownGroupError: a group is outside `GROUPS`.
-            InvalidRequestError: the request is invalid for the subject.
-            InvalidRangeError: `since` is after `until`.
-            CacheError: the cache cannot be read.
-        """
-        job = jobs.get(query.job) if query.job is not None else None
-        if job is not None and job.key == query.key:
-            if job.phase == 'failed':
-                jobs.forget(job)
-                raise JobError(job.error or INTERNAL_ERROR, job.status or 500)
-            if job.phase == 'done' and job.subject is not None:
-                return await compute(job.subject, query, requests)
-            if job.phase != 'done':
-                return job
-        if not isinstance(query.target, str) and not await stale(query.target, query.key[1]):
-            return await compute(query.target, query, requests)
-        return start_job(query)
+        query: wambatic.reports.jobs.Query, requests: list[wambatic.stats.base.StatsRequest]
+    ) -> list[wambatic.stats.base.StatsResult] | wambatic.reports.jobs.SyncJob:
+        return await wambatic.reports.jobs.results_or_job(
+            settings,
+            cache,
+            jobs,
+            clock,
+            sync_runner(query),
+            target=query.target,
+            key=query.key,
+            job_id=query.job,
+            requests=requests,
+        )
 
     @contextlib.asynccontextmanager
     async def lifespan(app: fastapi.FastAPI) -> collections.abc.AsyncIterator[None]:
@@ -427,7 +174,12 @@ def make_app(
         await jobs.close()
 
     app = fastapi.FastAPI(
-        title='wambatic', version=wambatic.version.VERSION, lifespan=lifespan, redoc_url=None
+        title='wambatic',
+        version=wambatic.version.VERSION,
+        lifespan=lifespan,
+        openapi_url=None,
+        docs_url=None,
+        redoc_url=None,
     )
 
     @app.middleware('http')
@@ -439,9 +191,9 @@ def make_app(
         # otherwise reach the client unredacted.
         try:
             return await call_next(request)
-        # auditme: accept[silent-broad-except] logged by error_response()
-        except Exception as e:  # noqa: BLE001 - logged by error_response()
-            return error_reply(request, *error_response(e))
+        # auditme: accept[silent-broad-except] logged by wambatic.reports.jobs.error_response()
+        except Exception as e:  # noqa: BLE001 - logged by wambatic.reports.jobs.error_response()
+            return error_reply(request, *wambatic.reports.jobs.error_response(e))
 
     @app.middleware('http')
     async def check_host_header(
@@ -481,6 +233,19 @@ def make_app(
         )
         return error_reply(request, 400, message)
 
+    @app.exception_handler(wambatic.reports.api.UnsupportedMediaType)
+    async def unsupported_media_type(
+        request: fastapi.Request, error: wambatic.reports.api.UnsupportedMediaType
+    ) -> fastapi.Response:
+        return fastapi.responses.JSONResponse({'error': str(error)}, status_code=415)
+
+    app.include_router(
+        wambatic.reports.api.graphql_router(
+            wambatic.reports.api.ApiContext(settings, cache, jobs, clock, sync_runner)
+        ),
+        prefix='/graphql',
+    )
+
     @app.get('/', include_in_schema=False)
     async def form() -> fastapi.responses.HTMLResponse:
         target = wambatic.reports.html.escape(default_target or '')
@@ -496,53 +261,39 @@ def make_app(
 
     @app.get('/report', include_in_schema=False)
     async def report(
-        request: fastapi.Request, raw: typing.Annotated[RawQuery, fastapi.Depends(raw_query)]
+        request: fastapi.Request,
+        raw: typing.Annotated[wambatic.reports.jobs.RawQuery, fastapi.Depends(raw_query)],
     ) -> fastapi.responses.HTMLResponse:
-        query = parse_query(settings, raw, clock(), page=True)
+        query = wambatic.reports.jobs.parse_query(settings, raw, clock(), page=True)
         outcome = await results_or_job(query, wambatic.reports.html.period_requests(query.request))
-        if isinstance(outcome, SyncJob):
+        if isinstance(outcome, wambatic.reports.jobs.SyncJob):
             reload = reload_path(request.url.components, outcome.id)
-            data = {
-                'job': outcome.id,
-                'progress': f'/api/progress?job={outcome.id}',
-                'reload': reload,
-            }
+            data = {'job': outcome.id, 'reload': reload}
             body = page(
                 'progress.html',
                 target=wambatic.reports.html.escape(query.key[0]),
                 retry=wambatic.reports.html.escape(reload_path(request.url.components, None)),
                 data=wambatic.reports.html.json_for_script(data),
-                script=wambatic.reports.html.read_template('progress.js'),
+                script=wambatic.reports.assets.read_template('progress.js'),
             )
             return fastapi.responses.HTMLResponse(body, status_code=202)
         document = await asyncio.to_thread(
             wambatic.reports.html.html_document,
             wambatic.reports.html.html_report(outcome, query.request.granularity),
             theme,
+            f'/assets/{wambatic.reports.assets.assets_hash()}/',
         )
         return fastapi.responses.HTMLResponse(document)
 
-    @app.get('/api/stats')
-    async def stats(
-        raw: typing.Annotated[RawQuery, fastapi.Depends(raw_query)],
-    ) -> fastapi.responses.JSONResponse:
-        """The result as `report --format json` prints it, or 202 and a job to follow."""
-        query = parse_query(settings, raw, clock(), page=False)
-        outcome = await results_or_job(query, [query.request])
-        if isinstance(outcome, SyncJob):
-            return fastapi.responses.JSONResponse(
-                {'job': outcome.id, 'progress': f'/api/progress?job={outcome.id}'},
-                status_code=202,
-            )
-        return fastapi.responses.JSONResponse(wambatic.reports.base.result_to_dict(outcome[0]))
-
-    @app.get('/api/progress')
-    async def progress(job: JobId = None) -> fastapi.responses.JSONResponse:
-        """How a sync job is going."""
-        found = jobs.get(job) if job else None
-        if found is None:
-            return fastapi.responses.JSONResponse({'error': 'no such job'}, status_code=404)
-        return fastapi.responses.JSONResponse(progress_json(found))
+    @app.get('/assets/{digest}/{name}', include_in_schema=False)
+    async def asset(digest: str, name: str) -> fastapi.Response:
+        found = next(
+            (a for a in wambatic.reports.assets.page_assets() if a.name == name),
+            None,
+        )
+        if found is None or digest != wambatic.reports.assets.assets_hash():
+            return fastapi.responses.JSONResponse({'error': 'no such file'}, status_code=404)
+        return fastapi.Response(found.content, media_type=found.media_type, headers=ASSET_HEADERS)
 
     return app
 

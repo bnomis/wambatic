@@ -13,6 +13,7 @@ import wambatic.fetch.base
 import wambatic.reports.errors
 import wambatic.reports.figures
 import wambatic.reports.html
+import wambatic.reports.jobs
 import wambatic.reports.rows
 import wambatic.reports.terminal
 import wambatic.reports.web
@@ -297,10 +298,10 @@ def test_parse_query_returns_a_query_or_raises_a_usage_error(
     job: str | None,
     page: bool,
 ) -> None:
-    raw = wambatic.reports.web.RawQuery(target, by, since, until, groups, by_author, tz, None, job)
+    raw = wambatic.reports.jobs.RawQuery(target, by, since, until, groups, by_author, tz, None, job)
     today = datetime.datetime(2027, 1, 20, 12, 0, tzinfo=datetime.UTC)
     try:
-        query = wambatic.reports.web.parse_query(
+        query = wambatic.reports.jobs.parse_query(
             wambatic.settings.Settings(), raw, today, page=page
         )
     except wambatic.reports.errors.UsageError, wambatic.settings.SettingsError:
@@ -351,3 +352,38 @@ def test_format_number_round_trips_and_signs_only_positive_values(
     assert text.startswith('+') == (signed and value > 0)
     if decimals is None and float(value).is_integer():
         assert '.' not in text
+
+
+CELL_METRICS = sorted(
+    {
+        *wambatic.reports.rows.TOTAL_METRICS,
+        *wambatic.reports.rows.FLOW_COUNTS,
+        *wambatic.reports.rows.FLOW_TIMES,
+        *wambatic.reports.rows.DELIVERY_UNITS,
+        *wambatic.reports.rows.POPULARITY_TABLE_METRICS,
+    }
+)
+
+
+@hypothesis.settings(max_examples=20, deadline=10000)
+@hypothesis.given(
+    hypothesis.strategies.sampled_from(CELL_METRICS),
+    hypothesis.strategies.one_of(
+        hypothesis.strategies.none(),
+        hypothesis.strategies.floats(min_value=0, max_value=1e9, allow_nan=False),
+    ),
+)
+def test_a_period_cell_holds_the_value_its_text_was_formatted_from(
+    metric: str, value: float | None
+) -> None:
+    [number] = wambatic.reports.html.period_numbers([metric], [value])
+    markup = wambatic.reports.html.cell(number, numeric=True)
+    match = re.fullmatch(r'<td class=num data-value="([^"]*)">([^<]*)</td>', markup)
+    assert match
+    raw, text = match.groups()
+    assert text == wambatic.reports.terminal.format_cell(metric, value)
+    if value is None:
+        assert raw == ''
+    else:
+        ratio = wambatic.reports.rows.DELIVERY_UNITS.get(metric) == 'ratio'
+        assert float(raw) == (value * 100 if ratio else value)

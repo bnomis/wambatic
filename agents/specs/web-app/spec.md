@@ -1,7 +1,7 @@
 # Web app
 
 **Version:** 2.0
-**Status:** proposed
+**Status:** implemented
 **Date:** 2026-11-11
 
 The local web app `wambatic serve` runs: its routes, sync jobs and progress page, security checks, logging, binding and shutdown. Part of [Reports](../reports/spec.md).

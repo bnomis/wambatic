@@ -7,7 +7,6 @@ import os
 import pathlib
 import re
 import stat
-import string
 
 import plotly.offline
 import pytest
@@ -16,6 +15,7 @@ import tests.conftest
 import tests.fixtures.reports
 import tests.fixtures.stats
 import wambatic.fetch.base
+import wambatic.reports.assets
 import wambatic.reports.errors
 import wambatic.reports.figures
 import wambatic.reports.html
@@ -24,6 +24,18 @@ import wambatic.stats.base
 
 PERIOD_NAMES = ('day', 'month', 'week', 'year')
 HOSTILE = '<b>&"\'</script>'
+ASSETS_URL = 'assets/'
+
+
+def html_document(
+    report: wambatic.reports.html.HtmlReport, theme: wambatic.settings.Theme = 'auto'
+) -> str:
+    return wambatic.reports.html.html_document(report, theme, ASSETS_URL)
+
+
+def without_values(document: str) -> str:
+    """The page without its `data-value` attributes, to compare the markup of the shown text."""
+    return re.sub(r' data-value="[^"]*"', '', document)
 
 
 class Page(html.parser.HTMLParser):
@@ -90,7 +102,7 @@ def keys_of(report: wambatic.reports.html.HtmlReport) -> set[str]:
 def test_every_figure_has_its_element_naming_the_chart(
     org_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    page = Page(wambatic.reports.html.html_document(org_report, 'auto'))
+    page = Page(html_document(org_report, 'auto'))
     keys = keys_of(org_report)
     assert 'activity-commits' in keys
     assert 'activity-calendar' in keys
@@ -105,7 +117,7 @@ def test_every_figure_has_its_element_naming_the_chart(
 def test_the_figures_of_every_granularity_are_in_the_embedded_data(
     org_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    page = Page(wambatic.reports.html.html_document(org_report, 'dark'))
+    page = Page(html_document(org_report, 'dark'))
     data = json.loads(page.data)
     assert data['initial'] == 'month'
     assert data['theme'] == 'dark'
@@ -121,7 +133,7 @@ def test_the_figures_of_every_granularity_are_in_the_embedded_data(
 def test_period_tables_appear_once_per_granularity_with_only_the_initial_one_visible(
     org_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    page = Page(wambatic.reports.html.html_document(org_report, 'auto'))
+    page = Page(html_document(org_report, 'auto'))
     periods = [t for t in page.tables() if t.get('class') == 'period']
     seen: dict[str, list[str | None]] = {}
     for table in periods:
@@ -135,7 +147,7 @@ def test_period_tables_appear_once_per_granularity_with_only_the_initial_one_vis
     assert all(h is None for h in seen['month'])
     assert all(h == 'hidden' for g, hidden in seen.items() if g != 'month' for h in hidden)
     other = Page(
-        wambatic.reports.html.html_document(
+        html_document(
             dataclasses.replace(org_report, initial=wambatic.stats.base.Granularity.DAY), 'auto'
         )
     )
@@ -146,7 +158,7 @@ def test_period_tables_appear_once_per_granularity_with_only_the_initial_one_vis
 def test_the_initial_granularitys_radio_is_checked(
     org_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    page = Page(wambatic.reports.html.html_document(org_report, 'auto'))
+    page = Page(html_document(org_report, 'auto'))
     radios = {
         attrs['value']: 'checked' in attrs
         for tag, attrs in page.elements
@@ -156,7 +168,7 @@ def test_the_initial_granularitys_radio_is_checked(
 
 
 def test_the_tiles_show_the_totals(org_report: wambatic.reports.html.HtmlReport) -> None:
-    page = Page(wambatic.reports.html.html_document(org_report, 'auto'))
+    page = Page(html_document(org_report, 'auto'))
     assert page.tiles['Commits'] == '10'
     assert page.tiles['Contributors'] == '3'
     assert page.tiles['Lines added'] == '90'
@@ -176,16 +188,16 @@ def test_a_median_with_no_data_is_a_dash(org_report: wambatic.reports.html.HtmlR
     report = dataclasses.replace(
         org_report, total=dataclasses.replace(org_report.total, series=series)
     )
-    page = Page(wambatic.reports.html.html_document(report, 'auto'))
+    page = Page(html_document(report, 'auto'))
     assert page.tiles['Median time to merge (hours)'] == '-'
-    whole = Page(wambatic.reports.html.html_document(org_report, 'auto'))
+    whole = Page(html_document(org_report, 'auto'))
     assert whole.tiles['Median time to merge (hours)'] != '-'
 
 
 def test_the_period_tables_hold_the_terminals_rows(
     org_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    document = wambatic.reports.html.html_document(org_report, 'auto')
+    document = without_values(html_document(org_report, 'auto'))
     assert '<td>2026-10</td><td class=num>7</td><td class=num>3</td>' in document
     assert '<td>Total</td><td class=num>10</td><td class=num>3</td>' in document
     assert '<td class=num>+34</td>' in document
@@ -193,26 +205,69 @@ def test_the_period_tables_hold_the_terminals_rows(
     assert '<td class=num>-</td>' in document
 
 
-def test_the_document_holds_one_copy_of_plotly_js(
+def test_the_document_holds_no_copy_of_plotly_js_but_names_its_version(
     org_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    document = wambatic.reports.html.html_document(org_report, 'auto')
-    marker = f'plotly.js v{plotly.offline.get_plotlyjs_version()}'
-    assert document.count(marker) == 1
-    assert document.count(str(plotly.offline.get_plotlyjs())) == 1
+    document = html_document(org_report, 'auto')
+    assert f'plotly.js v{plotly.offline.get_plotlyjs_version()}' not in document
     assert f'plotly.js: {plotly.offline.get_plotlyjs_version()}' in document
 
 
-def test_nothing_refers_outside_the_file(org_report: wambatic.reports.html.HtmlReport) -> None:
-    page = Page(wambatic.reports.html.html_document(org_report, 'auto'))
+def test_the_footer_names_the_excel_writer_version_and_the_data_holds_the_file_stem(
+    org_report: wambatic.reports.html.HtmlReport,
+) -> None:
+    document = html_document(org_report, 'auto')
+    version = wambatic.reports.assets.WRITE_EXCEL_FILE_VERSION
+    assert f'<p>write-excel-file: {version}</p>' in document
+    stem = wambatic.reports.html.report_filename(org_report.total.subject).removesuffix('.html')
+    assert f'"stem": "{stem}"' in document
+
+
+def test_the_page_names_only_files_under_the_assets_url(
+    org_report: wambatic.reports.html.HtmlReport,
+) -> None:
+    page = Page(html_document(org_report, 'auto'))
     for _, attrs in page.elements:
-        for name in ('src', 'href', 'action', 'data'):
+        for name in ('src', 'href', 'action'):
             value = attrs.get(name)
-            if value is not None and name != 'data':
+            if value is not None:
                 assert not value.startswith(('http:', 'https:', '//')), (name, value)
-    assert all('src' not in attrs for tag, attrs in page.elements if tag == 'script')
-    assert 'url(' not in page.style
-    assert '@import' not in page.style
+    files = [
+        value
+        for tag, attrs in page.elements
+        for name in ('src', 'href')
+        if tag in ('link', 'script') and (value := attrs.get(name))
+    ]
+    assert sorted(files) == sorted(
+        f'{ASSETS_URL}{asset.name}' for asset in wambatic.reports.assets.page_assets()
+    )
+    assert page.style == ''
+
+
+def test_the_scripts_load_deferred_in_order_after_the_page_data(
+    org_report: wambatic.reports.html.HtmlReport,
+) -> None:
+    document = html_document(org_report, 'auto')
+    positions = [
+        document.index(f'<script defer src="{ASSETS_URL}{name}"></script>')
+        for name in ('plotly.min.js', 'write-excel-file.min.js', 'tables.js', 'report.js')
+    ]
+    assert positions == sorted(positions)
+    assert document.index('id="wambatic-data"') < positions[0]
+    assert f'<link rel="stylesheet" href="{ASSETS_URL}report.css">' in document
+
+
+def test_a_page_says_what_to_do_when_its_folder_did_not_load(
+    org_report: wambatic.reports.html.HtmlReport,
+) -> None:
+    document = html_document(org_report, 'auto')
+    folder = wambatic.reports.assets.assets_folder_name()
+    assert (
+        f'<p class="assets-missing">This report\'s files ({folder}) did not load; '
+        'keep the page beside that folder.</p>'
+    ) in document
+    assert document.index('assets-missing') < document.index('<main>')
+    assert '.assets-missing' in wambatic.reports.assets.stylesheet()
 
 
 def test_a_hostile_login_is_escaped_in_the_html_and_round_trips_in_the_data(
@@ -222,9 +277,7 @@ def test_a_hostile_login_is_escaped_in_the_html_and_round_trips_in_the_data(
     total = dataclasses.replace(
         org_report.total, tables={**org_report.total.tables, 'top_contributors': rows}
     )
-    document = wambatic.reports.html.html_document(
-        dataclasses.replace(org_report, total=total), 'auto'
-    )
+    document = html_document(dataclasses.replace(org_report, total=total), 'auto')
     assert HOSTILE not in document
     assert '&lt;b&gt;&amp;&quot;&#x27;&lt;/script&gt;' in document
     page = Page(document)
@@ -241,9 +294,7 @@ def test_hostile_labels_in_the_other_tables_are_escaped(
     total = dataclasses.replace(
         org_report.total, tables={**org_report.total.tables, 'unavailable': unavailable}
     )
-    document = wambatic.reports.html.html_document(
-        dataclasses.replace(org_report, total=total), 'auto'
-    )
+    document = html_document(dataclasses.replace(org_report, total=total), 'auto')
     assert HOSTILE not in document
     assert document.count('&lt;b&gt;&amp;&quot;&#x27;&lt;/script&gt;') == 2
 
@@ -255,9 +306,7 @@ def test_the_embedded_data_is_valid_json_with_unicode_kept(
     total = dataclasses.replace(
         org_report.total, tables={**org_report.total.tables, 'top_contributors': rows}
     )
-    page = Page(
-        wambatic.reports.html.html_document(dataclasses.replace(org_report, total=total), 'auto')
-    )
+    page = Page(html_document(dataclasses.replace(org_report, total=total), 'auto'))
     assert json.loads(page.data)['range'][0]['data'][0]['y'] == ['zoë']
 
 
@@ -280,7 +329,7 @@ def test_report_filename_names_the_kind_and_the_subject(
 def test_a_total_that_is_not_total_is_refused(org_report: wambatic.reports.html.HtmlReport) -> None:
     month = org_report.periods[wambatic.stats.base.Granularity.MONTH]
     with pytest.raises(wambatic.reports.errors.UsageError, match='total must be a TOTAL result'):
-        wambatic.reports.html.html_document(dataclasses.replace(org_report, total=month), 'auto')
+        html_document(dataclasses.replace(org_report, total=month), 'auto')
 
 
 def test_a_missing_granularity_is_refused(org_report: wambatic.reports.html.HtmlReport) -> None:
@@ -288,16 +337,14 @@ def test_a_missing_granularity_is_refused(org_report: wambatic.reports.html.Html
         g: r for g, r in org_report.periods.items() if g is not wambatic.stats.base.Granularity.WEEK
     }
     with pytest.raises(wambatic.reports.errors.UsageError, match='periods must be exactly'):
-        wambatic.reports.html.html_document(
-            dataclasses.replace(org_report, periods=periods), 'auto'
-        )
+        html_document(dataclasses.replace(org_report, periods=periods), 'auto')
 
 
 def test_an_initial_granularity_outside_the_periods_is_refused(
     org_report: wambatic.reports.html.HtmlReport,
 ) -> None:
     with pytest.raises(wambatic.reports.errors.UsageError, match='initial'):
-        wambatic.reports.html.html_document(
+        html_document(
             dataclasses.replace(org_report, initial=wambatic.stats.base.Granularity.TOTAL), 'auto'
         )
 
@@ -313,7 +360,7 @@ def test_results_without_a_requested_start_begin_at_their_own_period_start_and_b
     starts = {result.since for result in results}
     assert len(starts) > 1
     report = wambatic.reports.html.html_report(results, wambatic.stats.base.Granularity.MONTH)
-    assert 'id="wambatic-data"' in wambatic.reports.html.html_document(report, 'auto')
+    assert 'id="wambatic-data"' in html_document(report, 'auto')
 
 
 def test_a_result_made_for_another_range_is_refused_naming_the_difference(
@@ -329,9 +376,7 @@ def test_a_result_made_for_another_range_is_refused_naming_the_difference(
         wambatic.reports.errors.UsageError,
         match='month result differs from the total in request since',
     ):
-        wambatic.reports.html.html_document(
-            dataclasses.replace(org_report, periods=periods), 'auto'
-        )
+        html_document(dataclasses.replace(org_report, periods=periods), 'auto')
 
 
 def test_a_result_for_another_subject_or_groups_is_refused(
@@ -342,7 +387,7 @@ def test_a_result_for_another_subject_or_groups_is_refused(
     with pytest.raises(
         wambatic.reports.errors.UsageError, match='day result differs from the total in subject'
     ):
-        wambatic.reports.html.html_document(
+        html_document(
             dataclasses.replace(
                 org_report,
                 periods={**org_report.periods, wambatic.stats.base.Granularity.DAY: user},
@@ -353,7 +398,7 @@ def test_a_result_for_another_subject_or_groups_is_refused(
         day, request=dataclasses.replace(day.request, groups=tests.fixtures.stats.GROUP_ACTIVITY)
     )
     with pytest.raises(wambatic.reports.errors.UsageError, match='request groups'):
-        wambatic.reports.html.html_document(
+        html_document(
             dataclasses.replace(
                 org_report,
                 periods={**org_report.periods, wambatic.stats.base.Granularity.DAY: groups},
@@ -372,9 +417,7 @@ def test_a_result_filed_under_the_wrong_granularity_is_refused(
         ],
     }
     with pytest.raises(wambatic.reports.errors.UsageError, match='week result is by day'):
-        wambatic.reports.html.html_document(
-            dataclasses.replace(org_report, periods=periods), 'auto'
-        )
+        html_document(dataclasses.replace(org_report, periods=periods), 'auto')
 
 
 @pytest.mark.parametrize(
@@ -385,30 +428,28 @@ def test_each_theme_sets_data_theme_on_the_html_element_as_it_should(
     theme: wambatic.settings.Theme,
     attribute: str | None,
 ) -> None:
-    page = Page(wambatic.reports.html.html_document(org_report, theme))
+    page = Page(html_document(org_report, theme))
     html_attributes = next(attrs for tag, attrs in page.elements if tag == 'html')
     assert html_attributes.get('data-theme') == attribute
 
 
-def test_the_stylesheet_defines_both_themes_as_custom_properties(
-    org_report: wambatic.reports.html.HtmlReport,
-) -> None:
-    page = Page(wambatic.reports.html.html_document(org_report, 'auto'))
-    assert '--surface: #fcfcfb;' in page.style
-    assert '--surface: #1a1a19;' in page.style
-    assert ':root[data-theme="dark"]' in page.style
-    assert 'prefers-color-scheme: dark' in page.style
-    assert page.style.count('--series-1: #3987e5;') == 2
-    assert re.search(r'--sequential-5: #b7d3f6;', page.style)
+def test_the_stylesheet_defines_both_themes_as_custom_properties() -> None:
+    style = wambatic.reports.assets.stylesheet()
+    assert '--surface: #fcfcfb;' in style
+    assert '--surface: #1a1a19;' in style
+    assert ':root[data-theme="dark"]' in style
+    assert 'prefers-color-scheme: dark' in style
+    assert style.count('--series-1: #3987e5;') == 2
+    assert re.search(r'--sequential-5: #b7d3f6;', style)
 
 
 def test_a_repo_page_has_no_by_repository_table_and_the_sections_of_its_groups(
     repo_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    document = wambatic.reports.html.html_document(repo_report, 'auto')
+    document = html_document(repo_report, 'auto')
     assert 'By repository' not in document
-    assert 'id="activity"' in document
-    assert 'id="flow"' in document
+    assert 'id="tab-commits"' in document
+    assert 'id="tab-flow"' in document
     assert 'repo octo-org/alpha' in document
 
 
@@ -430,22 +471,23 @@ def test_a_group_the_result_lacks_has_no_section(
         periods={g: flow_free(r) for g, r in org_report.periods.items()},
         initial=org_report.initial,
     )
-    document = wambatic.reports.html.html_document(report, 'auto')
-    assert 'id="activity"' in document
-    assert 'id="flow"' not in document
+    document = html_document(report, 'auto')
+    assert 'id="tab-commits"' in document
+    assert 'id="tab-flow"' not in document
+    assert panel_ids(document) == ACTIVITY_PANELS
     assert 'PRs opened' not in document
 
 
 def test_the_templates_are_found_through_importlib_resources() -> None:
     templates = importlib.resources.files('wambatic.reports') / 'templates'
-    for name in ('report.html', 'report.css', 'report.js'):
+    for name in wambatic.reports.assets.TEMPLATE_NAMES:
         assert (templates / name).is_file()
 
 
 def test_the_report_names_the_range_the_timezone_and_the_provenance(
     org_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    document = wambatic.reports.html.html_document(org_report, 'auto')
+    document = html_document(org_report, 'auto')
     assert '2026-10-01 to 2027-01-31, UTC' in document
     assert 'computed_at: 2027-01-20T12:00:00+00:00' in document
     assert 'schema_version: ' in document
@@ -456,7 +498,7 @@ def test_the_report_names_the_range_the_timezone_and_the_provenance(
             'version_override_at': '2027-01-20T12:00:00+00:00',
         },
     )
-    assert 'ignore-cache-version' in wambatic.reports.html.html_document(
+    assert 'ignore-cache-version' in html_document(
         dataclasses.replace(org_report, total=warned), 'auto'
     )
 
@@ -468,9 +510,7 @@ def test_the_header_names_both_zones_in_author_mode_only(
         total = dataclasses.replace(
             org_report.total, provenance={**org_report.total.provenance, 'commit_timezone': mode}
         )
-        return wambatic.reports.html.html_document(
-            dataclasses.replace(org_report, total=total), 'auto'
-        )
+        return html_document(dataclasses.replace(org_report, total=total), 'auto')
 
     assert '2026-10-01 to 2027-01-31, commits in authors&#x27; zones, other events in UTC' in (
         document('author')
@@ -480,7 +520,7 @@ def test_the_header_names_both_zones_in_author_mode_only(
         org_report.total,
         provenance={k: v for k, v in org_report.total.provenance.items() if k != 'commit_timezone'},
     )
-    assert '2026-10-01 to 2027-01-31, UTC' in wambatic.reports.html.html_document(
+    assert '2026-10-01 to 2027-01-31, UTC' in html_document(
         dataclasses.replace(org_report, total=keyless), 'auto'
     )
 
@@ -492,24 +532,19 @@ def test_the_commit_dates_unavailable_row_appears_in_the_html_report(
     total = dataclasses.replace(
         org_report.total, tables={**org_report.total.tables, 'unavailable': rows}
     )
-    document = wambatic.reports.html.html_document(
-        dataclasses.replace(org_report, total=total), 'auto'
-    )
+    document = html_document(dataclasses.replace(org_report, total=total), 'auto')
     assert 'commit dates: octo-org/alpha' in document
 
 
 def test_the_footer_names_an_enterprise_host_and_github_com_is_unchanged(
     org_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    plain = wambatic.reports.html.html_document(org_report, 'auto')
+    plain = html_document(org_report, 'auto')
     assert 'GitHub host' not in plain
     dotcom = dataclasses.replace(
         org_report.total, provenance={**org_report.total.provenance, 'github_host': 'github.com'}
     )
-    assert (
-        wambatic.reports.html.html_document(dataclasses.replace(org_report, total=dotcom), 'auto')
-        == plain
-    )
+    assert html_document(dataclasses.replace(org_report, total=dotcom), 'auto') == plain
     enterprise = dataclasses.replace(
         org_report.total,
         provenance={
@@ -518,16 +553,14 @@ def test_the_footer_names_an_enterprise_host_and_github_com_is_unchanged(
             'server_version': '3.19.1',
         },
     )
-    document = wambatic.reports.html.html_document(
-        dataclasses.replace(org_report, total=enterprise), 'auto'
-    )
+    document = html_document(dataclasses.replace(org_report, total=enterprise), 'auto')
     assert '<p>GitHub host: ghe.example.com (Enterprise Server 3.19.1)</p>' in document
 
 
 def test_the_footer_says_how_commits_were_read(
     org_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    document = wambatic.reports.html.html_document(org_report, 'auto')
+    document = html_document(org_report, 'auto')
     assert '<p>Commits read by: local clone</p>' in document
     assert '<p>Branches: default branch</p>' in document
     assert '; linguist-generated and linguist-vendored files</p>' in document
@@ -541,9 +574,7 @@ def test_the_footer_says_how_commits_were_read(
             'linguist': 'false',
         },
     )
-    document = wambatic.reports.html.html_document(
-        dataclasses.replace(org_report, total=set_up), 'auto'
-    )
+    document = html_document(dataclasses.replace(org_report, total=set_up), 'auto')
     assert '<p>Commits read by: API with files</p>' in document
     assert '<p>Branches: default branch and release/*</p>' in document
     assert '<p>Line counts leave out: nothing</p>' in document
@@ -551,9 +582,7 @@ def test_the_footer_says_how_commits_were_read(
         org_report.total,
         provenance={k: v for k, v in org_report.total.provenance.items() if k != 'commit_methods'},
     )
-    document = wambatic.reports.html.html_document(
-        dataclasses.replace(org_report, total=unread), 'auto'
-    )
+    document = html_document(dataclasses.replace(org_report, total=unread), 'auto')
     assert 'Commits read by' not in document
 
 
@@ -562,11 +591,15 @@ def test_render_html_writes_the_document_and_returns_the_path(
 ) -> None:
     out = tmp_path / 'out' / 'report.html'
     assert wambatic.reports.html.render_html(org_report, out, 'light') is out
+    folder = wambatic.reports.assets.assets_folder_name()
     assert out.read_text(encoding='utf-8') == wambatic.reports.html.html_document(
-        org_report, 'light'
+        org_report, 'light', f'{folder}/'
     )
-    assert sorted(path.name for path in out.parent.iterdir()) == list(
-        tests.fixtures.reports.REPORT_FILES
+    assert sorted(path.name for path in out.parent.iterdir()) == sorted(
+        [*tests.fixtures.reports.REPORT_FILES, folder]
+    )
+    assert sorted(path.name for path in (out.parent / folder).iterdir()) == sorted(
+        asset.name for asset in wambatic.reports.assets.page_assets()
     )
     assert stat.S_IMODE(out.stat().st_mode) == 0o644
 
@@ -608,14 +641,18 @@ def test_a_failed_move_leaves_the_file_as_it_was_and_no_temporary_file(
         patch.setattr(os, 'replace', refuse)
         with pytest.raises(wambatic.reports.errors.OutputError, match='no space left'):
             wambatic.reports.html.render_html(org_report, out, 'auto')
-    assert list(directory.iterdir()) == []
+    assert [path.name for path in directory.iterdir()] == [
+        wambatic.reports.assets.assets_folder_name()
+    ]
     out.write_text('earlier')
     with monkeypatch.context() as patch:
         patch.setattr(os, 'replace', refuse)
         with pytest.raises(wambatic.reports.errors.OutputError, match='no space left'):
             wambatic.reports.html.render_html(org_report, out, 'auto')
     assert out.read_text() == 'earlier'
-    assert [path.name for path in directory.iterdir()] == list(tests.fixtures.reports.REPORT_FILES)
+    assert sorted(path.name for path in directory.iterdir()) == sorted(
+        [*tests.fixtures.reports.REPORT_FILES, wambatic.reports.assets.assets_folder_name()]
+    )
 
 
 def test_a_bad_report_writes_nothing(
@@ -626,17 +663,6 @@ def test_a_bad_report_writes_nothing(
     with pytest.raises(wambatic.reports.errors.UsageError, match='initial'):
         wambatic.reports.html.render_html(bad, out, 'auto')
     assert not out.parent.exists()
-
-
-def test_the_script_has_no_dollar_that_string_template_would_read() -> None:
-    script = (importlib.resources.files('wambatic.reports') / 'templates' / 'report.js').read_text(
-        encoding='utf-8'
-    )
-    assert script
-    template = string.Template(script)
-    assert template.is_valid()
-    assert template.get_identifiers() == []
-    assert '$' not in script
 
 
 def only_delivery(
@@ -658,11 +684,11 @@ def test_the_delivery_section_and_tiles_appear_only_with_delivery_series(
     org_report: wambatic.reports.html.HtmlReport,
     delivery_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    without = wambatic.reports.html.html_document(org_report, 'auto')
-    assert 'id="delivery"' not in without
+    without = html_document(org_report, 'auto')
+    assert 'id="tab-delivery"' not in without
     assert 'Workflow runs' not in Page(without).tiles
-    page = Page(wambatic.reports.html.html_document(delivery_report, 'auto'))
-    assert page.by_id('delivery')
+    page = Page(html_document(delivery_report, 'auto'))
+    assert page.by_id('tab-delivery')
     assert page.tiles['Workflow runs'] == '13'
     assert page.tiles['Success rate'] == '66.7%'  # 6 of 9 completed runs
     assert page.tiles['Releases'] == '6'
@@ -674,7 +700,7 @@ def test_the_delivery_section_and_tiles_appear_only_with_delivery_series(
 def test_every_delivery_figure_has_its_element_and_the_section_holds_its_charts(
     delivery_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    document = wambatic.reports.html.html_document(delivery_report, 'auto')
+    document = html_document(delivery_report, 'auto')
     page = Page(document)
     keys = {
         f.key
@@ -685,15 +711,15 @@ def test_every_delivery_figure_has_its_element_and_the_section_holds_its_charts(
     assert 'delivery-lead-time' in keys
     for key in keys:
         assert page.by_id(key)['role'] == 'img'
-    section = document.split('id="delivery"')[1].split('</section>')[0]
+    section = document.split('id="tab-delivery"')[1].split('</section>')[0]
     assert all(f'id="{key}"' in section for key in keys)
 
 
 def test_the_delivery_tables_hold_the_rows_of_rows_py_once_per_granularity(
     delivery_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    document = wambatic.reports.html.html_document(delivery_report, 'auto')
-    section = document.split('id="delivery"')[1].split('</section>')[0]
+    document = without_values(html_document(delivery_report, 'auto'))
+    section = document.split('id="tab-delivery"')[1].split('</section>')[0]
     for title in ('Delivery by period', 'DORA proxies by period'):
         assert section.count(f'<caption>{title}') == 4, title
     assert section.count(' hidden') == 6  # all but the initial granularity of two tables
@@ -716,7 +742,7 @@ def test_a_page_with_delivery_but_no_proxy_has_no_proxy_table_or_line(
             not metric.startswith(('deployments', 'lead_time', 'change_failure', 'time_to_restore'))
         ),
     )
-    document = wambatic.reports.html.html_document(plain, 'auto')
+    document = html_document(plain, 'auto')
     assert 'Delivery by period' in document
     assert 'DORA proxies by period' not in document
     assert 'class="proxies"' not in document
@@ -724,18 +750,18 @@ def test_a_page_with_delivery_but_no_proxy_has_no_proxy_table_or_line(
 
 
 def popularity_section(document: str) -> str:
-    return document.split('id="popularity"')[1].split('</section>')[0]
+    return document.split('id="tab-popularity"')[1].split('</section>')[0]
 
 
 def test_the_popularity_section_and_tiles_appear_only_with_popularity_series(
     org_report: wambatic.reports.html.HtmlReport,
     popularity_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    without = wambatic.reports.html.html_document(org_report, 'auto')
-    assert 'id="popularity"' not in without
+    without = html_document(org_report, 'auto')
+    assert 'id="tab-popularity"' not in without
     assert 'Top language' not in Page(without).tiles
-    page = Page(wambatic.reports.html.html_document(popularity_report, 'auto'))
-    assert page.by_id('popularity')
+    page = Page(html_document(popularity_report, 'auto'))
+    assert page.by_id('tab-popularity')
     assert page.tiles['Stars'] == '10'  # alpha 6 and beta 4
     assert page.tiles['Forks'] == '5'
     assert page.tiles['Watchers'] == '6'
@@ -746,7 +772,7 @@ def test_the_popularity_section_and_tiles_appear_only_with_popularity_series(
 def test_the_popularity_section_holds_its_charts_and_says_what_the_counts_are(
     popularity_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    document = wambatic.reports.html.html_document(popularity_report, 'auto')
+    document = html_document(popularity_report, 'auto')
     page = Page(document)
     section = popularity_section(document)
     for key in (
@@ -761,14 +787,15 @@ def test_the_popularity_section_holds_its_charts_and_says_what_the_counts_are(
     assert 'as of the last sync' in section
     assert 'exist now' in section
     assert (
-        'id="popularity-languages"' not in document.split('id="activity"')[1].split('</section>')[0]
+        'id="popularity-languages"'
+        not in document.split('id="tab-commits"')[1].split('</section>')[0]
     )
 
 
 def test_the_popularity_tables_hold_the_rows_of_rows_py(
     popularity_report: wambatic.reports.html.HtmlReport,
 ) -> None:
-    section = popularity_section(wambatic.reports.html.html_document(popularity_report, 'auto'))
+    section = without_values(popularity_section(html_document(popularity_report, 'auto')))
     assert section.count('<caption>Popularity by period') == 4
     assert section.count(' hidden') == 3
     assert '<td>2026-10</td><td class=num>3</td><td class=num>5</td>' in section
@@ -788,7 +815,8 @@ def test_a_directory_that_cannot_be_made_is_an_output_error(
     blocker = tmp_path / 'blocker'
     blocker.write_text('a file, not a directory')
     out = blocker / 'report.html'
-    with pytest.raises(wambatic.reports.errors.OutputError, match=f'cannot write {out}') as info:
+    folder = out.parent / wambatic.reports.assets.assets_folder_name()
+    with pytest.raises(wambatic.reports.errors.OutputError, match=f'cannot write {folder}') as info:
         wambatic.reports.html.render_html(org_report, out, 'auto')
     assert isinstance(info.value.__cause__, OSError)
 
@@ -806,7 +834,7 @@ def test_a_template_that_cannot_be_read_is_an_output_error(
 
     monkeypatch.setattr(pathlib.Path, 'read_text', read_text)
     with pytest.raises(wambatic.reports.errors.OutputError, match='report template report.css'):
-        wambatic.reports.html.read_template('report.css')
+        wambatic.reports.assets.read_template('report.css')
 
 
 def test_a_plotlyjs_that_cannot_be_read_is_an_output_error(
@@ -817,4 +845,200 @@ def test_a_plotlyjs_that_cannot_be_read_is_an_output_error(
 
     monkeypatch.setattr(plotly.offline, 'get_plotlyjs', get_plotlyjs)
     with pytest.raises(wambatic.reports.errors.OutputError, match='plotly.js'):
-        wambatic.reports.html.read_plotlyjs()
+        wambatic.reports.assets.read_plotlyjs()
+
+
+def test_a_failed_folder_write_leaves_no_page(
+    org_report: wambatic.reports.html.HtmlReport,
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def refuse(source: object, destination: object) -> None:
+        raise OSError(28, 'no space left')
+
+    monkeypatch.setattr(os, 'rename', refuse)
+    out = tmp_path / 'out' / 'report.html'
+    with pytest.raises(wambatic.reports.errors.OutputError, match='cannot write .*no space left'):
+        wambatic.reports.html.render_html(org_report, out, 'auto')
+    assert list((tmp_path / 'out').iterdir()) == []
+
+
+NUMERIC_CELL = re.compile(r'<td class=num data-value="([^"]*)">([^<]*)</td>')
+TABLE_HEAD = re.compile(r'<table[^>]*>.*?<thead><tr>(.*?)</tr></thead>', re.DOTALL)
+REPORT_FIXTURES = ['delivery_report', 'org_report', 'popularity_report', 'repo_report']
+
+
+def shown_forms(value: float) -> set[str]:
+    format_number = wambatic.reports.terminal.format_number
+    return {
+        format_number(value),
+        format_number(value, signed=True),
+        format_number(value, decimals=1),
+        f'{value:,.1f}%',
+    }
+
+
+@pytest.mark.parametrize('fixture', REPORT_FIXTURES)
+def test_every_numeric_cell_holds_the_value_its_text_was_formatted_from(
+    fixture: str, request: pytest.FixtureRequest
+) -> None:
+    document = html_document(request.getfixturevalue(fixture))
+    cells = NUMERIC_CELL.findall(document)
+    assert cells
+    for raw, text in cells:
+        if text == '-':
+            assert raw == ''
+        else:
+            assert html.unescape(text) in shown_forms(float(raw)), (raw, text)
+
+
+@pytest.mark.parametrize('fixture', REPORT_FIXTURES)
+def test_every_header_cell_says_its_type_and_the_first_column_is_text(
+    fixture: str, request: pytest.FixtureRequest
+) -> None:
+    document = html_document(request.getfixturevalue(fixture))
+    heads = TABLE_HEAD.findall(document)
+    assert heads
+    for head in heads:
+        kinds = re.findall(r'<th[^>]*data-type="(number|text)"', head)
+        assert kinds
+        assert kinds[0] == 'text'
+        assert head.count('<th') == len(kinds)
+
+
+@pytest.mark.parametrize(
+    ('content', 'expected'),
+    [
+        (
+            wambatic.reports.html.Number('1,234', 1234.0),
+            '<td class=num data-value="1234">1,234</td>',
+        ),
+        (wambatic.reports.html.Number('+56', 56), '<td class=num data-value="56">+56</td>'),
+        (
+            wambatic.reports.html.Number('12.5%', 12.5),
+            '<td class=num data-value="12.5">12.5%</td>',
+        ),
+        (wambatic.reports.html.Number('-', None), '<td class=num data-value="">-</td>'),
+        ('octo', '<td>octo</td>'),
+    ],
+)
+def test_a_cell_carries_the_number_its_text_shows(
+    content: str | wambatic.reports.html.Number, expected: str
+) -> None:
+    assert wambatic.reports.html.cell(content, numeric=False) == expected
+
+
+def test_the_unavailable_table_has_only_text_columns(
+    org_report: wambatic.reports.html.HtmlReport,
+) -> None:
+    rows = [{'metric': 'commit dates: octo-org/alpha', 'reason': 'dated in UTC: no author offset'}]
+    total = dataclasses.replace(
+        org_report.total, tables={**org_report.total.tables, 'unavailable': rows}
+    )
+    document = html_document(dataclasses.replace(org_report, total=total))
+    section = document.split('id="unavailable"')[1].split('</section>')[0]
+    assert section.count('data-type="text"') == 2
+    assert 'data-type="number"' not in section
+    assert 'data-value' not in section
+
+
+ACTIVITY_PANELS = ['tab-commits', 'tab-contributors', 'tab-lines']
+
+
+def panel_ids(document: str) -> list[str]:
+    return re.findall(r'<section id="(tab-[a-z]+)" role="tabpanel"', document)
+
+
+def test_the_panels_follow_the_spec_order_and_hold_their_charts(
+    org_report: wambatic.reports.html.HtmlReport,
+    delivery_report: wambatic.reports.html.HtmlReport,
+    popularity_report: wambatic.reports.html.HtmlReport,
+) -> None:
+    document = html_document(org_report, 'auto')
+    assert panel_ids(document)[:3] == ACTIVITY_PANELS
+    commits = document.split('id="tab-commits"')[1].split('</section>')[0]
+    assert 'id="activity-commits"' in commits
+    assert 'id="activity-active-days"' in commits
+    assert 'id="activity-calendar"' in commits
+    assert 'id="activity-lines"' not in commits
+    contributors = document.split('id="tab-contributors"')[1].split('</section>')[0]
+    assert 'id="activity-contributors"' in contributors
+    assert 'id="activity-top-contributors"' in contributors
+    assert 'id="activity-commits"' not in contributors
+    lines = document.split('id="tab-lines"')[1].split('</section>')[0]
+    assert 'id="activity-lines"' in lines
+    assert panel_ids(html_document(delivery_report, 'auto')) == [
+        'tab-commits',
+        'tab-contributors',
+        'tab-lines',
+        'tab-flow',
+        'tab-delivery',
+    ]
+    assert panel_ids(html_document(popularity_report, 'auto'))[-1] == 'tab-popularity'
+
+
+def test_every_tab_button_names_its_panel_and_the_bar_is_hidden_until_script_runs(
+    popularity_report: wambatic.reports.html.HtmlReport,
+) -> None:
+    document = html_document(popularity_report, 'auto')
+    ids = panel_ids(document)
+    assert '<div class="tab-bar" role="tablist" hidden>' in document
+    assert re.findall(r'role="tab" id="[a-z-]+" aria-controls="(tab-[a-z]+)"', document) == ids
+    panels = re.findall(r'<section id="tab-[^>]*>', document)
+    assert panels and all('hidden' not in tag for tag in panels)
+
+
+def test_unavailable_sits_outside_the_panels(
+    org_report: wambatic.reports.html.HtmlReport,
+) -> None:
+    rows = [{'metric': 'releases', 'reason': 'not fetched'}]
+    total = dataclasses.replace(
+        org_report.total, tables={**org_report.total.tables, 'unavailable': rows}
+    )
+    report = dataclasses.replace(org_report, total=total)
+    document = html_document(report, 'auto')
+    before = document.split('<section id="unavailable">')[0]
+    assert before.count('<section') == before.count('</section>')
+    assert document.rindex('role="tabpanel"') < document.index('id="unavailable"')
+
+
+def contributors_summary(report: wambatic.reports.html.HtmlReport, count: int) -> str:
+    base = tests.fixtures.stats.ORG_TOP_CONTRIBUTORS[0]
+    rows = [{**base, 'login': f'person{index}'} for index in range(count)]
+    total = dataclasses.replace(
+        report.total, tables={**report.total.tables, 'top_contributors': rows}
+    )
+    document = html_document(dataclasses.replace(report, total=total), 'auto')
+    match = re.search(
+        r'<details class="table-block"[^>]*><summary>Top contributors .*?</summary>', document
+    )
+    assert match is not None
+    return match.group(0)
+
+
+@pytest.mark.parametrize(('count', 'is_open'), [(10, True), (11, False)])
+def test_a_table_block_is_open_only_when_it_has_at_most_ten_rows(
+    org_report: wambatic.reports.html.HtmlReport, count: int, is_open: bool
+) -> None:
+    summary = contributors_summary(org_report, count)
+    assert summary.startswith('<details class="table-block" open>') is is_open
+    assert f'<span class="row-count">{count} rows</span>' in summary
+
+
+def test_the_period_tables_of_one_kind_share_one_block_and_unavailable_has_none(
+    org_report: wambatic.reports.html.HtmlReport,
+) -> None:
+    document = html_document(org_report, 'auto')
+    blocks = re.findall(r'<details class="table-block".*?</details>', document, re.DOTALL)
+    periods = [block for block in blocks if 'class="period"' in block]
+    assert periods
+    for block in periods:
+        assert block.count('class="period"') == len(PERIOD_NAMES)
+    unavailable = [{'metric': 'stars', 'reason': 'not fetched'}]
+    total = dataclasses.replace(
+        org_report.total, tables={**org_report.total.tables, 'unavailable': unavailable}
+    )
+    planted = html_document(dataclasses.replace(org_report, total=total), 'auto')
+    section = planted.split('<section id="unavailable">')[1]
+    assert '<details' not in section
+    assert '<table>' in section

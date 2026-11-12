@@ -1,7 +1,7 @@
 # HTML report
 
 **Version:** 2.0
-**Status:** proposed
+**Status:** implemented
 **Date:** 2026-11-11
 
 The static HTML report of `--format html`, also served by the web app: its figures, page layout, tabs, tables, granularity switch, palette and themes, table export, and the headless-browser test. Part of [Reports](../reports/spec.md).
@@ -50,7 +50,6 @@ class HtmlReport:
     periods: dict[Granularity, StatsResult]  # exactly YEAR, MONTH, WEEK and DAY
     initial: Granularity                     # the granularity shown on load; a key of `periods`
 
-# auditme: accept[spec-api-signature-drift] assets_url is 2.0, not built yet; tasks-1.md Task 2 removes this line
 def html_document(
     report: HtmlReport, theme: typing.Literal['auto', 'dark', 'light'], assets_url: str
 ) -> str:

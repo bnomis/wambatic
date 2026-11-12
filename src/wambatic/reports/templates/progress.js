@@ -5,7 +5,8 @@
   // The addresses are built here from the job id and this page's own query, so nothing in the
   // embedded data can send the page elsewhere.
   const jobId = String(data.job);
-  const progressPath = '/api/progress?job=' + encodeURIComponent(jobId);
+  const jobQuery =
+    'query($id: ID!) { job(id: $id) { state reposListed reposPending reposDone rowsWritten error status } }';
   const query = new URLSearchParams(location.search);
   query.set('job', jobId);
   const reloadPath = '/report?' + query.toString();
@@ -14,11 +15,11 @@
   const errorElement = document.getElementById('error');
   const retryElement = document.getElementById('retry');
   const labels = {
-    queued: 'Waiting for another sync to finish',
-    listing: 'Listing repositories',
-    syncing: 'Syncing repositories',
-    done: 'Done, loading the report',
-    failed: 'The sync failed',
+    QUEUED: 'Waiting for another sync to finish',
+    LISTING: 'Listing repositories',
+    SYNCING: 'Syncing repositories',
+    DONE: 'Done, loading the report',
+    FAILED: 'The sync failed',
   };
 
   function fail(message) {
@@ -27,34 +28,41 @@
     retryElement.hidden = false;
   }
 
-  function show(body) {
-    stateElement.textContent = labels[body.state] || body.state;
-    if (body.repos_pending !== null) {
-      const rows = body.rows_written === null ? 0 : body.rows_written;
+  function show(job) {
+    stateElement.textContent = labels[job.state] || job.state;
+    if (job.reposPending !== null) {
+      const rows = job.rowsWritten === null ? 0 : job.rowsWritten;
       countsElement.textContent =
-        body.repos_done + ' of ' + body.repos_pending + ' repositories synced of ' +
-        body.repos_listed + ' listed, ' + rows + ' rows written';
-    } else if (body.repos_listed !== null) {
-      countsElement.textContent = body.repos_listed + ' repositories listed';
+        job.reposDone + ' of ' + job.reposPending + ' repositories synced of ' +
+        job.reposListed + ' listed, ' + rows + ' rows written';
+    } else if (job.reposListed !== null) {
+      countsElement.textContent = job.reposListed + ' repositories listed';
     }
   }
 
   async function poll() {
     try {
-      const response = await fetch(progressPath, { cache: 'no-store' });
+      const response = await fetch('/graphql', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({ query: jobQuery, variables: { id: jobId } }),
+      });
       const body = await response.json();
-      if (!response.ok) {
+      if (!response.ok || body.errors || !body.data || body.data.job === null) {
         stateElement.textContent = 'The sync cannot be followed';
-        fail(body.error);
+        const first = body.errors && body.errors[0];
+        fail((first && first.message) || body.error || 'no such job');
         return;
       }
-      show(body);
-      if (body.state === 'done') {
+      const job = body.data.job;
+      show(job);
+      if (job.state === 'DONE') {
         location.replace(reloadPath);
         return;
       }
-      if (body.state === 'failed') {
-        fail(body.error);
+      if (job.state === 'FAILED') {
+        fail(job.error);
         return;
       }
     } catch (error) {

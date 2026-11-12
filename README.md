@@ -1,6 +1,6 @@
 # wambatic
 
-Statistics from github.com for a user, an organisation or a single repository, as a report in your terminal, as one self-contained HTML page, as JSON or in a web app on your own machine.
+Statistics from github.com for a user, an organisation or a single repository, as a report in your terminal, as an HTML page with its assets folder, as JSON or in a web app on your own machine.
 
 wambatic reads the default-branch history, pull requests, issues, releases and GitHub Actions runs from GitHub's GraphQL and REST APIs, keeps them in a local SQLite cache, and reports commits, contributors, active days and lines added, deleted and net, together with how pull requests and issues flow (opened, merged, closed, and how long that takes) and how the project delivers (runs, releases and proxies for the DORA metrics), by year, month, week or day. Only the changes since the last run are fetched, so a repeat run is fast and a report from a warm cache works offline.
 

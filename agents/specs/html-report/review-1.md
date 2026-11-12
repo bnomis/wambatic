@@ -48,3 +48,5 @@ None open. The choices the change needed were answered in this session's intervi
 ## Answers
 
 Answered on the review page on 2026-11-11: every item (1 to 20) approved, with no comments.
+
+Later on 2026-11-11, item 17 changed in one detail: the pin is strawberry-graphql 0.338.0, not 0.341.2, because the project's 14-day `exclude-newer` quarantine hides 0.341.2 (found by tasks-1.md Task 1). The exact pin and the reasons for it are unchanged (GraphQL API spec 1.1).

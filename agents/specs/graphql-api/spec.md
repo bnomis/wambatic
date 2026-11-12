@@ -1,10 +1,12 @@
 # GraphQL API
 
-**Version:** 1.0
-**Status:** proposed
+**Version:** 1.1
+**Status:** implemented
 **Date:** 2026-11-11
 
 The web app's API: one GraphQL endpoint, `/graphql`, that answers stats for a target, starts or joins a sync, and reports how a sync job is going. It replaces the REST routes `/api/stats` and `/api/progress` and FastAPI's `/openapi.json` and `/docs`; the user decided on 2026-11-11 to replace REST rather than add GraphQL beside it, and chose [Strawberry](https://strawberry.rocks/) as the library. Part of [Reports](../reports/spec.md); served by the [Web app](../web-app/spec.md) 2.0.
+
+Version 1.1 (2026-11-11) pins strawberry-graphql 0.338.0 instead of 0.341.2, which the project's 14-day dependency quarantine hides; see External dependencies.
 
 A client asks only for the fields it needs, so a script that wants one series of a large org does not receive every table. The data is the same as `report --format json` prints: every field is read from `result_to_dict`, so the API and the JSON output never disagree.
 
@@ -87,13 +89,13 @@ import collections.abc
 import fastapi
 import strawberry.fastapi
 
-@dataclasses.dataclass(frozen=True, slots=True)
-class ApiContext:
+@dataclasses.dataclass   # not frozen: the router sets `request` and `response` on a BaseContext
+class ApiContext(strawberry.fastapi.BaseContext):
     settings: Settings
     cache: Cache
     jobs: Jobs
     clock: collections.abc.Callable[[], datetime.datetime]
-    run_sync: collections.abc.Callable[[SyncJob], collections.abc.Awaitable[None]]
+    sync_runner: collections.abc.Callable[[Query], RunSync]   # the sync a query's job runs
 
 schema: strawberry.Schema   # Query, Mutation, with the WambaticErrors extension
 
@@ -113,7 +115,7 @@ def graphql_router(context: ApiContext) -> strawberry.fastapi.GraphQLRouter:
 ## Implementation
 
 - *Stats.* `stats` computes at once when `input.job` is the finished job of the same key (target and groups) or when the target is a `Subject` and `needs_sync` with `fetch.max_age` (the fetching flags off) is false, and returns `Stats`; otherwise it returns `SyncNeeded`. It never starts a sync: a query has no side effects, and a client that wants fresh data calls the `sync` mutation, polls `job`, then queries `stats` with `job`. The computation runs off the event loop as the web app's routes do (`results_or_job` in `jobs.py`), and `Stats` is built from `result_to_dict(result)`, whose keys map to the fields above (`format_version` to `formatVersion`, `by_kind` to `byKind`, `by_author` to `byAuthor`).
-- *Sync.* `sync` calls `Jobs.start` with the key and `context.run_sync`, the same function the progress page's jobs run, and returns the job; one sync runs at a time and the others wait as `QUEUED`, as in the web app. A bare NAME is resolved inside the job, so `sync` answers at once.
+- *Sync.* `sync` calls `Jobs.start` with the key and `context.sync_runner(query)`, the same runner the progress page's jobs use (it takes the parsed query because the job's key does not hold `by_author`), and returns the job; one sync runs at a time and the others wait as `QUEUED`, as in the web app. A bare NAME is resolved inside the job, so `sync` answers at once.
 - *Transport.* `strawberry.fastapi.GraphQLRouter(schema, context_getter=..., graphql_ide='graphiql', allow_queries_via_get=True, multipart_uploads_enabled=False)`, mounted with `app.include_router(router, prefix='/graphql')`. Strawberry refuses mutations over GET. The web app's existing middlewares apply: the loopback `Host` check, the debug request log, and `convert_errors` for anything raised outside a resolver.
 - *Cross-site requests.* A web page on another site cannot read the answer (no CORS headers are sent), but it could make the browser POST a form to a loopback server and start a sync with the operator's token. So a POST to `/graphql` whose `Content-Type` is not `application/json` gets 415 `{"error": "POST /graphql needs Content-Type: application/json"}` from a check in `api.py` before Strawberry reads the body: a browser sends a JSON content type cross-site only after a CORS preflight, which the server never approves.
 - *GraphiQL.* A browser's GET of `/graphql` with no query shows Strawberry's GraphiQL page, which loads its script and stylesheet from a CDN (unpkg), so it needs a network connection where the app's own pages do not; this replaces FastAPI's `/docs`, which loaded from jsDelivr for the same reason.
@@ -123,5 +125,5 @@ def graphql_router(context: ApiContext) -> strawberry.fastapi.GraphQLRouter:
 
 ## External dependencies
 
-- [strawberry-graphql](https://strawberry.rocks/) 0.341.2 (MIT, released 2026-11-07, read on PyPI 2026-11-11), with its FastAPI integration. It is before 1.0 and releases often, with breaking changes noted in its changelog, so `pyproject.toml` pins it exactly (`strawberry-graphql[fastapi]==0.341.2`) and an upgrade is a deliberate change that re-runs the schema test. It brings `graphql-core` (`>=3.3,<3.4`). Its PyPI classifiers do not list Python 3.14 (checked 2026-11-11); the first task installs it under 3.14 and runs the tests before anything else is built on it, and stops with the failure if it does not work.
+- [strawberry-graphql](https://strawberry.rocks/) 0.338.0 (MIT, released 2026-10-26, read on PyPI 2026-11-11), with its FastAPI integration. The project's `[tool.uv] exclude-newer = "14 days"` hides any release younger than 14 days, so the pin is the newest release outside that window on the day the list ran; 1.0 of this spec named 0.341.2 (released 2026-11-07), which `uv lock` could not resolve (found by tasks-1.md Task 1 on 2026-11-11). It is before 1.0 and releases often, with breaking changes noted in its changelog, so `pyproject.toml` pins it exactly (`strawberry-graphql[fastapi]==0.338.0`) and an upgrade is a deliberate change that re-runs the schema test. It brings `graphql-core` (`>=3.3,<3.4`; 3.3.1 resolved). Its PyPI classifiers do not list Python 3.14 (checked 2026-11-11), but it imports and answers a query through FastAPI under Python 3.14.7 (checked 2026-11-11); the first task repeats that check as a test.
 - FastAPI and uvicorn, as in the [Web app](../web-app/spec.md).

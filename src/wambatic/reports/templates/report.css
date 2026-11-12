@@ -100,6 +100,35 @@ h2 {
   font-variant-numeric: tabular-nums;
 }
 
+.tab-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 24px 0 0;
+  border-bottom: 1px solid var(--grid);
+}
+
+.tab-bar button {
+  padding: 8px 16px;
+  background: none;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  color: var(--ink-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.tab-bar button[aria-selected="true"] {
+  border-bottom-color: var(--series-1);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.tab-bar button:focus-visible {
+  outline: 2px solid var(--series-1);
+  outline-offset: -2px;
+}
+
 .charts {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr));
@@ -177,4 +206,93 @@ footer p {
 footer .warning {
   color: var(--ink);
   font-weight: 600;
+}
+
+.assets-missing {
+  display: none;
+}
+
+.table-block {
+  margin: 0 0 16px;
+}
+
+.table-block > summary {
+  padding: 8px 0;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+th .sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+th .sort .arrow {
+  display: inline-block;
+  min-width: 1em;
+  color: var(--ink-secondary);
+}
+
+.filters th {
+  padding: 2px 4px;
+  font-weight: 400;
+}
+
+.filters input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 5em;
+  padding: 2px 4px;
+  border: 1px solid var(--grid);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.filters input[aria-invalid="true"] {
+  border-color: var(--ink);
+  outline: 2px solid var(--ink-secondary);
+}
+
+.table-status {
+  margin: 0 0 8px;
+  color: var(--ink-secondary);
+  font-size: 0.85rem;
+}
+
+table[hidden] + .table-status {
+  display: none;
+}
+
+.table-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0 0 8px;
+}
+
+.table-tools .export {
+  padding: 2px 10px;
+  border: 1px solid var(--grid);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.export-error {
+  color: var(--ink);
+  font-size: 0.85rem;
+}
+
+table[hidden] + .table-status + .table-tools {
+  display: none;
 }

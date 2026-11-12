@@ -27,7 +27,7 @@ wambatic report repo:octocat/Hello-World --full-refresh
 ## A file to share
 
 ```shell
-# A self-contained HTML page, opening on the week view, written to a file of your choice
+# An HTML page and its assets folder, opening on the week view, written to a file of your choice
 wambatic report org:github --format html --by week --out reports/github.html
 ```
 

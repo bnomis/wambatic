@@ -3,7 +3,7 @@
 ![The wambatic logo](assets/wambatic-mark-animated.svg){ align=right width="128" }
 
 Statistics from github.com for a user, an organisation or a single repository, as a report in your
-terminal, as one self-contained HTML page, as JSON or in a web app on your own machine.
+terminal, as an HTML page with its assets folder, as JSON or in a web app on your own machine.
 
 ```shell
 wambatic report repo:pallets/click --format html --by month
@@ -38,8 +38,8 @@ says what wambatic does not do.
 
 ## Why wambatic
 
-- **One tool, four front ends.** The same numbers appear in the terminal, in a page you can attach to an
-  issue, as JSON for scripts and in a web app.
+- **One tool, four front ends.** The same numbers appear in the terminal, in a page you can share with its
+  folder, as JSON for scripts and in a web app.
 - **Only what is new is fetched.** After the first run, a sync reads the changes since the last one, so a
   repeat run is fast and a report from a warm cache works offline.
 - **Nothing is hidden behind colour.** Net lines carry a sign and a partial period carries a mark, so the

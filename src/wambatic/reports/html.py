@@ -5,7 +5,6 @@ import collections.abc
 import dataclasses
 import functools
 import html
-import importlib.resources
 import json
 import os
 import pathlib
@@ -16,6 +15,7 @@ import typing
 
 import plotly.offline
 
+import wambatic.reports.assets
 import wambatic.reports.errors
 import wambatic.reports.figures
 import wambatic.reports.rows
@@ -32,9 +32,11 @@ PERIODS = (
 )
 SAFE_FILENAME = re.compile(r'[^A-Za-z0-9._-]')
 FILE_MODE = 0o644
+TABLE_OPEN_ROWS = 10
 PROXIES_LINE = 'The DORA figures are proxies; how each is measured is described in the README.'
 OTHER_LANGUAGE = wambatic.stats.popularity.OTHER
 POPULARITY_LINE = 'Counts are as of the last sync; totals count the stars and forks that exist now.'
+FORMAT_NET = functools.partial(wambatic.reports.terminal.format_number, signed=True)
 JSON_ESCAPES = {'&': '\\u0026', '<': '\\u003c', '>': '\\u003e'}
 
 
@@ -137,47 +139,6 @@ def check_report(report: HtmlReport) -> None:
             )
 
 
-TEMPLATE_NAMES = (
-    'form.html',
-    'message.html',
-    'progress.html',
-    'progress.js',
-    'report.css',
-    'report.html',
-    'report.js',
-)
-
-
-@functools.cache
-def read_template(name: str) -> str:
-    """The packaged template `name`.
-
-    Raises:
-        OutputError: when the template cannot be read or is not UTF-8.
-    """
-    resource = importlib.resources.files('wambatic.reports') / 'templates' / name
-    try:
-        return resource.read_text(encoding='utf-8')
-    except OSError, UnicodeDecodeError:
-        raise wambatic.reports.errors.OutputError(
-            f'cannot read the report template {name}; reinstall wambatic'
-        ) from None
-
-
-def read_plotlyjs() -> str:
-    """The plotly.js bundled with plotly.
-
-    Raises:
-        OutputError: when the file cannot be read or is not UTF-8.
-    """
-    try:
-        return str(plotly.offline.get_plotlyjs())
-    except OSError, UnicodeDecodeError:
-        raise wambatic.reports.errors.OutputError(
-            'cannot read the plotly.js bundled with plotly; reinstall wambatic'
-        ) from None
-
-
 def escape(text: object) -> str:
     return html.escape(str(text))
 
@@ -188,60 +149,108 @@ def json_for_script(data: object) -> str:
     return ''.join(JSON_ESCAPES.get(char, char) for char in text)
 
 
-def tokens(theme: wambatic.reports.figures.Theme) -> str:
-    """A theme's colours as the CSS custom properties the stylesheet reads."""
-    declarations = {
-        'page': theme.page,
-        'surface': theme.surface,
-        'ink': theme.ink,
-        'ink-secondary': theme.ink_secondary,
-        'grid': theme.grid,
-        **{f'series-{n}': colour for n, colour in enumerate(theme.categorical, 1)},
-        **{f'sequential-{n}': colour for n, colour in enumerate(theme.sequential, 1)},
-    }
-    return '\n  '.join(f'--{name}: {colour};' for name, colour in declarations.items())
-
-
 def theme_attribute(theme: wambatic.settings.Theme) -> str:
     """The `<html>` attribute that fixes a theme; `auto` leaves the choice to the viewer."""
     return '' if theme == 'auto' else f' data-theme="{theme}"'
 
 
-def stylesheet() -> str:
-    palette = wambatic.reports.figures.PALETTE
-    return string.Template(read_template('report.css')).substitute(
-        light=tokens(palette['light']), dark=tokens(palette['dark'])
+@dataclasses.dataclass(frozen=True, slots=True)
+class Number:
+    """A numeric cell: the text shown and the value it was formatted from (None for no data)."""
+
+    text: str
+    value: float | None
+
+
+def raw_value(value: float | None) -> str:
+    """The `data-value` text: empty for no data, else the number with no needless `.0`."""
+    if value is None:
+        return ''
+    if isinstance(value, float) and not value.is_integer():
+        return repr(value)
+    return str(int(value))
+
+
+def number(format_text: collections.abc.Callable[[float], str], value: float | None) -> Number:
+    """A cell for `value` shown as `format_text` gives it, or `-` for no data."""
+    text = wambatic.reports.rows.NO_DATA if value is None else format_text(value)
+    return Number(text, value)
+
+
+def head_cell(text: str, numeric: bool) -> str:
+    kind = 'number' if numeric else 'text'
+    return f'<th{" class=num" if numeric else ""} data-type="{kind}">{escape(text)}</th>'
+
+
+def cell(content: str | Number, numeric: bool) -> str:
+    if isinstance(content, Number):
+        return f'<td class=num data-value="{raw_value(content.value)}">{escape(content.text)}</td>'
+    return f'<td{" class=num" if numeric else ""}>{escape(content)}</td>'
+
+
+def rows_text(count: int) -> str:
+    return f'{count:,} row' if count == 1 else f'{count:,} rows'
+
+
+def block_html(title: str, count: int, content: str) -> str:
+    """A collapsible block: closed when the shown table has more than `TABLE_OPEN_ROWS` rows."""
+    opened = ' open' if count <= TABLE_OPEN_ROWS else ''
+    return (
+        f'<details class="table-block"{opened}><summary>{escape(title)} '
+        f'(<span class="row-count">{rows_text(count)}</span>)</summary>{content}</details>'
     )
-
-
-def cell(text: str, numeric: bool, tag: str = 'td') -> str:
-    return f'<{tag}{" class=num" if numeric else ""}>{escape(text)}</{tag}>'
 
 
 def table_html(
     title: str,
     headers: collections.abc.Sequence[str],
-    rows: collections.abc.Sequence[collections.abc.Sequence[str]],
+    rows: collections.abc.Sequence[collections.abc.Sequence[str | Number]],
     *,
-    footer: collections.abc.Sequence[str] | None = None,
+    footer: collections.abc.Sequence[str | Number] | None = None,
     note: str = '',
     attributes: str = '',
+    numeric: collections.abc.Sequence[bool] | None = None,
+    block: bool = True,
 ) -> str:
-    """A data table whose first column is text and the others numbers."""
-    head = ''.join(cell(h, i > 0, 'th') for i, h in enumerate(headers))
+    """A data table whose first column is text and the others numbers, unless `numeric` says
+    which columns are numbers. A numeric column holds `Number` cells carrying their raw value.
+    It is wrapped in a collapsible block unless `block` is false."""
+    kinds = [i > 0 for i in range(len(headers))] if numeric is None else list(numeric)
+    head = ''.join(head_cell(h, kinds[i]) for i, h in enumerate(headers))
     body = ''.join(
-        '<tr>' + ''.join(cell(text, i > 0) for i, text in enumerate(row)) + '</tr>' for row in rows
+        '<tr>' + ''.join(cell(item, kinds[i]) for i, item in enumerate(row)) + '</tr>'
+        for row in rows
     )
     foot = ''
     if footer is not None:
         foot = (
-            '<tfoot><tr>' + ''.join(cell(t, i > 0) for i, t in enumerate(footer)) + '</tr></tfoot>'
+            '<tfoot><tr>'
+            + ''.join(cell(item, kinds[i]) for i, item in enumerate(footer))
+            + '</tr></tfoot>'
         )
     caption = escape(title) + (f'<span class="note">{escape(note)}</span>' if note else '')
-    return (
+    scroll = (
         f'<div class="table-scroll"><table{attributes}><caption>{caption}</caption>'
         f'<thead><tr>{head}</tr></thead><tbody>{body}</tbody>{foot}</table></div>'
     )
+    return block_html(title, len(rows), scroll) if block else scroll
+
+
+def period_numbers(
+    metrics: collections.abc.Sequence[str], values: collections.abc.Sequence[float | None]
+) -> list[Number]:
+    """The cells of one period row; a ratio's value is the 0 to 100 percentage its text shows."""
+    return [
+        Number(
+            wambatic.reports.terminal.format_cell(metric, value),
+            None
+            if value is None
+            else value * 100
+            if wambatic.reports.rows.DELIVERY_UNITS.get(metric) == 'ratio'
+            else value,
+        )
+        for metric, value in zip(metrics, values, strict=True)
+    ]
 
 
 def period_table_html(
@@ -250,24 +259,18 @@ def period_table_html(
     hidden: bool,
     note: str,
 ) -> str:
-    rows = [
+    rows: list[list[str | Number]] = [
         [
             row.label + (wambatic.reports.rows.PARTIAL_MARK if row.partial else ''),
-            *(
-                wambatic.reports.terminal.format_cell(metric, value)
-                for metric, value in zip(table.metrics, row.values, strict=True)
-            ),
+            *period_numbers(table.metrics, row.values),
         ]
         for row in table.rows
     ]
-    footer = None
+    footer: list[str | Number] | None = None
     if table.total is not None:
         footer = [
             'Total',
-            *(
-                wambatic.reports.terminal.format_cell(metric, value)
-                for metric, value in zip(table.metrics, table.total, strict=True)
-            ),
+            *period_numbers(table.metrics, table.total),
         ]
     attributes = f' class="period" data-granularity="{granularity}"' + (' hidden' if hidden else '')
     return table_html(
@@ -277,6 +280,7 @@ def period_table_html(
         footer=footer,
         note=note,
         attributes=attributes,
+        block=False,
     )
 
 
@@ -287,15 +291,21 @@ def period_tables_html(
     ],
     note: collections.abc.Callable[[wambatic.reports.rows.PeriodTable], str],
 ) -> str:
-    """One table for each granularity, all but the initial one hidden."""
+    """One table for each granularity, all but the initial one hidden, in one collapsible block
+    that is open when the initial granularity's table is short."""
     pieces = []
+    shown: wambatic.reports.rows.PeriodTable | None = None
     for granularity in PERIODS:
         table = build(report.periods[granularity])
         if table is not None:
+            if shown is None or granularity == report.initial:
+                shown = table
             pieces.append(
                 period_table_html(table, granularity, granularity != report.initial, note(table))
             )
-    return ''.join(pieces)
+    if shown is None:
+        return ''
+    return block_html(shown.title, len(shown.rows), ''.join(pieces))
 
 
 def partial_note(table: wambatic.reports.rows.PeriodTable) -> str:
@@ -313,14 +323,14 @@ def dora_note(table: wambatic.reports.rows.PeriodTable) -> str:
 def popularity_now_html(now: wambatic.reports.rows.PopularityNow | None) -> str:
     if now is None:
         return ''
-    format_number = wambatic.reports.terminal.format_number
 
-    def texts(row: wambatic.reports.rows.PopularityRow) -> list[str]:
+    def texts(row: wambatic.reports.rows.PopularityRow) -> list[str | Number]:
         return [
             row.repo,
-            format_number(row.stars),
-            format_number(row.forks),
-            format_number(row.watchers),
+            *(
+                number(wambatic.reports.terminal.format_number, count)
+                for count in (row.stars, row.forks, row.watchers)
+            ),
         ]
 
     return table_html(
@@ -341,8 +351,8 @@ def languages_html(languages: wambatic.reports.rows.Languages | None) -> str:
         [
             [
                 row.language,
-                wambatic.reports.terminal.format_number(row.bytes),
-                f'{row.share * 100:,.1f}%',
+                number(wambatic.reports.terminal.format_number, row.bytes),
+                number(lambda share: f'{share:,.1f}%', row.share * 100),
             ]
             for row in languages.rows
         ],
@@ -361,10 +371,10 @@ def breakdown_html(result: wambatic.stats.base.StatsResult) -> str:
                     [
                         [
                             row.name,
-                            wambatic.reports.terminal.format_number(row.commits),
-                            wambatic.reports.terminal.format_number(row.lines_added),
-                            wambatic.reports.terminal.format_number(row.lines_deleted),
-                            wambatic.reports.terminal.format_number(row.lines_net, signed=True),
+                            number(wambatic.reports.terminal.format_number, row.commits),
+                            number(wambatic.reports.terminal.format_number, row.lines_added),
+                            number(wambatic.reports.terminal.format_number, row.lines_deleted),
+                            number(FORMAT_NET, row.lines_net),
                         ]
                         for row in rows
                     ],
@@ -377,18 +387,17 @@ def contributors_html(result: wambatic.stats.base.StatsResult) -> str:
     rows = wambatic.reports.rows.top_contributors(result)
     if not rows:
         return ''
-    format_number = wambatic.reports.terminal.format_number
     return table_html(
         'Top contributors',
         wambatic.reports.rows.CONTRIBUTOR_HEADERS,
         [
             [
                 row.login,
-                format_number(row.commits),
-                format_number(row.lines_added),
-                format_number(row.lines_deleted),
-                format_number(row.lines_net, signed=True),
-                format_number(row.active_days),
+                number(wambatic.reports.terminal.format_number, row.commits),
+                number(wambatic.reports.terminal.format_number, row.lines_added),
+                number(wambatic.reports.terminal.format_number, row.lines_deleted),
+                number(FORMAT_NET, row.lines_net),
+                number(wambatic.reports.terminal.format_number, row.active_days),
             ]
             for row in rows
         ],
@@ -401,7 +410,13 @@ def unavailable_html(result: wambatic.stats.base.StatsResult) -> str:
         return ''
     return (
         '<section id="unavailable"><h2>Unavailable</h2>'
-        + table_html('Unavailable', wambatic.reports.rows.UNAVAILABLE_HEADERS, rows)
+        + table_html(
+            'Unavailable',
+            wambatic.reports.rows.UNAVAILABLE_HEADERS,
+            rows,
+            numeric=(False, False),
+            block=False,
+        )
         + '</section>'
     )
 
@@ -553,6 +568,7 @@ def footer_html(total: wambatic.stats.base.StatsResult) -> str:
     lines = [
         *wambatic.reports.rows.provenance_lines(total),
         f'plotly.js: {plotly.offline.get_plotlyjs_version()}',
+        f'write-excel-file: {wambatic.reports.assets.WRITE_EXCEL_FILE_VERSION}',
     ]
     return (
         '<footer>'
@@ -564,81 +580,155 @@ def footer_html(total: wambatic.stats.base.StatsResult) -> str:
     )
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class Panel:
+    """One tab: its panel id, its title and what it holds. `intro` is a line under the heading
+    that does not count as content, so a tab with only an intro does not appear."""
+
+    key: str
+    title: str
+    parts: list[str]
+    intro: str = ''
+
+    @property
+    def content(self) -> str:
+        return ''.join(self.parts)
+
+    @property
+    def panel_id(self) -> str:
+        return f'tab-{self.key}'
+
+
+def charts_html(*groups: collections.abc.Iterable[str]) -> str:
+    """The `div` that lays out charts, or nothing when there are none."""
+    joined = ''.join(''.join(group) for group in groups)
+    return f'<div class="charts">{joined}</div>' if joined else ''
+
+
+def panel_html(panel: Panel) -> str:
+    return (
+        f'<section id="{panel.panel_id}" role="tabpanel" class="tab-panel">'
+        f'<h2>{escape(panel.title)}</h2>{panel.intro}{panel.content}</section>'
+    )
+
+
+def tab_bar_html(panels: collections.abc.Sequence[Panel]) -> str:
+    """The tab bar, hidden until the page script shows it, since the tabs only work with script."""
+    buttons = ''.join(
+        f'<button type="button" role="tab" id="tab-button-{panel.key}" '
+        f'aria-controls="{panel.panel_id}" aria-selected="false" tabindex="-1">'
+        f'{escape(panel.title)}</button>'
+        for panel in panels
+    )
+    return f'<div class="tab-bar" role="tablist" hidden>{buttons}</div>'
+
+
+def activity_panels(
+    report: HtmlReport, built: PageFigures, figures: list[wambatic.reports.figures.Figure]
+) -> list[Panel]:
+    total = report.total
+    if wambatic.reports.rows.activity_table(total) is None:
+        return []
+    by_key = {f.key: f for f in figures if f.group == 'activity'}
+
+    def chart(*keys: str) -> list[str]:
+        return [figure_html(by_key[key]) for key in keys if key in by_key]
+
+    def range_charts(*keys: str) -> list[str]:
+        return [figure_html(f) for f in built.range_figures if f.key in keys]
+
+    calendar = [] if built.calendar is None else [figure_html(built.calendar, True)]
+    return [
+        Panel(
+            'commits',
+            'Commits',
+            [
+                charts_html(chart('activity-commits', 'activity-active-days'), calendar),
+                period_tables_html(report, wambatic.reports.rows.activity_table, partial_note),
+            ],
+        ),
+        Panel(
+            'contributors',
+            'Contributors',
+            [
+                charts_html(
+                    chart('activity-contributors'),
+                    range_charts(
+                        'activity-top-contributors', 'activity-by-repository', 'activity-by-author'
+                    ),
+                ),
+                contributors_html(total),
+                breakdown_html(total),
+            ],
+        ),
+        Panel('lines', 'Lines', [charts_html(chart('activity-lines'))]),
+    ]
+
+
 def sections_html(
     report: HtmlReport,
     built: PageFigures,
     now: wambatic.reports.rows.PopularityNow | None,
     languages: wambatic.reports.rows.Languages | None,
 ) -> str:
+    """The tab bar, the panels that have content, then Unavailable outside every panel."""
     total = report.total
     figures = period_figures(report, built)
-    range_figures = built.range_figures
-    calendar = built.calendar
-    sections = []
-    if wambatic.reports.rows.activity_table(total) is not None:
-        charts = [f for f in figures if f.group == 'activity']
-        wide = [calendar] if calendar is not None else []
-        pieces = [
-            '<section id="activity"><h2>Activity</h2>',
-            '<div class="charts">',
-            *(figure_html(f) for f in charts),
-            *(figure_html(f, True) for f in wide),
-            *(figure_html(f) for f in range_figures if f.group == 'activity'),
-            '</div>',
-            period_tables_html(report, wambatic.reports.rows.activity_table, partial_note),
-            breakdown_html(total),
-            contributors_html(total),
-            '</section>',
-        ]
-        sections.append(''.join(pieces))
+    panels = activity_panels(report, built, figures)
     if wambatic.reports.rows.flow_table(total) is not None:
-        pieces = [
-            '<section id="flow"><h2>Flow</h2>',
-            '<div class="charts">',
-            *(figure_html(f) for f in figures if f.group == 'flow'),
-            '</div>',
-            period_tables_html(report, wambatic.reports.rows.flow_table, partial_note),
-            period_tables_html(
-                report,
-                wambatic.reports.rows.flow_times_table,
-                wambatic.reports.terminal.flow_times_caption,
-            ),
-            '</section>',
-        ]
-        sections.append(''.join(pieces))
+        panels.append(
+            Panel(
+                'flow',
+                'Flow',
+                [
+                    charts_html(figure_html(f) for f in figures if f.group == 'flow'),
+                    period_tables_html(report, wambatic.reports.rows.flow_table, partial_note),
+                    period_tables_html(
+                        report,
+                        wambatic.reports.rows.flow_times_table,
+                        wambatic.reports.terminal.flow_times_caption,
+                    ),
+                ],
+            )
+        )
     if wambatic.reports.rows.delivery_table(total) is not None:
         has_dora = wambatic.reports.rows.dora_table(total) is not None
-        pieces = [
-            '<section id="delivery"><h2>Delivery</h2>',
-            f'<p class="proxies">{escape(PROXIES_LINE)}</p>' if has_dora else '',
-            '<div class="charts">',
-            *(figure_html(f) for f in figures if f.group == 'delivery'),
-            '</div>',
-            period_tables_html(report, wambatic.reports.rows.delivery_table, delivery_note),
-            period_tables_html(report, wambatic.reports.rows.dora_table, dora_note),
-            '</section>',
-        ]
-        sections.append(''.join(pieces))
+        panels.append(
+            Panel(
+                'delivery',
+                'Delivery',
+                [
+                    charts_html(figure_html(f) for f in figures if f.group == 'delivery'),
+                    period_tables_html(report, wambatic.reports.rows.delivery_table, delivery_note),
+                    period_tables_html(report, wambatic.reports.rows.dora_table, dora_note),
+                ],
+                f'<p class="proxies">{escape(PROXIES_LINE)}</p>' if has_dora else '',
+            )
+        )
     if wambatic.reports.rows.popularity_table(total) is not None:
-        pieces = [
-            '<section id="popularity"><h2>Popularity</h2>',
-            f'<p class="popularity-note">{escape(POPULARITY_LINE)}</p>',
-            '<div class="charts">',
-            *(figure_html(f) for f in figures if f.group == 'popularity'),
-            *(figure_html(f) for f in range_figures if f.group == 'popularity'),
-            '</div>',
-            period_tables_html(
-                report,
-                wambatic.reports.rows.popularity_table,
-                wambatic.reports.terminal.popularity_caption,
-            ),
-            popularity_now_html(now),
-            languages_html(languages),
-            '</section>',
-        ]
-        sections.append(''.join(pieces))
-    sections.append(unavailable_html(total))
-    return ''.join(sections)
+        panels.append(
+            Panel(
+                'popularity',
+                'Popularity',
+                [
+                    charts_html(
+                        (figure_html(f) for f in figures if f.group == 'popularity'),
+                        (figure_html(f) for f in built.range_figures if f.group == 'popularity'),
+                    ),
+                    period_tables_html(
+                        report,
+                        wambatic.reports.rows.popularity_table,
+                        wambatic.reports.terminal.popularity_caption,
+                    ),
+                    popularity_now_html(now),
+                    languages_html(languages),
+                ],
+                f'<p class="popularity-note">{escape(POPULARITY_LINE)}</p>',
+            )
+        )
+    present = [panel for panel in panels if panel.content]
+    bar = tab_bar_html(present) if present else ''
+    return bar + ''.join(panel_html(panel) for panel in present) + unavailable_html(total)
 
 
 def page_data(
@@ -646,6 +736,7 @@ def page_data(
 ) -> dict[str, object]:
     calendar = built.calendar
     return {
+        'stem': pathlib.PurePath(report_filename(report.total.subject)).stem,
         'initial': str(report.initial),
         'theme': theme,
         'palette': {
@@ -661,36 +752,62 @@ def page_data(
     }
 
 
-def html_document(report: HtmlReport, theme: wambatic.settings.Theme) -> str:
-    """The whole self-contained page. Pure: the only reads are of this package's templates.
+def asset_tags(assets_url: str) -> tuple[str, str]:
+    """The stylesheet link and the script elements for the files under `assets_url`."""
+    link = (
+        f'<link rel="stylesheet" href="{escape(assets_url)}'
+        f'{wambatic.reports.assets.STYLESHEET_NAME}">'
+    )
+    scripts = '\n'.join(
+        f'<script defer src="{escape(assets_url)}{name}"></script>'
+        for name in wambatic.reports.assets.SCRIPT_NAMES
+    )
+    return link, scripts
+
+
+def html_document(report: HtmlReport, theme: wambatic.settings.Theme, assets_url: str) -> str:
+    """The whole page, which loads its scripts and stylesheet from `assets_url`, a URL path ending
+    in `/`. Pure: the only reads are of this package's templates and assets.
     Raises UsageError when the five results differ in anything but granularity."""
     check_report(report)
     built = build_page_figures(report)
     now = wambatic.reports.rows.popularity_now(report.total)
     languages = wambatic.reports.rows.languages_rows(report.total)
     title = f'wambatic: {wambatic.reports.rows.subject_text(report.total)}'
-    return string.Template(read_template('report.html')).substitute(
+    link, scripts = asset_tags(assets_url)
+    return string.Template(wambatic.reports.assets.read_template('report.html')).substitute(
         theme_attribute=theme_attribute(theme),
         title=escape(title),
-        style=stylesheet(),
+        stylesheet=link,
         header=header_html(report),
+        missing=missing_assets_html(),
         tiles=tiles_html(report.total, now, languages),
         sections=sections_html(report, built, now, languages),
         footer=footer_html(report.total),
         data=json_for_script(page_data(report, theme, built)),
-        plotlyjs=read_plotlyjs(),
-        script=read_template('report.js'),
+        scripts=scripts,
+    )
+
+
+def missing_assets_html() -> str:
+    """The notice shown when the page's folder did not load; only the stylesheet hides it."""
+    return (
+        '<p class="assets-missing">'
+        f"This report's files ({escape(wambatic.reports.assets.assets_folder_name())}) "
+        'did not load; keep the page beside that folder.</p>'
     )
 
 
 def render_html(
     report: HtmlReport, out: pathlib.Path, theme: wambatic.settings.Theme
 ) -> pathlib.Path:
-    """Write `html_document(report, theme)` to `out` and return it. The file is written to a
-    temporary file beside `out` and moved into place, so a failed write leaves `out` as it was
-    and no temporary file behind. Missing parent directories are created. Raises OutputError
-    when the file cannot be written."""
-    document = html_document(report, theme)
+    """Write the assets folder beside `out`, then `html_document(report, theme, ...)` to `out`,
+    and return `out`. The page is written to a temporary file beside `out` and moved into place,
+    so a failed write leaves `out` as it was and no temporary file behind; it is not written when
+    the folder cannot be. Missing parent directories are created. Raises OutputError when either
+    cannot be written."""
+    document = html_document(report, theme, f'{wambatic.reports.assets.assets_folder_name()}/')
+    wambatic.reports.assets.write_assets(out.parent)
     try:
         out.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile(

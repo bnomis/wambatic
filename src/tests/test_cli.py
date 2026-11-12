@@ -40,6 +40,7 @@ import wambatic.fetch.client
 import wambatic.fetch.errors
 import wambatic.fetch.hosts
 import wambatic.fetch.ratelimit
+import wambatic.reports.assets
 import wambatic.reports.errors
 import wambatic.reports.service
 import wambatic.settings
@@ -1413,10 +1414,10 @@ def test_html_of_the_delivery_group_alone_has_the_delivery_section_and_no_other(
     assert wambatic.cli.main([*argv, *tests.fixtures.constants.ALPHA_FLAGS]) == 0
     capsys.readouterr()
     text = (out_dir / 'org-octo-org.html').read_text(encoding='utf-8')
-    assert 'id="delivery"' in text
+    assert 'id="tab-delivery"' in text
     assert 'id="delivery-runs"' in text
-    assert 'id="activity"' not in text
-    assert 'id="flow"' not in text
+    assert 'id="tab-commits"' not in text
+    assert 'id="tab-flow"' not in text
 
 
 @pytest.mark.usefixtures('clock_after_fixtures')
@@ -1520,7 +1521,9 @@ def test_html_syncs_once_and_computes_five_times_and_writes_one_file(
     assert len(ran.syncs) == 1
     assert granularities == [['total', 'year', 'month', 'week', 'day']]
     assert ran.stdout == f'{out}\n'
-    assert [path.name for path in out.parent.iterdir()] == list(tests.fixtures.reports.REPORT_FILES)
+    assert sorted(path.name for path in out.parent.iterdir()) == sorted(
+        [*tests.fixtures.reports.REPORT_FILES, wambatic.reports.assets.assets_folder_name()]
+    )
 
 
 @pytest.mark.usefixtures('clock_after_fixtures')

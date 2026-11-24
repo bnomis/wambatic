@@ -61,4 +61,4 @@ A change to user-visible behaviour (options, settings, defaults, output, errors)
 
 Install both hook types: `pre-commit install --hook-type pre-commit --hook-type pre-push`.
 
-`.gitmodules` keeps `.agents` on the HTTPS URL because Claude Code cloud sessions fill it from there and have no SSH key. An SSH-only checkout sets `git config submodule..agents.url git@github.com:bnomis/agents.git` locally. The CI `audit` job reads the private repository with a read-only deploy key held as the Actions secret `AGENTS_DEPLOY_KEY`.
+`.gitmodules` keeps `.agents` on the HTTPS URL because Claude Code cloud sessions fill it from there and have no SSH key. An SSH-only checkout sets `git config submodule..agents.url git@github.com:bnomis/agents.git` locally. The agents repository is public, so the CI `audit` job fills the submodule over HTTPS with no key.
